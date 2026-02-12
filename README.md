@@ -62,7 +62,7 @@ Unlike OpenClaw's local-first architecture, AgentForge operates as a cloud-nativ
 | `@agentforge/channels` | WhatsApp, Telegram, Web adapters |
 | `@agentforge/voice` | ElevenLabs voice integration |
 | `@agentforge/sandbox` | E2B code execution |
-| `@agentforge/browser` | Playwright MCP browser automation |
+| `@agentforge/browser` | Vercel Agent Browser for AI-powered web automation |
 | `@agentforge/plugins` | Plugin registry, sandboxing |
 | `@agentforge/security` | Auth, rate limiting, trust boundaries |
 | `@agentforge/mcp` | MCP client/server |
