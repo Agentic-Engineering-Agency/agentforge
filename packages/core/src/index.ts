@@ -8,10 +8,10 @@
  */
 
 export { Agent } from './agent.js';
-export type { AgentConfig, AgentResponse, StreamChunk } from './agent.js';
+export type { AgentConfig, AgentModel, AgentResponse, StreamChunk } from './agent.js';
 
 export { SandboxManager, TimeoutError, SandboxExecutionError } from './sandbox.js';
 export type { SandboxConfig, SandboxRunOptions, SandboxResult } from './sandbox.js';
 
 export { MCPServer } from './mcp-server.js';
-export type { Tool, ToolSchema } from './mcp-server.js';
+export type { MCPServerConfig, Tool, ToolSchema } from './mcp-server.js';

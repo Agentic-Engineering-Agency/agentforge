@@ -1,6 +1,16 @@
 import { z } from 'zod';
 
 /**
+ * Configuration for creating an MCP server.
+ */
+export interface MCPServerConfig {
+  /** The name of the MCP server. */
+  name?: string;
+  /** The version of the MCP server. */
+  version?: string;
+}
+
+/**
  * Schema descriptor for tool listing.
  */
 export interface ToolSchema {
@@ -48,7 +58,7 @@ export interface Tool<
  *
  * @example
  * ```typescript
- * const server = new MCPServer();
+ * const server = new MCPServer({ name: 'my-tools', version: '1.0.0' });
  *
  * server.registerTool({
  *   name: 'add',
@@ -63,7 +73,20 @@ export interface Tool<
  * ```
  */
 export class MCPServer {
+  /** The server name. */
+  public readonly name: string;
+  /** The server version. */
+  public readonly version: string;
   private tools: Map<string, Tool> = new Map();
+
+  /**
+   * Creates a new MCP server instance.
+   * @param config - Optional server configuration.
+   */
+  constructor(config?: MCPServerConfig) {
+    this.name = config?.name ?? 'agentforge-mcp';
+    this.version = config?.version ?? '0.0.0';
+  }
 
   /**
    * Registers a new tool with the MCP server.
@@ -134,7 +157,6 @@ export class MCPServer {
    * @returns A simplified JSON Schema object.
    */
   private zodToJsonSchema(schema: z.ZodTypeAny): Record<string, unknown> {
-    // Simple conversion - in production, use zod-to-json-schema
     if (schema instanceof z.ZodObject) {
       const shape = schema.shape;
       const properties: Record<string, unknown> = {};

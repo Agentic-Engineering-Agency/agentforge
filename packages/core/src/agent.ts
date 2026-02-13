@@ -2,6 +2,14 @@ import { Agent as MastraAgent } from '@mastra/core/agent';
 import type { LanguageModelV1 } from 'ai';
 
 /**
+ * Supported model types for AgentForge agents.
+ *
+ * - `LanguageModelV1`: Any AI SDK v4 model instance (e.g., `openai('gpt-4o')`)
+ * - `string`: A Mastra model router ID (e.g., `'openai/gpt-4o'`)
+ */
+export type AgentModel = LanguageModelV1 | string;
+
+/**
  * Configuration for creating an AgentForge Agent.
  */
 export interface AgentConfig {
@@ -12,19 +20,28 @@ export interface AgentConfig {
   /** The system prompt or instructions for the agent. */
   instructions: string;
   /**
-   * The language model to use. Pass a LanguageModelV1 instance
-   * (e.g., from `@ai-sdk/openai`, `@ai-sdk/anthropic`, etc.).
+   * The language model to use. Accepts either:
+   * - A `LanguageModelV1` instance (e.g., from `@ai-sdk/openai`)
+   * - A string model ID (e.g., `'openai/gpt-4o'`)
    *
    * @example
    * ```typescript
    * import { openai } from '@ai-sdk/openai';
+   *
+   * // Using an AI SDK model instance (BYOK)
    * const agent = new Agent({
    *   model: openai('gpt-4o-mini'),
    *   // ...
    * });
+   *
+   * // Using a Mastra model router string
+   * const agent = new Agent({
+   *   model: 'openai/gpt-4o-mini',
+   *   // ...
+   * });
    * ```
    */
-  model: LanguageModelV1;
+  model: AgentModel;
   /** A dictionary of tools available to the agent. */
   tools?: Record<string, unknown>;
 }
@@ -52,7 +69,8 @@ export interface StreamChunk {
  *
  * Wraps the Mastra Agent to provide a simplified, curated API for
  * creating and interacting with AI agents. Supports any AI SDK-compatible
- * model provider (OpenAI, Anthropic, Google, etc.) via BYOK (Bring Your Own Key).
+ * model provider (OpenAI, Anthropic, Google, etc.) via BYOK (Bring Your Own Key),
+ * or Mastra model router string IDs.
  *
  * @example
  * ```typescript
@@ -87,9 +105,10 @@ export class Agent {
     this.name = config.name;
 
     this.mastraAgent = new MastraAgent({
+      id: config.id,
       name: config.name,
       instructions: config.instructions,
-      model: config.model,
+      model: config.model as Parameters<typeof MastraAgent.prototype.generate>[0] extends { model?: infer M } ? M : never,
       ...(config.tools ? { tools: config.tools as Record<string, never> } : {}),
     });
   }
