@@ -1,0 +1,50 @@
+{
+  "name": "@agentforge/cli",
+  "version": "0.1.0",
+  "description": "CLI tool for creating, running, and managing AgentForge projects",
+  "type": "module",
+  "bin": {
+    "agentforge": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "files": [
+    "dist",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "commander": "^12.0.0",
+    "chalk": "^5.3.0",
+    "fs-extra": "^11.2.0",
+    "ora": "^8.0.0",
+    "prompts": "^2.4.2"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/prompts": "^2.4.9",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "keywords": [
+    "agentforge",
+    "cli",
+    "ai",
+    "agents",
+    "scaffolding"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Agentic-Engineering-Agency/agentforge.git",
+    "directory": "packages/cli"
+  }
+}

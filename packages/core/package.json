@@ -1,0 +1,64 @@
+{
+  "name": "@agentforge/core",
+  "version": "0.1.0",
+  "description": "Core agent primitives, sandbox integration, and MCP server for AgentForge",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./agent": {
+      "types": "./dist/agent.d.ts",
+      "import": "./dist/agent.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox.d.ts",
+      "import": "./dist/sandbox.js"
+    },
+    "./mcp": {
+      "types": "./dist/mcp-server.d.ts",
+      "import": "./dist/mcp-server.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@mastra/core": "^0.5.0",
+    "ai": "^4.0.0",
+    "@e2b/code-interpreter": "^1.0.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "keywords": [
+    "ai",
+    "agents",
+    "mastra",
+    "mcp",
+    "e2b",
+    "sandbox",
+    "multi-agent"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Agentic-Engineering-Agency/agentforge.git",
+    "directory": "packages/core"
+  }
+}

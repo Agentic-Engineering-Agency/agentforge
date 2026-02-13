@@ -1,0 +1,22 @@
+{
+  "name": "agentforge",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AgentForge: The Minimalist Framework for Collaborative AI Agents",
+  "author": "Agentic Engineering <hello@agenticengineering.agency>",
+  "license": "Apache-2.0",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "test:core": "pnpm --filter @agentforge/core test",
+    "test:cli": "pnpm --filter @agentforge/cli test",
+    "lint": "pnpm -r lint",
+    "clean": "pnpm -r clean",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

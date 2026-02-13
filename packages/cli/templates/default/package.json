@@ -1,0 +1,19 @@
+{
+  "name": "my-agentforge-project",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "agentforge run",
+    "build": "tsc",
+    "convex:dev": "npx convex dev",
+    "convex:deploy": "npx convex deploy"
+  },
+  "dependencies": {
+    "@agentforge/core": "^0.1.0",
+    "convex": "^1.17.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0"
+  }
+}
