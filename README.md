@@ -1,97 +1,85 @@
-# AgentForge 🚀
+# AgentForge (NanoClaw) 🚀
 
-Enterprise-grade AI agent framework built on [Mastra](https://mastra.ai), [Convex](https://convex.dev), and [Cloudflare Workers](https://workers.cloudflare.com).
+A minimalist, enterprise-grade framework for building collaborative AI agents, built on [Mastra](https://mastra.ai), [Convex](https://convex.dev), and [E2B](https://e2b.dev).
 
-A secure, cloud-native alternative to OpenClaw with defense-in-depth security.
+This is the **NanoClaw** edition—a focused, core implementation of the AgentForge vision, designed for developers who need a robust, secure, and scalable foundation for their AI agent applications.
 
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-blue.svg)](https://typescriptlang.org)
-[![Status](https://img.shields.io/badge/status-planning-orange.svg)](ROADMAP.md)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://typescriptlang.org)
+[![Status](https://img.shields.io/badge/status-active-green.svg)](https://github.com/Agentic-Engineering-Agency/agentforge)
 
-## 🎯 Vision
+## ✨ Core Features (NanoClaw Edition)
 
-AgentForge aims to be the definitive TypeScript framework for building, deploying, and managing AI agents across messaging platforms, voice interfaces, and web applications.
-
-Unlike OpenClaw's local-first architecture, AgentForge operates as a cloud-native, edge-first platform with **security as a foundational pillar**—not a bolt-on.
-
-## ✨ Key Features
-
-- 🤖 **Multi-Platform Agents** — Deploy to WhatsApp, Telegram, Web, and Voice with a single codebase
-- 🔒 **Security-First** — Defense-in-depth sandboxing addressing the "Lethal Quartet" vulnerabilities
-- ⚡ **Edge-Native** — Cloudflare Workers for global low-latency deployment
-- 🔄 **Real-Time** — Convex for real-time state and persistent storage
-- 🎙️ **Voice-Ready** — ElevenLabs integration for conversational AI
-- 🔌 **MCP-Native** — Full Model Context Protocol support
-- 🤝 **A2A-Ready** — Google Agent-to-Agent protocol support
-- 🧩 **Plugin Ecosystem** — WASM-sandboxed plugins with security scanning
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Client Applications                       │
-│  (WhatsApp, Telegram, Web, Voice)                           │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────────┐
-│              Cloudflare Workers (Edge)                       │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐         │
-│  │   Gateway   │  │   Durable   │  │    Auth     │         │
-│  │             │  │   Objects   │  │   (Clerk)   │         │
-│  └─────────────┘  └─────────────┘  └─────────────┘         │
-└───────────────────────┬─────────────────────────────────────┘
-                        │
-┌───────────────────────▼─────────────────────────────────────┐
-│                  Convex Backend                              │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐      │
-│  │  Agents  │ │ Threads  │ │ Messages │ │ Memories │      │
-│  └──────────┘ └──────────┘ └──────────┘ └──────────┘      │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐                    │
-│  │  Users   │ │ AuditLog │ │  Vector  │                    │
-│  └──────────┘ └──────────┘ └──────────┘                    │
-└─────────────────────────────────────────────────────────────┘
-```
+- 🤖 **Core Agent Primitives**: A simple, powerful `Agent` class that wraps `@mastra/core` to support any AI SDK-compatible model provider (OpenAI, Anthropic, Google, etc.) using a Bring-Your-Own-Key (BYOK) model.
+-  CLI Scaffolding: A command-line tool (`@agentforge/cli`) to instantly create new agent projects with a pre-configured Convex backend.
+- ️ **Secure Code Execution**: All tool code runs in a secure E2B sandbox, providing enterprise-grade isolation and preventing malicious code execution.
+- 🤝 **Agent-to-Tool Communication**: A built-in Model Context Protocol (MCP) server for standardized, type-safe communication between agents and their tools.
+- ️ **Real-Time State**: Leverages Convex for real-time database and backend functions, perfect for collaborative agent workflows.
 
 ## 📦 Packages
 
+This monorepo contains the core packages for the AgentForge NanoClaw framework.
+
 | Package | Description |
-|---------|-------------|
-| `@agentforge/core` | Agent creation, tool system, workflow engine |
-| `@agentforge/convex` | Convex backend integration, thread management |
-| `@agentforge/edge` | Cloudflare Workers gateway, Durable Objects |
-| `@agentforge/channels` | WhatsApp, Telegram, Web adapters |
-| `@agentforge/voice` | ElevenLabs voice integration |
-| `@agentforge/sandbox` | E2B code execution |
-| `@agentforge/browser` | Vercel Agent Browser for AI-powered web automation |
-| `@agentforge/plugins` | Plugin registry, sandboxing |
-| `@agentforge/security` | Auth, rate limiting, trust boundaries |
-| `@agentforge/mcp` | MCP client/server |
-| `@agentforge/a2a` | A2A protocol support |
-| `@agentforge/client` | React/JS client SDK |
+|---|---|
+| `@agentforge/core` | Core agent, sandbox, and MCP server primitives. |
+| `@agentforge/cli` | CLI tool for scaffolding and running AgentForge projects. |
 
 ## 🚀 Quick Start
 
+Get your first AgentForge project running in under a minute.
+
+### 1. Install the CLI
+
 ```bash
-# Install CLI
+# Install the CLI globally
 npm install -g @agentforge/cli
-
-# Create new project
-agentforge create my-agent
-
-# Deploy to Cloudflare Workers
-agentforge deploy
 ```
 
-## 📋 Roadmap
+### 2. Create a New Project
 
-| Phase | Timeline | Focus |
-|-------|----------|-------|
-| **1: Foundation** | Months 1-3 | Core framework, messaging, auth |
-| **2: Execution** | Months 3-5 | E2B, browser, voice, memory |
-| **3: Ecosystem** | Months 5-8 | Plugins, A2A, security dashboard |
-| **4: Cloud** | Months 8-12 | Managed offering, SOC 2 |
+```bash
+# Create a new project directory
+agentforge create my-first-agent
+```
 
-See [ROADMAP.md](ROADMAP.md) for detailed timeline.
+This command scaffolds a new project with the following structure:
+
+```
+my-first-agent/
+├── convex/          # Convex schema and functions
+│   └── schema.ts    # Database schema (agents, threads, messages)
+├── src/
+│   └── agent.ts     # Your agent definition
+├── .env.example     # Example environment variables
+├── package.json
+└── tsconfig.json
+```
+
+### 3. Configure Environment
+
+Copy the `.env.example` to `.env` and add your API keys.
+
+```bash
+cp .env.example .env
+```
+
+```dotenv
+# .env
+OPENAI_API_KEY=sk-your-key-here
+E2B_API_KEY=e2b_your-key-here
+```
+
+### 4. Run the Development Server
+
+This command starts the Convex local development server.
+
+```bash
+cd my-first-agent
+agentforge run
+```
+
+Your agent is now running locally! You can interact with it by writing scripts that import and use your agent from `src/agent.ts`.
 
 ## 🤝 Contributing
 
@@ -99,14 +87,8 @@ We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guid
 
 ## 📄 License
 
-AgentForge is dual-licensed:
-- **Framework**: [Apache 2.0](LICENSE)
-- **Managed Cloud**: Proprietary
+AgentForge is licensed under the [Apache 2.0 License](LICENSE).
 
 ## 🏢 Organization
 
-Built with ❤️ by [Agentic Engineering](https://agenticengineering.agency) — Guadalajara, Mexico
-
----
-
-**Status**: Planning Phase | **Start Date**: February 2026
+Built with ❤️ by [Agentic Engineering](https://agenticengineering.agency) — Guadalajara, Mexico.
