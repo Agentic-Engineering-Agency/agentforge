@@ -1,5 +1,5 @@
 {
-  "name": "@agentforge/core",
+  "name": "@agentforge-ai/core",
   "version": "0.1.0",
   "description": "Core agent primitives, sandbox integration, and MCP server for AgentForge",
   "main": "./dist/index.js",

@@ -11,7 +11,7 @@ This is the **NanoClaw** edition—a focused, core implementation of the AgentFo
 ## ✨ Core Features (NanoClaw Edition)
 
 - 🤖 **Core Agent Primitives**: A simple, powerful `Agent` class that wraps `@mastra/core` to support any AI SDK-compatible model provider (OpenAI, Anthropic, Google, etc.) using a Bring-Your-Own-Key (BYOK) model.
--  CLI Scaffolding: A command-line tool (`@agentforge/cli`) to instantly create new agent projects with a pre-configured Convex backend.
+-  CLI Scaffolding: A command-line tool (`@agentforge-ai/cli`) to instantly create new agent projects with a pre-configured Convex backend.
 - ️ **Secure Code Execution**: All tool code runs in a secure E2B sandbox, providing enterprise-grade isolation and preventing malicious code execution.
 - 🤝 **Agent-to-Tool Communication**: A built-in Model Context Protocol (MCP) server for standardized, type-safe communication between agents and their tools.
 - ️ **Real-Time State**: Leverages Convex for real-time database and backend functions, perfect for collaborative agent workflows.
@@ -22,8 +22,8 @@ This monorepo contains the core packages for the AgentForge NanoClaw framework.
 
 | Package | Description |
 |---|---|
-| `@agentforge/core` | Core agent, sandbox, and MCP server primitives. |
-| `@agentforge/cli` | CLI tool for scaffolding and running AgentForge projects. |
+| `@agentforge-ai/core` | Core agent, sandbox, and MCP server primitives. |
+| `@agentforge-ai/cli` | CLI tool for scaffolding and running AgentForge projects. |
 
 ## 🚀 Quick Start
 
@@ -33,7 +33,7 @@ Get your first AgentForge project running in under a minute.
 
 ```bash
 # Install the CLI globally
-npm install -g @agentforge/cli
+npm install -g @agentforge-ai/cli
 ```
 
 ### 2. Create a New Project

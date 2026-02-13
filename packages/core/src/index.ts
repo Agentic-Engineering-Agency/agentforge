@@ -1,5 +1,5 @@
 /**
- * @agentforge/core
+ * @agentforge-ai/core
  *
  * The core package for the AgentForge framework.
  * Provides agent primitives, secure sandbox execution, and MCP server capabilities.

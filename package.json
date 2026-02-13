@@ -8,8 +8,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "test:core": "pnpm --filter @agentforge/core test",
-    "test:cli": "pnpm --filter @agentforge/cli test",
+    "test:core": "pnpm --filter @agentforge-ai/core test",
+    "test:cli": "pnpm --filter @agentforge-ai/cli test",
     "lint": "pnpm -r lint",
     "clean": "pnpm -r clean",
     "typecheck": "pnpm -r typecheck"

@@ -1,4 +1,4 @@
-# Spec: [AF-5] CLI Tool (@agentforge/cli)
+# Spec: [AF-5] CLI Tool (@agentforge-ai/cli)
 
 **Author:** Manus AI
 **Date:** 2026-02-12
@@ -6,13 +6,13 @@
 
 ## 1. Objective
 
-Build the initial command-line interface (CLI) for the AgentForge framework. This tool, published as `@agentforge/cli`, will provide developers with essential commands for creating, running, and managing AgentForge projects.
+Build the initial command-line interface (CLI) for the AgentForge framework. This tool, published as `@agentforge-ai/cli`, will provide developers with essential commands for creating, running, and managing AgentForge projects.
 
 ## 2. Technical Requirements
 
 - The CLI MUST be built with TypeScript and Node.js.
 - It MUST use the `commander.js` library for command parsing.
-- It MUST be published to npm as a public package named `@agentforge/cli`.
+- It MUST be published to npm as a public package named `@agentforge-ai/cli`.
 - It MUST include project scaffolding capabilities to quickly set up new AgentForge projects.
 
 ## 3. Commands
@@ -26,7 +26,7 @@ Build the initial command-line interface (CLI) for the AgentForge framework. Thi
     - Creates a new directory with the given project name.
     - Scaffolds a new project with the following structure:
         - `convex/` directory with a basic `schema.ts`.
-        - `package.json` with dependencies for `@agentforge/core`, `convex`, and `mastra`.
+        - `package.json` with dependencies for `@agentforge-ai/core`, `convex`, and `mastra`.
         - A sample agent definition file.
         - A `tsconfig.json` file.
     - Runs `npm install` (or `pnpm install`) to install dependencies.

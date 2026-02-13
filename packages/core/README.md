@@ -1,17 +1,17 @@
-# @agentforge/core
+# @agentforge-ai/core
 
 Core agent primitives, secure sandbox execution, and MCP server for the AgentForge framework.
 
 ## Installation
 
 ```bash
-npm install @agentforge/core
+npm install @agentforge-ai/core
 ```
 
 ## Quick Start
 
 ```typescript
-import { Agent, SandboxManager, MCPServer } from '@agentforge/core';
+import { Agent, SandboxManager, MCPServer } from '@agentforge-ai/core';
 
 // Create an agent
 const agent = new Agent({
