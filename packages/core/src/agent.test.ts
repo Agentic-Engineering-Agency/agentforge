@@ -95,6 +95,37 @@ describe('Agent', () => {
     expect(chunks[1]).toEqual({ content: 'chunk2' });
   });
 
+  it('stream() should handle non-string chunks', async () => {
+    const agent = new Agent(config);
+    const mockTextStream = (async function* () {
+      yield 123;
+      yield { toString: () => 'obj' };
+    })();
+    (MastraAgent.prototype.stream as ReturnType<typeof vi.fn>).mockResolvedValue({
+      textStream: mockTextStream,
+    });
+
+    const chunks: Array<{ content: string }> = [];
+    for await (const chunk of agent.stream('Test prompt')) {
+      chunks.push(chunk);
+    }
+
+    expect(chunks).toHaveLength(2);
+    expect(chunks[0]).toEqual({ content: '123' });
+    expect(chunks[1]).toEqual({ content: 'obj' });
+  });
+
+  it('should accept a string model ID', () => {
+    const configWithString: AgentConfig = {
+      id: 'string-model',
+      name: 'String Model Agent',
+      instructions: 'Test',
+      model: 'openai/gpt-4o',
+    };
+    const agent = new Agent(configWithString);
+    expect(agent.id).toBe('string-model');
+  });
+
   it('stream() should handle empty streams', async () => {
     const agent = new Agent(config);
     const mockTextStream = (async function* () {
