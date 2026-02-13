@@ -17,6 +17,17 @@ describe('MCPServer', () => {
     server = new MCPServer();
   });
 
+  it('should create a server with default config', () => {
+    expect(server.name).toBe('agentforge-mcp');
+    expect(server.version).toBe('0.0.0');
+  });
+
+  it('should create a server with custom config', () => {
+    const custom = new MCPServer({ name: 'my-server', version: '1.0.0' });
+    expect(custom.name).toBe('my-server');
+    expect(custom.version).toBe('1.0.0');
+  });
+
   it('should register a new tool', () => {
     server.registerTool(addTool);
     const tools = server.listTools();
@@ -79,5 +90,85 @@ describe('MCPServer', () => {
     const tools = server.listTools();
     expect(tools).toHaveLength(0);
     expect(tools).toEqual([]);
+  });
+
+  it('callTool should throw when output validation fails', async () => {
+    const strictTool: Tool<z.ZodObject<{ x: z.ZodNumber }>, z.ZodString> = {
+      name: 'strict',
+      description: 'Returns a string',
+      inputSchema: z.object({ x: z.number() }),
+      outputSchema: z.string(),
+      handler: async () => 42 as unknown as string, // intentionally wrong output
+    };
+    server.registerTool(strictTool);
+    await expect(server.callTool('strict', { x: 1 })).rejects.toThrow(
+      "Invalid output from tool 'strict':"
+    );
+  });
+
+  describe('zodToJsonSchema coverage', () => {
+    it('should handle string input schemas', () => {
+      const tool: Tool<z.ZodString, z.ZodString> = {
+        name: 'echo',
+        inputSchema: z.string(),
+        outputSchema: z.string(),
+        handler: async (input) => input,
+      };
+      server.registerTool(tool);
+      const tools = server.listTools();
+      expect(tools[0].inputSchema).toEqual({ type: 'string' });
+      expect(tools[0].outputSchema).toEqual({ type: 'string' });
+    });
+
+    it('should handle boolean schemas', () => {
+      const tool: Tool<z.ZodBoolean, z.ZodBoolean> = {
+        name: 'toggle',
+        inputSchema: z.boolean(),
+        outputSchema: z.boolean(),
+        handler: async (input) => !input,
+      };
+      server.registerTool(tool);
+      const tools = server.listTools();
+      expect(tools[0].inputSchema).toEqual({ type: 'boolean' });
+    });
+
+    it('should handle array schemas', () => {
+      const tool: Tool<z.ZodArray<z.ZodNumber>, z.ZodNumber> = {
+        name: 'sum',
+        inputSchema: z.array(z.number()),
+        outputSchema: z.number(),
+        handler: async (input) => input.reduce((a: number, b: number) => a + b, 0),
+      };
+      server.registerTool(tool);
+      const tools = server.listTools();
+      expect(tools[0].inputSchema).toEqual({ type: 'array' });
+    });
+
+    it('should handle unknown/unsupported schemas', () => {
+      const tool: Tool<z.ZodAny, z.ZodAny> = {
+        name: 'any',
+        inputSchema: z.any(),
+        outputSchema: z.any(),
+        handler: async (input) => input,
+      };
+      server.registerTool(tool);
+      const tools = server.listTools();
+      expect(tools[0].inputSchema).toEqual({ type: 'unknown' });
+    });
+
+    it('should handle nested object schemas', () => {
+      const tool: Tool<z.ZodObject<{ nested: z.ZodObject<{ value: z.ZodString }> }>, z.ZodAny> = {
+        name: 'nested',
+        inputSchema: z.object({ nested: z.object({ value: z.string() }) }),
+        outputSchema: z.any(),
+        handler: async (input) => input,
+      };
+      server.registerTool(tool);
+      const tools = server.listTools();
+      expect(tools[0].inputSchema).toEqual({
+        type: 'object',
+        properties: { nested: { type: 'object' } },
+      });
+    });
   });
 });
