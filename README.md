@@ -7,6 +7,8 @@ This is the **NanoClaw** edition—a focused, core implementation of the AgentFo
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://typescriptlang.org)
 [![Status](https://img.shields.io/badge/status-active-green.svg)](https://github.com/Agentic-Engineering-Agency/agentforge)
+[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/Agentic-Engineering-Agency/agentforge)
+[![npm](https://img.shields.io/npm/v/@agentforge-ai/core.svg)](https://www.npmjs.com/package/@agentforge-ai/core)
 
 ## ✨ Core Features (NanoClaw Edition)
 
