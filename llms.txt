@@ -1,0 +1,141 @@
+# AgentForge Project Context (for LLMs)
+
+This document provides a comprehensive overview of the AgentForge project, its architecture, codebase, and development practices. Use this as your primary source of truth for understanding and contributing to the project.
+
+## 1. High-Level Overview
+
+- **Project Name**: AgentForge
+- **Tagline**: The Minimalist Framework for Collaborative AI Agents
+- **Philosophy (NanoClaw Edition)**: A focused, core implementation designed for developers who need a robust, secure, and scalable foundation for their AI agent applications.
+- **Core Technologies**: Mastra (agent orchestration), Convex (real-time database), E2B (secure code execution sandbox).
+- **Monorepo Structure**: Managed with pnpm workspaces.
+- **Language**: TypeScript
+- **Testing**: Vitest with 100% test coverage enforced.
+- **CI/CD**: GitHub Actions for testing and deployment.
+
+## 2. Monorepo Structure and Packages
+
+The project is a pnpm monorepo with the following structure:
+
+```
+/agentforge
+├── convex/                  # Convex backend schema and functions
+├── docs/                    # Project documentation
+├── examples/
+│   └── finforge/            # Example financial intelligence agent
+├── packages/
+│   ├── core/                # @agentforge-ai/core: Main framework logic
+│   └── cli/                 # @agentforge-ai/cli: Scaffolding and management tool
+├── specs/                   # Feature specifications
+├── CHANGELOG.md
+├── package.json             # Root package.json
+└── pnpm-workspace.yaml
+```
+
+### 2.1. `@agentforge-ai/core`
+
+This is the heart of the framework. It provides the core primitives for building agents.
+
+**Key Exports:**
+- `Agent`: The main class for creating and interacting with an agent.
+- `SandboxManager`: Manages the lifecycle of E2B sandboxes for secure code execution.
+- `MCPServer`: A server for registering and invoking tools that agents can use.
+- `Tool` (interface): The definition for a tool that can be registered with the `MCPServer`.
+
+**Dependencies:**
+- `@mastra/core`: For agent orchestration and LLM interaction.
+- `@e2b/code-interpreter`: For the secure sandbox environment.
+- `ai`: Vercel AI SDK for language model integration.
+- `zod`: For defining and validating tool input/output schemas.
+
+### 2.2. `@agentforge-ai/cli`
+
+This package provides the command-line interface for managing AgentForge projects.
+
+**Commands:**
+- `agentforge create <project-name>`: Scaffolds a new AgentForge project from a template.
+- `agentforge run`: Starts the local Convex development server.
+- `agentforge deploy`: Deploys the Convex backend to production, with support for environment variables, dry runs, and rollbacks.
+
+### 2.3. `convex/`
+
+This directory contains the data model and backend logic for an AgentForge project, running on the Convex platform.
+
+**Schema (`convex/schema.ts`):**
+- `agents`: Stores agent configurations.
+- `threads`: Represents conversations or tasks.
+- `messages`: Stores the messages within a thread (user, assistant, system, tool).
+
+**Functions:**
+- `agents.ts`, `threads.ts`, `messages.ts`: Contain Convex mutations and queries for creating and retrieving data.
+
+## 3. Core Concepts and APIs
+
+### 3.1. The `Agent` Class (`@agentforge-ai/core`)
+
+This is the central abstraction. It wraps `@mastra/core` and provides a simple interface for agent interaction.
+
+**Constructor:**
+```typescript
+new Agent(config: AgentConfig)
+```
+
+**`AgentConfig` Interface:**
+- `id`: A unique identifier for the agent.
+- `name`: A human-readable name.
+- `instructions`: The system prompt for the agent.
+- `model`: The language model to use. Can be a string (e.g., "openai:gpt-4o-mini") or a `LanguageModelV1` instance from the Vercel AI SDK.
+- `tools` (optional): An `MCPServer` instance containing the tools available to the agent.
+
+**Key Method:**
+- `generate(prompt: string)`: Runs the agent with a given prompt and returns the result, including text output and any tool calls.
+
+### 3.2. The `SandboxManager` Class (`@agentforge-ai/core`)
+
+Provides a pool of E2B sandboxes for executing tool code securely.
+
+**Key Methods:**
+- `runCode(code: string)`: Executes a snippet of Python code in a sandbox and returns the output.
+- `cleanup()`: Terminates all active sandboxes.
+
+### 3.3. The `MCPServer` Class (`@agentforge-ai/core`)
+
+Manages the tools available to an agent.
+
+**Key Methods:**
+- `registerTool(tool: Tool)`: Registers a new tool.
+- `listTools()`: Returns a JSON schema of all registered tools, suitable for passing to an LLM.
+- `callTool(toolName: string, input: unknown)`: Invokes a tool with the given input.
+
+**`Tool` Interface:**
+- `name`: The name of the tool.
+- `description`: A description of what the tool does.
+- `inputSchema`: A Zod schema for the tool's input.
+- `outputSchema`: A Zod schema for the tool's output.
+- `handler`: An async function that implements the tool's logic.
+
+## 4. Development Workflow
+
+1.  **Get latest code**: `git pull origin main`
+2.  **Install dependencies**: `pnpm install`
+3.  **Make changes**: Edit files in `packages/` or other directories.
+4.  **Write tests**: Add or update tests in the corresponding `*.test.ts` file. All new code must be covered by tests.
+5.  **Run tests**: `pnpm test` or `pnpm test:coverage`.
+6.  **Build**: `pnpm build`.
+7.  **Commit**: Use conventional commit messages (e.g., `feat:`, `fix:`, `docs:`).
+
+## 5. How to Contribute
+
+- **Bug Fixes**: Find an open issue, or create a new one. Submit a pull request with the fix and a corresponding test.
+- **New Features**: 
+    1. Create a specification document in `specs/`.
+    2. Get approval on the spec.
+    3. Implement the feature following the TDD workflow.
+    4. Submit a pull request.
+
+## 6. Key Project Files
+
+- `README.md`: High-level project overview.
+- `CHANGELOG.md`: Version history and release notes.
+- `docs/`: In-depth guides and tutorials.
+- `examples/finforge/`: A complete, working example project that is excellent for understanding how all the pieces fit together.
