@@ -1,11 +1,11 @@
-# @agentforge/cli
+# @agentforge-ai/cli
 
 Command-line interface for creating, running, and managing AgentForge projects.
 
 ## Installation
 
 ```bash
-npm install -g @agentforge/cli
+npm install -g @agentforge-ai/cli
 ```
 
 ## Commands

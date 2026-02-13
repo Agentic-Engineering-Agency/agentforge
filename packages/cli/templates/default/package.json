@@ -10,7 +10,7 @@
     "convex:deploy": "npx convex deploy"
   },
   "dependencies": {
-    "@agentforge/core": "^0.1.0",
+    "@agentforge-ai/core": "^0.1.0",
     "convex": "^1.17.0"
   },
   "devDependencies": {

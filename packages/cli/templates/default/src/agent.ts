@@ -1,4 +1,4 @@
-import { Agent } from '@agentforge/core';
+import { Agent } from '@agentforge-ai/core';
 
 /**
  * A sample AgentForge agent.

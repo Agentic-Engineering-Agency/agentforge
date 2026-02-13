@@ -12,7 +12,7 @@ Implement the core `Agent` class for the AgentForge framework. This class will s
 
 - The `Agent` class MUST be implemented in TypeScript.
 - It MUST wrap the `@mastra/core` Agent class, exposing a simplified and curated API.
-- It MUST be part of the `@agentforge/core` package.
+- It MUST be part of the `@agentforge-ai/core` package.
 - All public methods and properties MUST be documented with JSDoc.
 - The implementation MUST be fully type-safe with no `any` types.
 

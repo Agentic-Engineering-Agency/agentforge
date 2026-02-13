@@ -1,0 +1,22 @@
+{
+  "name": "finforge-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FinForge — A financial intelligence agent built with AgentForge",
+  "type": "module",
+  "scripts": {
+    "dev": "npx convex dev",
+    "start": "tsx src/main.ts",
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@agentforge-ai/core": "workspace:*",
+    "@ai-sdk/openai": "^1.0.0",
+    "convex": "^1.17.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}
