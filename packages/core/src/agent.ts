@@ -1,5 +1,6 @@
 import { Agent as MastraAgent } from '@mastra/core/agent';
 import type { LanguageModelV1 } from 'ai';
+import type { MCPServer } from './mcp-server.js';
 
 /**
  * Supported model types for AgentForge agents.
@@ -42,8 +43,8 @@ export interface AgentConfig {
    * ```
    */
   model: AgentModel;
-  /** A dictionary of tools available to the agent. */
-  tools?: Record<string, unknown>;
+  /** An MCPServer instance providing tools for the agent. */
+  tools?: MCPServer;
 }
 
 /**
@@ -72,16 +73,29 @@ export interface StreamChunk {
  * model provider (OpenAI, Anthropic, Google, etc.) via BYOK (Bring Your Own Key),
  * or Mastra model router string IDs.
  *
+ * Tools can be provided at construction time via the `tools` config option,
+ * or added dynamically after construction using the `addTools()` method.
+ *
  * @example
  * ```typescript
  * import { openai } from '@ai-sdk/openai';
+ * import { Agent, MCPServer } from '@agentforge-ai/core';
+ *
+ * const tools = new MCPServer();
+ * tools.registerTool({ ... });
  *
  * const agent = new Agent({
  *   id: 'my-agent',
  *   name: 'My Agent',
  *   instructions: 'You are a helpful assistant.',
  *   model: openai('gpt-4o-mini'),
+ *   tools: tools,
  * });
+ *
+ * // Or add tools dynamically:
+ * const moreTools = new MCPServer();
+ * moreTools.registerTool({ ... });
+ * agent.addTools(moreTools);
  *
  * const response = await agent.generate('Hello!');
  * ```
@@ -93,8 +107,17 @@ export class Agent {
   /** The agent's human-readable name. */
   public readonly name: string;
 
+  /** The agent's instructions (system prompt). */
+  public readonly instructions: string;
+
+  /** The agent's model configuration. */
+  public readonly model: AgentModel;
+
   /** The underlying Mastra agent instance. */
   private mastraAgent: MastraAgent;
+
+  /** The collection of MCP servers providing tools to this agent. */
+  private toolServers: MCPServer[] = [];
 
   /**
    * Creates a new AgentForge Agent.
@@ -103,14 +126,86 @@ export class Agent {
   constructor(config: AgentConfig) {
     this.id = config.id;
     this.name = config.name;
+    this.instructions = config.instructions;
+    this.model = config.model;
 
-    this.mastraAgent = new MastraAgent({
-      id: config.id,
-      name: config.name,
-      instructions: config.instructions,
-      model: config.model as Parameters<typeof MastraAgent.prototype.generate>[0] extends { model?: infer M } ? M : never,
-      ...(config.tools ? { tools: config.tools as Record<string, never> } : {}),
-    });
+    if (config.tools) {
+      this.toolServers.push(config.tools);
+    }
+
+    this.mastraAgent = this.buildMastraAgent();
+  }
+
+  /**
+   * Dynamically adds tools from an MCPServer to this agent.
+   *
+   * This method allows you to extend an agent's capabilities after construction.
+   * Multiple MCPServer instances can be added, and their tools are merged together.
+   * The underlying Mastra agent is rebuilt to include the new tools.
+   *
+   * @param server - An MCPServer instance containing the tools to add.
+   *
+   * @example
+   * ```typescript
+   * const agent = new Agent({ id: 'a', name: 'A', instructions: '...', model: 'openai/gpt-4o' });
+   *
+   * const financialTools = new MCPServer();
+   * financialTools.registerTool({ name: 'get_stock_price', ... });
+   * agent.addTools(financialTools);
+   *
+   * const adminTools = new MCPServer();
+   * adminTools.registerTool({ name: 'delete_user', ... });
+   * agent.addTools(adminTools);
+   *
+   * // Agent now has both get_stock_price and delete_user tools
+   * const tools = agent.getTools();
+   * ```
+   */
+  addTools(server: MCPServer): void {
+    this.toolServers.push(server);
+    this.mastraAgent = this.buildMastraAgent();
+  }
+
+  /**
+   * Removes all tools from this agent.
+   *
+   * Clears all registered MCPServer instances and rebuilds the underlying
+   * Mastra agent without any tools.
+   */
+  clearTools(): void {
+    this.toolServers = [];
+    this.mastraAgent = this.buildMastraAgent();
+  }
+
+  /**
+   * Returns a flat list of all tool schemas registered across all MCPServer instances.
+   *
+   * @returns An array of tool schema descriptors from all attached MCPServers.
+   */
+  getTools(): ReturnType<MCPServer['listTools']> {
+    return this.toolServers.flatMap((server) => server.listTools());
+  }
+
+  /**
+   * Invokes a tool by name across all attached MCPServer instances.
+   *
+   * Searches through all registered MCPServers for the named tool and
+   * invokes it with the provided input. Throws if the tool is not found
+   * in any server.
+   *
+   * @param toolName - The name of the tool to invoke.
+   * @param input - The input to pass to the tool.
+   * @returns A promise that resolves with the tool's output.
+   * @throws {Error} If the tool is not found in any attached MCPServer.
+   */
+  async callTool(toolName: string, input: unknown): Promise<unknown> {
+    for (const server of this.toolServers) {
+      const toolList = server.listTools();
+      if (toolList.some((t) => t.name === toolName)) {
+        return server.callTool(toolName, input);
+      }
+    }
+    throw new Error(`Tool '${toolName}' not found in any attached MCPServer.`);
   }
 
   /**
@@ -133,5 +228,35 @@ export class Agent {
     for await (const chunk of result.textStream) {
       yield { content: typeof chunk === 'string' ? chunk : String(chunk) };
     }
+  }
+
+  /**
+   * Builds (or rebuilds) the underlying Mastra agent from the current configuration.
+   * Called on construction and whenever tools are added or cleared.
+   */
+  private buildMastraAgent(): MastraAgent {
+    const toolsRecord = this.buildToolsRecord();
+
+    return new MastraAgent({
+      id: this.id,
+      name: this.name,
+      instructions: this.instructions,
+      model: this.model as Parameters<typeof MastraAgent.prototype.generate>[0] extends { model?: infer M } ? M : never,
+      ...(Object.keys(toolsRecord).length > 0 ? { tools: toolsRecord as Record<string, never> } : {}),
+    });
+  }
+
+  /**
+   * Merges tools from all attached MCPServer instances into a single record
+   * suitable for passing to the Mastra agent constructor.
+   */
+  private buildToolsRecord(): Record<string, unknown> {
+    const record: Record<string, unknown> = {};
+    for (const server of this.toolServers) {
+      for (const tool of server.listTools()) {
+        record[tool.name] = tool;
+      }
+    }
+    return record;
   }
 }
