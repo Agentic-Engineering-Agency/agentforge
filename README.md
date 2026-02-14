@@ -1,22 +1,23 @@
 # AgentForge (NanoClaw) 🚀
 
-A minimalist, enterprise-grade framework for building collaborative AI agents, built on [Mastra](https://mastra.ai), [Convex](https://convex.dev), and [E2B](https://e2b.dev).
-
-This is the **NanoClaw** edition—a focused, core implementation of the AgentForge vision, designed for developers who need a robust, secure, and scalable foundation for their AI agent applications.
-
 [![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://typescriptlang.org)
 [![Status](https://img.shields.io/badge/status-active-green.svg)](https://github.com/Agentic-Engineering-Agency/agentforge)
 [![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/Agentic-Engineering-Agency/agentforge)
 [![npm](https://img.shields.io/npm/v/@agentforge-ai/core.svg)](https://www.npmjs.com/package/@agentforge-ai/core)
 
-## ✨ Core Features (NanoClaw Edition)
+A minimalist, enterprise-grade framework for building collaborative AI agents, built on [Mastra](https://mastra.ai), [Convex](https://convex.dev), and [E2B](https://e2b.dev).
 
-- 🤖 **Core Agent Primitives**: A simple, powerful `Agent` class that wraps `@mastra/core` to support any AI SDK-compatible model provider (OpenAI, Anthropic, Google, etc.) using a Bring-Your-Own-Key (BYOK) model.
--  CLI Scaffolding: A command-line tool (`@agentforge-ai/cli`) to instantly create new agent projects with a pre-configured Convex backend.
-- ️ **Secure Code Execution**: All tool code runs in a secure E2B sandbox, providing enterprise-grade isolation and preventing malicious code execution.
+This is the **NanoClaw** edition—a focused, core implementation of the AgentForge vision, designed for developers who need a robust, secure, and scalable foundation for their AI agent applications.
+
+## ✨ Core Features (v0.2.1)
+
+- 🤖 **Core Agent Primitives**: A simple, powerful `Agent` class that wraps `@mastra/core`.
+- 🛠️ **Dynamic Tooling**: Add tools to agents on the fly with `agent.addTools()`, allowing for flexible, context-aware capabilities.
+- 🚀 **CLI Scaffolding**: A command-line tool (`@agentforge-ai/cli`) to instantly create new agent projects with a pre-configured Convex backend.
+- 🔒 **Secure Code Execution**: All tool code runs in a secure E2B sandbox, providing enterprise-grade isolation and preventing malicious code execution.
 - 🤝 **Agent-to-Tool Communication**: A built-in Model Context Protocol (MCP) server for standardized, type-safe communication between agents and their tools.
-- ️ **Real-Time State**: Leverages Convex for real-time database and backend functions, perfect for collaborative agent workflows.
+- ⚡️ **Real-Time State**: Leverages Convex for real-time database and backend functions, perfect for collaborative agent workflows.
 
 ## 📦 Packages
 
