@@ -13,24 +13,24 @@ export const list = query({
       return await ctx.db
         .query("threads")
         .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId))
-        .collect();
+        .take(100).collect();
     }
     
     if (args.agentId) {
       return await ctx.db
         .query("threads")
         .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .collect();
+        .take(100).collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("threads")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     }
     
-    return await ctx.db.query("threads").collect();
+    return await ctx.db.query("threads").take(100).collect();
   },
 });
 
@@ -87,7 +87,7 @@ export const remove = mutation({
     const messages = await ctx.db
       .query("messages")
       .withIndex("byThread", (q) => q.eq("threadId", args.id))
-      .collect();
+      .take(100).collect();
     
     for (const message of messages) {
       await ctx.db.delete(message._id);

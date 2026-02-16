@@ -17,19 +17,19 @@ export const list = query({
       records = await ctx.db
         .query("usage")
         .withIndex("byProvider", (q) => q.eq("provider", args.provider))
-        .collect();
+        .take(100).collect();
     } else if (args.agentId) {
       records = await ctx.db
         .query("usage")
         .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .collect();
+        .take(100).collect();
     } else if (args.userId) {
       records = await ctx.db
         .query("usage")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     } else {
-      records = await ctx.db.query("usage").collect();
+      records = await ctx.db.query("usage").take(100).collect();
     }
     
     // Filter by time range if provided
@@ -59,14 +59,14 @@ export const getStats = query({
       records = await ctx.db
         .query("usage")
         .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .collect();
+        .take(100).collect();
     } else if (args.userId) {
       records = await ctx.db
         .query("usage")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     } else {
-      records = await ctx.db.query("usage").collect();
+      records = await ctx.db.query("usage").take(100).collect();
     }
     
     // Filter by time range
@@ -140,9 +140,9 @@ export const getByTimePeriod = query({
       records = await ctx.db
         .query("usage")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     } else {
-      records = await ctx.db.query("usage").collect();
+      records = await ctx.db.query("usage").take(100).collect();
     }
     
     records = records.filter((r) => r.timestamp >= startTime);
@@ -182,7 +182,7 @@ export const cleanup = mutation({
     const records = await ctx.db
       .query("usage")
       .withIndex("byTimestamp")
-      .collect();
+      .take(100).collect();
     
     const toDelete = records.filter((r) => r.timestamp < args.olderThan);
     

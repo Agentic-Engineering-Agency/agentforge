@@ -12,7 +12,7 @@ export const list = query({
       const connections = await ctx.db
         .query("mcpConnections")
         .withIndex("byIsEnabled", (q) => q.eq("isEnabled", args.isEnabled))
-        .collect();
+        .take(100).collect();
       
       if (args.userId) {
         return connections.filter((c) => c.userId === args.userId);
@@ -24,10 +24,10 @@ export const list = query({
       return await ctx.db
         .query("mcpConnections")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     }
     
-    return await ctx.db.query("mcpConnections").collect();
+    return await ctx.db.query("mcpConnections").take(100).collect();
   },
 });
 
