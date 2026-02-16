@@ -7,11 +7,13 @@
     "dev": "agentforge run",
     "build": "tsc",
     "convex:dev": "npx convex dev",
-    "convex:deploy": "npx convex deploy"
+    "convex:deploy": "npx convex deploy",
+    "dashboard": "agentforge dashboard"
   },
   "dependencies": {
-    "@agentforge-ai/core": "^0.3.1",
-    "convex": "^1.17.0"
+    "@agentforge-ai/core": "^0.3.2",
+    "convex": "^1.17.0",
+    "zod": "^3.23.0"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

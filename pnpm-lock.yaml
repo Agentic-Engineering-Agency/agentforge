@@ -45,6 +45,9 @@ importers:
       commander:
         specifier: ^12.0.0
         version: 12.1.0
+      convex:
+        specifier: ^1.17.0
+        version: 1.31.7(react@19.2.4)
       fs-extra:
         specifier: ^11.2.0
         version: 11.3.3
