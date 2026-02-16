@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/web",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "description": "AgentForge Web Dashboard - Built with TanStack Router + Vite",
   "type": "module",

@@ -1,12 +1,30 @@
-import { ConvexHttpClient } from 'convex/browser';
 import fs from 'fs-extra';
 import path from 'node:path';
 
 /**
- * Get the Convex deployment URL from the project's .env files
+ * Safely get the current working directory.
+ * Returns null if the CWD has been deleted or is inaccessible.
+ */
+function safeCwd(): string | null {
+  try {
+    return process.cwd();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Get the Convex deployment URL from the project's .env files.
+ * Called lazily — only when a command actually needs Convex.
  */
 function getConvexUrl(): string {
-  const cwd = process.cwd();
+  const cwd = safeCwd();
+  if (!cwd) {
+    throw new Error(
+      'Current directory does not exist or is not accessible.\n' +
+      'Please navigate to a valid AgentForge project directory and try again.'
+    );
+  }
   const envFiles = ['.env.local', '.env', '.env.production'];
 
   for (const envFile of envFiles) {
@@ -20,7 +38,7 @@ function getConvexUrl(): string {
     }
   }
 
-  // Also check .env.local in convex directory
+  // Also check .convex/deployment.json
   const convexEnv = path.join(cwd, '.convex', 'deployment.json');
   if (fs.existsSync(convexEnv)) {
     try {
@@ -37,15 +55,18 @@ function getConvexUrl(): string {
 }
 
 /**
- * Create a Convex HTTP client connected to the project's deployment
+ * Create a Convex HTTP client connected to the project's deployment.
+ * The ConvexHttpClient import is deferred to avoid triggering
+ * process.cwd() at module load time (which crashes if CWD is gone).
  */
-export function createClient(): ConvexHttpClient {
+export function createClient() {
+  const { ConvexHttpClient } = require('convex/browser');
   const url = getConvexUrl();
-  return new ConvexHttpClient(url);
+  return new ConvexHttpClient(url) as import('convex/browser').ConvexHttpClient;
 }
 
 /**
- * Safely call a Convex query/mutation and handle errors
+ * Safely call a Convex query/mutation and handle errors gracefully.
  */
 export async function safeCall<T>(
   fn: () => Promise<T>,
@@ -57,6 +78,8 @@ export async function safeCall<T>(
     if (error.message?.includes('CONVEX_URL not found')) {
       console.error('\n❌ Not connected to Convex.');
       console.error('   Run `npx convex dev` in your project directory first.\n');
+    } else if (error.message?.includes('Current directory does not exist')) {
+      console.error(`\n❌ ${error.message}\n`);
     } else if (error.message?.includes('fetch failed') || error.message?.includes('ECONNREFUSED')) {
       console.error('\n❌ Cannot reach Convex deployment.');
       console.error('   Make sure `npx convex dev` is running.\n');

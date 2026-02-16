@@ -1,208 +1,222 @@
-# AgentForge 🚀
+# AgentForge
 
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)](https://typescriptlang.org)
-[![Status](https://img.shields.io/badge/status-active-green.svg)](https://github.com/Agentic-Engineering-Agency/agentforge)
-[![Coverage](https://img.shields.io/badge/coverage-100%25-brightgreen.svg)](https://github.com/Agentic-Engineering-Agency/agentforge)
-[![npm](https://img.shields.io/npm/v/@agentforge-ai/core.svg)](https://www.npmjs.com/package/@agentforge-ai/core)
+**AgentForge: The Minimalist Framework for Collaborative AI Agents.**
 
-**The Minimalist Framework for Collaborative AI Agents**
+AgentForge is a "NanoClaw made with Mastra" — a powerful, lightweight framework for building, managing, and deploying autonomous AI agents. It provides a seamless developer experience with a full-featured CLI, a real-time web dashboard, and a robust backend powered by Convex and Mastra.
 
-A production-ready framework for building, managing, and deploying AI agents with a focus on simplicity, scalability, and developer experience. Inspired by OpenClaw's architecture and NanoClaw's minimalist philosophy, AgentForge combines the best of both worlds with modern tools.
+[![NPM Version](https://img.shields.io/npm/v/@agentforge-ai/cli?color=33e)](https://www.npmjs.com/package/@agentforge-ai/cli)
+[![License](https://img.shields.io/github/license/Agentic-Engineering-Agency/agentforge?color=4c1)](https://github.com/Agentic-Engineering-Agency/agentforge/blob/main/LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/Agentic-Engineering-Agency/agentforge?style=social)](https://github.com/Agentic-Engineering-Agency/agentforge)
 
-Built on [Mastra](https://mastra.ai), [Convex](https://convex.dev), and [E2B](https://e2b.dev).
+![AgentForge Dashboard](https://raw.githubusercontent.com/Agentic-Engineering-Agency/agentforge/main/docs/assets/dashboard-hero.png)
 
-## ✨ Features
+## Key Features
 
-### 🤖 Agent Management
-- **Multi-Provider Support**: OpenAI, Anthropic, OpenRouter, Google, xAI
-- **BYOK Model**: Bring Your Own Key for all providers
-- **Dynamic Tooling**: Add tools to agents on the fly
-- **Secure Execution**: E2B sandboxes for safe code execution
-- **Real-time State**: Powered by Convex
-
-### 💬 Chat & Sessions
-- **Interactive Chat**: Real-time conversation interface
-- **Session Management**: Track and manage active conversations
-- **Message History**: Persistent conversation context
-- **Multi-Channel Support**: Dashboard, API, webhooks
-
-### 📁 File Management
-- **File Upload**: Drag-and-drop file uploads
-- **Folder Organization**: Hierarchical folder structure
-- **Cloudflare R2 Integration**: Cost-effective file storage
-
-### 🗂️ Projects & Workspaces
-- **Project Organization**: Group agents, files, and conversations
-- **Project Settings**: Per-project configuration
-
-### 🛠️ Skills Marketplace
-- **Skill Discovery**: Browse available skills
-- **Easy Installation**: One-click skill installation
-- **Custom Skills**: Develop and share your own skills
-
-### ⏰ Cron Jobs
-- **Scheduled Tasks**: Run agents on a schedule
-- **Execution History**: View past runs and results
-
-### 🔌 MCP Connections
-- **Model Context Protocol**: Connect to external services
-- **Tool Integration**: Extend agent capabilities
-
-### 📊 Usage & Metrics
-- **Token Tracking**: Monitor token usage per agent
-- **Cost Estimation**: Estimate costs across providers
-- **Usage Statistics**: Analyze usage trends
-
-### 💓 Heartbeat System
-- **Task Continuity**: Agents can check on ongoing conversations
-- **Pending Tasks**: Track and resume unfinished work
-- **Context Maintenance**: Preserve context across sessions
-
-### 🎨 Web Dashboard
-- **Modern UI**: Built with TanStack Start and Tailwind CSS
-- **Dark Theme**: Eye-friendly dark mode
-- **Responsive Design**: Works on desktop and mobile
-- **Real-time Updates**: Powered by Convex subscriptions
-
-## 📦 Packages
-
-| Package | Description |
+| Feature | Description |
 |---|---|
-| `@agentforge-ai/core` | Core agent, sandbox, and MCP server primitives |
-| `@agentforge-ai/cli` | CLI tool for scaffolding and running projects |
-| `@agentforge-ai/web` | Web dashboard for managing agents |
+| 🤖 **Agent Management** | Create, configure, and manage multiple agents with distinct instructions, models, and tools. |
+| 💬 **Interactive Chat** | Real-time chat interface in both the CLI and web dashboard for seamless agent interaction. |
+| 📂 **File Management** | Persistent file storage with folder organization, powered by local storage or Cloudflare R2. |
+| 🛠️ **Extensible Skills** | Enhance agent capabilities with a simple, powerful skill system. Create custom tools with ease. |
+| ⏰ **Cron Jobs** | Schedule agents to run tasks at specific intervals using cron expressions. |
+| 🔌 **MCP Connections** | Integrate with external services and tools using the Model Context Protocol (MCP). |
+| 🔐 **Secure Vault** | Safely store and manage API keys and other secrets with built-in encryption and auto-redaction. |
+| 💓 **HEARTBEAT System** | Ensures task continuity by allowing agents to monitor and resume long-running operations. |
+| 📊 **Usage Tracking** | Monitor token usage and estimate costs across different LLM providers. |
+| 🚀 **Cloudflare Ready** | Deploy your frontend to Cloudflare Pages and file storage to R2 with zero egress fees. |
 
-## 🚀 Quick Start
+## Tech Stack
+
+AgentForge is built on a modern, serverless, and real-time technology stack, designed for performance and scalability.
+
+- **Frontend**: TanStack Router, React, Vite, Tailwind CSS
+- **Backend**: Convex (Real-time Database, Serverless Functions)
+- **AI Engine**: Mastra (Multi-provider LLM support)
+- **Deployment**: Cloudflare Pages (Frontend), Cloudflare R2 (File Storage)
+
+## Getting Started
 
 ### 1. Install the CLI
 
 ```bash
+# Using npm
 npm install -g @agentforge-ai/cli
-# or
+
+# Using pnpm
 pnpm add -g @agentforge-ai/cli
 ```
 
 ### 2. Create a New Project
 
 ```bash
-agentforge create my-first-agent
-cd my-first-agent
+agentforge create my-agent-project
+cd my-agent-project
 ```
 
-### 3. Configure Environment
+This command scaffolds a new project with the recommended structure, including a `convex` backend, a `dashboard` frontend, and a default agent definition.
+
+### 3. Configure Your Environment
+
+Copy the example environment file and add your preferred LLM provider API key.
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
-Add your API keys to `.env`:
+Edit `.env.local`:
 
 ```dotenv
-OPENAI_API_KEY=sk-your-key-here
-ANTHROPIC_API_KEY=sk-ant-your-key-here
-E2B_API_KEY=e2b_your-key-here
+# Your Convex deployment URL (set automatically by `npx convex dev`)
+CONVEX_URL=
+
+# Set the API key for your preferred provider (only one is needed)
+OPENAI_API_KEY=sk-...
+# OPENROUTER_API_KEY=sk-or-...
+# ANTHROPIC_API_KEY=sk-ant-...
+# GOOGLE_API_KEY=AIza...
+# XAI_API_KEY=xai-...
 ```
 
-### 4. Start Development
+### 4. Start the Development Servers
+
+AgentForge requires two concurrent processes for local development:
 
 ```bash
-# Start Convex backend
-agentforge run
+# Terminal 1: Start the Convex backend
+npx convex dev
 
-# In another terminal, start web dashboard
-cd packages/web
-pnpm dev
+# Terminal 2: Launch the web dashboard
+agentforge dashboard
 ```
 
-Open http://localhost:3000 to access the dashboard.
+- The `convex dev` command syncs your database schema, runs your backend functions, and provides a live dashboard at `http://localhost:8187`.
+- The `agentforge dashboard` command starts the Vite development server for the web UI, typically on `http://localhost:3000`.
 
-### 5. Create Your First Agent
+## CLI Command Reference
 
-```typescript
-import { Agent } from "@mastra/core/agent";
+AgentForge provides a comprehensive CLI for managing every aspect of your project.
 
-const agent = new Agent({
-  id: "my-agent",
-  name: "My First Agent",
-  instructions: "You are a helpful AI assistant.",
-  model: "openai/gpt-4o-mini",
-  tools: {},
-});
+### Project Lifecycle
 
-export default agent;
+| Command | Description |
+|---|---|
+| `agentforge create <name>` | Create a new AgentForge project. |
+| `agentforge deploy` | Deploy the Convex backend to production. |
+| `agentforge dashboard` | Launch the web dashboard. |
+| `agentforge status` | Show system health and connection status. |
+| `agentforge logs` | Tail recent activity logs. |
+| `agentforge heartbeat` | Check and resume pending agent tasks. |
+
+### Agent Management
+
+| Command | Description |
+|---|---|
+| `agentforge agents list` | List all available agents. |
+| `agentforge agents create` | Create a new agent via an interactive prompt. |
+| `agentforge agents inspect <id>` | Show detailed information for a specific agent. |
+| `agentforge agents edit <id>` | Edit an agent's properties. |
+| `agentforge agents delete <id>` | Delete an agent. |
+| `agentforge agents enable <id>` | Activate an agent. |
+| `agentforge agents disable <id>` | Deactivate an agent. |
+
+### Chat & Sessions
+
+| Command | Description |
+|---|---|
+| `agentforge chat [agent-id]` | Start an interactive chat session with an agent. |
+| `agentforge sessions list` | List all active and past sessions. |
+| `agentforge sessions inspect <id>` | Show details for a specific session. |
+| `agentforge sessions end <id>` | Terminate an active session. |
+| `agentforge threads list` | List all conversation threads. |
+| `agentforge threads inspect <id>` | Show the message history of a thread. |
+| `agentforge threads delete <id>` | Delete a thread and all its messages. |
+
+### Skills & Capabilities
+
+| Command | Description |
+|---|---|
+| `agentforge skills list` | List all installed skills. |
+| `agentforge skills create` | Create a new skill from a template. |
+| `agentforge skills install <name>` | Install a skill into your project. |
+| `agentforge skills remove <name>` | Remove a skill. |
+| `agentforge skills search <query>` | Search for available skills. |
+
+### Automation & Scheduling
+
+| Command | Description |
+|---|---|
+| `agentforge cron list` | List all scheduled cron jobs. |
+| `agentforge cron create` | Create a new cron job. |
+| `agentforge cron delete <id>` | Delete a cron job. |
+| `agentforge cron enable <id>` | Enable a cron job. |
+| `agentforge cron disable <id>` | Disable a cron job. |
+
+### File & Project Management
+
+| Command | Description |
+|---|---|
+| `agentforge files list [folder]` | List files, optionally filtered by folder. |
+| `agentforge files upload <path>` | Upload a file to the workspace. |
+| `agentforge files delete <id>` | Delete a file. |
+| `agentforge folders create <name>` | Create a new folder. |
+| `agentforge projects list` | List all projects. |
+| `agentforge projects create <name>` | Create a new project. |
+| `agentforge projects switch <id>` | Set the active project for CLI commands. |
+
+### Configuration & Secrets
+
+| Command | Description |
+|---|---|
+| `agentforge config show` | Display the current project configuration. |
+| `agentforge config set <key> <value>` | Set a configuration value in `.env.local`. |
+| `agentforge config get <key>` | Retrieve a configuration value. |
+| `agentforge config provider <name>` | Interactively configure an LLM provider. |
+| `agentforge vault list` | List all secrets stored in the vault (values masked). |
+| `agentforge vault set <name> [value]` | Store a new secret securely. |
+| `agentforge vault get <name>` | Retrieve a secret (use `--reveal` to show value). |
+| `agentforge vault delete <name>` | Delete a secret from the vault. |
+| `agentforge vault rotate <name>` | Update the value of an existing secret. |
+
+## Project Structure
+
+A new AgentForge project has the following structure:
+
+```
+/my-agent-project
+├── convex/                 # Convex backend (database schema, functions)
+│   ├── schema.ts
+│   └── *.ts
+├── dashboard/              # Web dashboard frontend (Vite + React)
+│   ├── src/
+│   └── package.json
+├── skills/                 # Custom agent skills
+│   └── skill-creator/
+├── workspace/              # Default local file storage for agents
+├── .env.local              # Your local environment variables (gitignored)
+├── .env.example            # Example environment file
+├── package.json
+└── tsconfig.json
 ```
 
-## 🏗️ Architecture
+## Core Concepts
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                Web Dashboard (TanStack Start)                │
-│  Chat • Agents • Files • Projects • Skills • Cron • Usage   │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Convex (Backend)                          │
-│  Real-time Database • Queries • Mutations • Actions          │
-└─────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Mastra (Agent Engine)                       │
-│  OpenAI • Anthropic • OpenRouter • Google • xAI              │
-└─────────────────────────────────────────────────────────────┘
-```
+- **Agents**: The fundamental actors in the system. Each agent has a unique identity, instructions, and a configured LLM.
+- **Workspace**: The agent's environment. It provides tools for file management (`filesystem`), code execution (`sandbox`), and skill activation (`skills`).
+- **Skills**: Reusable sets of instructions and tools that can be attached to agents to extend their capabilities.
+- **HEARTBEAT**: A system that allows agents to persist their state and resume long-running tasks across interruptions.
+- **Vault**: An encrypted storage for secrets that automatically detects and redacts sensitive information from chat messages.
 
-## 📚 Documentation
+## Contributing
 
-- [Getting Started](docs/getting-started.md)
-- [Agent Configuration](docs/agents.md)
-- [Web Dashboard](packages/web/README.md)
-- [API Reference](docs/api.md)
-- [Deployment Guide](docs/deployment.md)
+We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on how to get started.
 
-## 🗺️ Roadmap
+## License
 
-### v0.3.0 (Current)
-- ✅ Convex schema and backend
-- ✅ Mastra integration
-- ✅ Web dashboard
-- ✅ Multi-provider support
-- ✅ Heartbeat system
-- 🚧 Real-time execution
-- 🚧 File management
-- 🚧 Usage tracking
+AgentForge is licensed under the Apache-2.0 License. See [LICENSE](LICENSE) for details.
 
-### v0.4.0
-- ⏳ Skills marketplace
-- ⏳ Cron jobs
-- ⏳ MCP connections
-- ⏳ Authentication
-- ⏳ Multi-user support
+## Acknowledgments
 
-### v1.0.0
-- ⏳ Production-ready
-- ⏳ Enterprise features
-- ⏳ Advanced observability
-- ⏳ Marketplace ecosystem
-
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-## 📄 License
-
-Apache-2.0 - See [LICENSE](LICENSE) for details.
-
-## 🏢 Organization
-
-Built with ❤️ by [Agentic Engineering](https://agenticengineering.agency) — Guadalajara, Mexico.
-
-## 🙏 Acknowledgments
-
-- Inspired by [OpenClaw](https://github.com/safeclaw/openclaw) and [NanoClaw](https://nanoclaw.net)
-- Built with [TanStack Start](https://tanstack.com/start)
-- Powered by [Mastra](https://mastra.ai)
-- Database by [Convex](https://convex.dev)
-- Sandboxes by [E2B](https://e2b.dev)
+- Inspired by the design and philosophy of [OpenClaw](https://github.com/safeclaw/openclaw) and [NanoClaw](https://nanoclaw.net).
+- Built with the excellent [TanStack](https://tanstack.com/) tools.
+- Powered by [Mastra](https://mastra.ai) for multi-provider AI.
+- Real-time backend by [Convex](https://convex.dev).
