@@ -156,7 +156,7 @@ export function getMarketNews(symbol: string) {
 export function createFinForgeMCPServer(): MCPServer {
   const server = new MCPServer({
     name: 'finforge-tools',
-    version: '0.1.0',
+    version: '0.3.2',
   });
 
   // --- Tool: Get Stock Quote ---
