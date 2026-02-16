@@ -2,13 +2,20 @@ import { Command } from 'commander';
 import { createProject } from './commands/create.js';
 import { runProject } from './commands/run.js';
 import { deployProject } from './commands/deploy.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const pkg = JSON.parse(readFileSync(resolve(__dirname, '..', 'package.json'), 'utf-8'));
 
 const program = new Command();
 
 program
   .name('agentforge')
   .description('CLI tool for creating, running, and managing AgentForge projects')
-  .version('0.2.0');
+  .version(pkg.version);
 
 program
   .command('create')
