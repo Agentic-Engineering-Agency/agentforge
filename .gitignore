@@ -31,3 +31,5 @@ pnpm-debug.log*
 
 # Convex
 .convex/
+test_results.md
+test_results_security.md
