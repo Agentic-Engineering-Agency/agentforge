@@ -284,6 +284,40 @@ export default defineSchema({
     .index("byStatus", ["status"])
     .index("byNextCheck", ["nextCheck"]),
 
+  // Secure Vault for encrypted secrets storage
+  vault: defineTable({
+    name: v.string(), // Display name (e.g., "OpenAI API Key")
+    category: v.string(), // "api_key", "token", "secret", "credential"
+    provider: v.optional(v.string()), // Associated provider
+    encryptedValue: v.string(), // AES-256-GCM encrypted value
+    iv: v.string(), // Initialization vector for decryption
+    maskedValue: v.string(), // e.g., "sk-...abc123"
+    isActive: v.boolean(),
+    expiresAt: v.optional(v.number()),
+    lastAccessedAt: v.optional(v.number()),
+    accessCount: v.number(),
+    userId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("byUserId", ["userId"])
+    .index("byCategory", ["category"])
+    .index("byProvider", ["provider"])
+    .index("byIsActive", ["isActive"]),
+
+  // Audit log for vault access
+  vaultAuditLog: defineTable({
+    vaultEntryId: v.id("vault"),
+    action: v.string(), // "created", "accessed", "updated", "deleted", "auto_captured"
+    source: v.string(), // "dashboard", "chat", "api", "agent"
+    userId: v.optional(v.string()),
+    ipAddress: v.optional(v.string()),
+    timestamp: v.number(),
+  })
+    .index("byVaultEntryId", ["vaultEntryId"])
+    .index("byUserId", ["userId"])
+    .index("byTimestamp", ["timestamp"]),
+
   // Agent instances for multi-agent workflows
   instances: defineTable({
     agentId: v.string(),
