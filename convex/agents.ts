@@ -12,9 +12,9 @@ export const list = query({
       return await ctx.db
         .query("agents")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     }
-    return await ctx.db.query("agents").collect();
+    return await ctx.db.query("agents").take(100).collect();
   },
 });
 
@@ -39,7 +39,7 @@ export const listActive = query({
       .query("agents")
       .withIndex("byIsActive", (q) => q.eq("isActive", true));
     
-    const agents = await query.collect();
+    const agents = await query.take(100).collect();
     
     if (args.userId) {
       return agents.filter((agent) => agent.userId === args.userId);

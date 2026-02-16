@@ -13,7 +13,7 @@ export const list = query({
       const skills = await ctx.db
         .query("skills")
         .withIndex("byCategory", (q) => q.eq("category", args.category))
-        .collect();
+        .take(100).collect();
       
       if (args.userId) {
         return skills.filter((s) => s.userId === args.userId);
@@ -28,7 +28,7 @@ export const list = query({
       const skills = await ctx.db
         .query("skills")
         .withIndex("byIsInstalled", (q) => q.eq("isInstalled", args.isInstalled))
-        .collect();
+        .take(100).collect();
       
       if (args.userId) {
         return skills.filter((s) => s.userId === args.userId);
@@ -40,10 +40,10 @@ export const list = query({
       return await ctx.db
         .query("skills")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     }
     
-    return await ctx.db.query("skills").collect();
+    return await ctx.db.query("skills").take(100).collect();
   },
 });
 
@@ -64,7 +64,7 @@ export const listInstalled = query({
     const skills = await ctx.db
       .query("skills")
       .withIndex("byIsInstalled", (q) => q.eq("isInstalled", true))
-      .collect();
+      .take(100).collect();
     
     if (args.userId) {
       return skills.filter((s) => s.userId === args.userId);

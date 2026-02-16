@@ -13,24 +13,24 @@ export const list = query({
       return await ctx.db
         .query("files")
         .withIndex("byFolderId", (q) => q.eq("folderId", args.folderId))
-        .collect();
+        .take(100).collect();
     }
     
     if (args.projectId) {
       return await ctx.db
         .query("files")
         .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId))
-        .collect();
+        .take(100).collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("files")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     }
     
-    return await ctx.db.query("files").collect();
+    return await ctx.db.query("files").take(100).collect();
   },
 });
 

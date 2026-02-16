@@ -13,24 +13,24 @@ export const list = query({
       return await ctx.db
         .query("folders")
         .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId))
-        .collect();
+        .take(100).collect();
     }
     
     if (args.parentId) {
       return await ctx.db
         .query("folders")
         .withIndex("byParentId", (q) => q.eq("parentId", args.parentId))
-        .collect();
+        .take(100).collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("folders")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     }
     
-    return await ctx.db.query("folders").collect();
+    return await ctx.db.query("folders").take(100).collect();
   },
 });
 
@@ -86,7 +86,7 @@ export const remove = mutation({
     const files = await ctx.db
       .query("files")
       .withIndex("byFolderId", (q) => q.eq("folderId", args.id))
-      .collect();
+      .take(100).collect();
     
     for (const file of files) {
       await ctx.db.delete(file._id);
@@ -96,7 +96,7 @@ export const remove = mutation({
     const subfolders = await ctx.db
       .query("folders")
       .withIndex("byParentId", (q) => q.eq("parentId", args.id))
-      .collect();
+      .take(100).collect();
     
     for (const subfolder of subfolders) {
       // Recursive delete (will be called via mutation)

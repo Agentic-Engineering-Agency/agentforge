@@ -13,7 +13,7 @@ export const list = query({
       const sessions = await ctx.db
         .query("sessions")
         .withIndex("byStatus", (q) => q.eq("status", args.status as any))
-        .collect();
+        .take(100).collect();
       
       if (args.userId) {
         return sessions.filter((s) => s.userId === args.userId);
@@ -28,17 +28,17 @@ export const list = query({
       return await ctx.db
         .query("sessions")
         .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .collect();
+        .take(100).collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("sessions")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     }
     
-    return await ctx.db.query("sessions").collect();
+    return await ctx.db.query("sessions").take(100).collect();
   },
 });
 
@@ -62,7 +62,7 @@ export const listActive = query({
     const sessions = await ctx.db
       .query("sessions")
       .withIndex("byStatus", (q) => q.eq("status", "active"))
-      .collect();
+      .take(100).collect();
     
     if (args.userId) {
       return sessions.filter((s) => s.userId === args.userId);

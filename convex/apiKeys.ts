@@ -12,7 +12,7 @@ export const list = query({
       const keys = await ctx.db
         .query("apiKeys")
         .withIndex("byProvider", (q) => q.eq("provider", args.provider))
-        .collect();
+        .take(100).collect();
       
       if (args.userId) {
         return keys.filter((k) => k.userId === args.userId);
@@ -24,10 +24,10 @@ export const list = query({
       return await ctx.db
         .query("apiKeys")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     }
     
-    return await ctx.db.query("apiKeys").collect();
+    return await ctx.db.query("apiKeys").take(100).collect();
   },
 });
 
@@ -49,7 +49,7 @@ export const getActiveForProvider = query({
     const keys = await ctx.db
       .query("apiKeys")
       .withIndex("byProvider", (q) => q.eq("provider", args.provider))
-      .collect();
+      .take(100).collect();
     
     const activeKeys = keys.filter((k) => k.isActive);
     

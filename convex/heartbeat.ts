@@ -38,7 +38,7 @@ export const get = query({
     const heartbeats = await ctx.db
       .query("heartbeats")
       .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-      .collect();
+      .take(100).collect();
     
     if (args.threadId) {
       return heartbeats.find((h) => h.threadId === args.threadId);
@@ -57,14 +57,14 @@ export const listActive = query({
     const heartbeats = await ctx.db
       .query("heartbeats")
       .withIndex("byStatus", (q) => q.eq("status", "active"))
-      .collect();
+      .take(100).collect();
     
     if (args.userId) {
       // Filter by userId if provided
       const userAgents = await ctx.db
         .query("agents")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
       
       const userAgentIds = new Set(userAgents.map((a) => a.id));
       return heartbeats.filter((h) => userAgentIds.has(h.agentId));
@@ -82,7 +82,7 @@ export const getDueForCheck = query({
     const heartbeats = await ctx.db
       .query("heartbeats")
       .withIndex("byNextCheck")
-      .collect();
+      .take(100).collect();
     
     return heartbeats.filter((h) => h.nextCheck <= now && h.status === "active");
   },

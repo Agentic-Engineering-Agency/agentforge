@@ -1,5 +1,4 @@
 import { createRootRoute, Outlet } from "@tanstack/react-router";
-import { TanStackRouterDevtools } from "@tanstack/router-devtools";
 import "../styles/globals.css";
 
 export const Route = createRootRoute({
@@ -8,9 +7,8 @@ export const Route = createRootRoute({
 
 function RootComponent() {
   return (
-    <>
+    <div className="min-h-screen bg-background text-foreground">
       <Outlet />
-      {process.env.NODE_ENV === "development" && <TanStackRouterDevtools />}
-    </>
+    </div>
   );
 }

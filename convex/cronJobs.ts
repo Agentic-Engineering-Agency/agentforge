@@ -13,7 +13,7 @@ export const list = query({
       const jobs = await ctx.db
         .query("cronJobs")
         .withIndex("byIsEnabled", (q) => q.eq("isEnabled", args.isEnabled))
-        .collect();
+        .take(100).collect();
       
       if (args.userId) {
         return jobs.filter((j) => j.userId === args.userId);
@@ -28,17 +28,17 @@ export const list = query({
       return await ctx.db
         .query("cronJobs")
         .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .collect();
+        .take(100).collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("cronJobs")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .collect();
+        .take(100).collect();
     }
     
-    return await ctx.db.query("cronJobs").collect();
+    return await ctx.db.query("cronJobs").take(100).collect();
   },
 });
 
@@ -58,7 +58,7 @@ export const getDueJobs = query({
     const jobs = await ctx.db
       .query("cronJobs")
       .withIndex("byNextRun")
-      .collect();
+      .take(100).collect();
     
     return jobs.filter((j) => j.isEnabled && j.nextRun && j.nextRun <= now);
   },
@@ -163,7 +163,7 @@ export const remove = mutation({
     const runs = await ctx.db
       .query("cronJobRuns")
       .withIndex("byCronJobId", (q) => q.eq("cronJobId", args.id))
-      .collect();
+      .take(100).collect();
     
     for (const run of runs) {
       await ctx.db.delete(run._id);
@@ -210,7 +210,7 @@ export const getRunHistory = query({
     const runs = await ctx.db
       .query("cronJobRuns")
       .withIndex("byCronJobId", (q) => q.eq("cronJobId", args.cronJobId))
-      .collect();
+      .take(100).collect();
     
     // Sort by startedAt descending
     runs.sort((a, b) => b.startedAt - a.startedAt);
