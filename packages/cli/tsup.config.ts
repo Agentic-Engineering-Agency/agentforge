@@ -8,9 +8,11 @@ export default defineConfig({
   sourcemap: true,
   clean: true,
   outDir: 'dist',
-  target: 'es2022',
+  target: 'node18',
   banner: {
     js: '#!/usr/bin/env node',
   },
+  external: ['convex', 'convex/browser'],
+  platform: 'node',
   publicDir: 'templates',
 });

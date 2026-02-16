@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/cli",
-  "version": "0.3.2",
+  "version": "0.4.0",
   "description": "CLI tool for creating, running, and managing AgentForge projects",
   "type": "module",
   "bin": {
@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "commander": "^12.0.0",
+    "convex": "^1.17.0",
     "chalk": "^5.3.0",
     "fs-extra": "^11.2.0",
     "ora": "^8.0.0",
