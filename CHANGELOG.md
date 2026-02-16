@@ -5,6 +5,66 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-02-16
+
+### Added
+
+#### Web Dashboard
+- **TanStack Start web dashboard** with modern UI and dark theme
+- **Dashboard layout** with sidebar navigation matching OpenClaw's structure
+- **Overview page** with stats and recent activity
+- **Chat interface** with real-time messaging
+- **Agents management** page for creating and managing agents
+- **Placeholder routes** for all major features (sessions, files, projects, skills, cron, connections, settings, usage)
+- **Responsive design** that works on desktop and mobile
+
+#### Backend & Database
+- **Comprehensive Convex schema** with 13 tables for agents, threads, messages, sessions, files, folders, projects, skills, cron jobs, MCP connections, API keys, usage tracking, and heartbeats
+- **Convex functions** for all core operations including CRUD for all entities
+- **Real-time subscriptions** powered by Convex
+
+#### Mastra Integration
+- **Multi-provider LLM support**: OpenAI, Anthropic, OpenRouter, Google, xAI
+- **Mastra integration module** with agent orchestration
+- **Convex actions** for agent execution
+- **Usage tracking** and cost estimation
+- **Streaming support** (placeholder)
+- **Workflow orchestration** (placeholder)
+
+#### Heartbeat System
+- **Task continuity** - Agents can check on ongoing conversations
+- **Pending task tracking** - Resume unfinished work
+- **Context maintenance** - Preserve state across sessions
+- **Scheduled checks** - Periodic heartbeat monitoring
+- **HEARTBEAT.md documentation** similar to OpenClaw
+
+#### Deployment
+- **Cloudflare Pages configuration** with wrangler.toml
+- **Environment variable templates** (.env.example)
+- **R2 bucket bindings** for file storage
+- **Deployment documentation** with step-by-step guides
+- **Multiple deployment options**: Cloudflare Pages, Vercel, Self-hosted
+
+#### Documentation
+- **Updated README** with comprehensive feature list
+- **Web dashboard README** with architecture details
+- **HEARTBEAT.md** documentation
+- **Deployment guide** with Cloudflare focus
+- **Architecture diagrams** and tech stack overview
+- **Roadmap** and comparison table
+
+### Changed
+- **Fixed Convex schema error** - Renamed reserved index `by_id` to `byAgentId`
+- **Updated package versions** to 0.3.0
+- **Enhanced README** with full feature documentation
+
+### Technical Details
+- **Frontend**: TanStack Start, Tailwind CSS, Radix UI, Lucide Icons
+- **Backend**: Convex (real-time database)
+- **Agent Engine**: Mastra
+- **Deployment**: Cloudflare Pages, Cloudflare R2
+- **Code Execution**: E2B sandboxes
+
 ## [0.2.1] - 2026-02-13
 
 ### Added
