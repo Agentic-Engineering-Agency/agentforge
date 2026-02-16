@@ -1,110 +1,110 @@
-# My AgentForge Project
+# AgentForge Project
 
-Built with [AgentForge](https://github.com/Agentic-Engineering-Agency/agentforge) — a NanoClaw made with Mastra.
+Welcome to your new AgentForge project! This project was scaffolded by the `@agentforge-ai/cli`.
 
-## Quick Start
+## 🚀 Quick Start
+
+### 1. Install Dependencies
+
+If this wasn't done automatically during project creation, install the dependencies for the root project and the dashboard:
 
 ```bash
-# 1. Install dependencies
-npm install
+# Install root dependencies
+pnpm install
 
-# 2. Set up your environment
-cp .env.example .env
-# Edit .env and add your API key (OpenAI, OpenRouter, Anthropic, etc.)
+# Install dashboard dependencies
+cd dashboard
+pnpm install
+cd ..
+```
 
-# 3. Start the Convex dev server
+### 2. Configure Your Environment
+
+Copy the example environment file and add your API keys. You only need to configure one LLM provider to get started.
+
+```bash
+cp .env.example .env.local
+```
+
+Edit `.env.local` with your keys:
+
+```dotenv
+# Convex URL will be set automatically by `npx convex dev`
+CONVEX_URL=
+
+# Add your preferred LLM provider API key
+OPENAI_API_KEY=sk-...
+```
+
+### 3. Start the Development Servers
+
+AgentForge requires two concurrent processes for local development:
+
+```bash
+# Terminal 1: Start the Convex backend
 npx convex dev
 
-# 4. Start building!
-npm run dev
+# Terminal 2: Launch the web dashboard
+agentforge dashboard
+```
+
+- The **Convex backend** syncs your database schema and functions, providing a dashboard at `http://localhost:8187`.
+- The **web dashboard** provides a UI for managing your agents, available at `http://localhost:3000`.
+
+## 🤖 Your First Agent
+
+Your default agent is defined in `src/agent.ts`. You can customize its instructions, model, and tools.
+
+```typescript
+// src/agent.ts
+import { Agent } from '@agentforge-ai/core';
+
+const myAgent = new Agent({
+  id: 'my-first-agent',
+  name: 'My First Agent',
+  instructions: 'You are a helpful AI assistant...',
+  model: 'openai:gpt-4o-mini',
+});
+
+export default myAgent;
 ```
 
 ## Project Structure
 
 ```
-├── convex/          # Convex schema and functions
-│   └── schema.ts    # Database schema (agents, threads, messages, etc.)
+/my-agent-project
+├── convex/                 # Convex backend (database schema, functions)
+├── dashboard/              # Web dashboard frontend (Vite + React)
+├── skills/                 # Custom agent skills
+├── workspace/              # Default local file storage for agents
 ├── src/
-│   └── agent.ts     # Your agent definition
-├── skills/          # Custom skills directory
-├── .env.example     # Environment variable template
+│   └── agent.ts            # Your main agent definition
+├── .env.local              # Your local environment variables
 ├── package.json
 └── tsconfig.json
 ```
 
-## CLI Commands
+##  CLI Commands
+
+Use the `agentforge` CLI to manage your project from the terminal.
 
 ```bash
-# Agent Management
-agentforge agents list              # List all agents
-agentforge agents create            # Create a new agent (interactive)
-agentforge agents inspect <id>      # Show agent details
-agentforge agents edit <id>         # Edit an agent
-agentforge agents delete <id>       # Delete an agent
+# List all agents
+agentforge agents list
 
-# Chat
-agentforge chat <agent-id>          # Start chatting with an agent
-agentforge chat --session <id>      # Resume a session
+# Chat with your agent
+agentforge chat my-first-agent
 
-# Sessions & Threads
-agentforge sessions list            # List all sessions
-agentforge threads list             # List all threads
-
-# Skills
-agentforge skills list              # List installed skills
-agentforge skills install <name>    # Install a skill
-agentforge skills search <query>    # Search available skills
-
-# Cron Jobs
-agentforge cron list                # List cron jobs
-agentforge cron create              # Create a cron job (interactive)
-
-# MCP Connections
-agentforge mcp list                 # List MCP connections
-agentforge mcp add                  # Add a connection (interactive)
-agentforge mcp test <id>            # Test connection health
-
-# Files & Projects
-agentforge files list               # List files
-agentforge files upload <path>      # Upload a file
-agentforge projects list            # List projects
-agentforge projects create <name>   # Create a project
-
-# Configuration & Vault
-agentforge config list              # List all config
-agentforge vault list               # List secrets (masked)
-agentforge vault add <name> <value> # Store a secret
-
-# Utilities
-agentforge status                   # Show system health
-agentforge logs                     # Tail recent logs
-agentforge dashboard                # Open the web dashboard
-agentforge deploy                   # Deploy to production
+# See all available commands
+agentforge --help
 ```
 
-## Providers
 
-AgentForge supports multiple LLM providers. Set your preferred provider in `.env`:
 
-| Provider | Model Format | API Key Variable |
-|----------|-------------|-----------------|
-| OpenAI | `openai:gpt-4o-mini` | `OPENAI_API_KEY` |
-| OpenRouter | `openrouter:anthropic/claude-3.5-sonnet` | `OPENROUTER_API_KEY` |
-| Anthropic | `anthropic:claude-3-5-sonnet-20241022` | `ANTHROPIC_API_KEY` |
-| Google | `google:gemini-2.0-flash` | `GOOGLE_API_KEY` |
-| xAI | `xai:grok-2` | `XAI_API_KEY` |
 
-## Web Dashboard
-
-Launch the dashboard for a visual interface:
-
-```bash
-agentforge dashboard
-```
 
 ## Learn More
 
-- [AgentForge Documentation](https://github.com/Agentic-Engineering-Agency/agentforge)
-- [CLI Reference](https://github.com/Agentic-Engineering-Agency/agentforge/blob/main/docs/cli-reference.md)
-- [Convex Docs](https://docs.convex.dev)
-- [Mastra Docs](https://mastra.ai/docs)
+- **[AgentForge Documentation](https://github.com/Agentic-Engineering-Agency/agentforge)**: Main project repository and documentation.
+- **[Convex Docs](https://docs.convex.dev)**: Learn more about the real-time backend.
+- **[Mastra Docs](https://mastra.ai/docs)**: Understand the core AI engine.
