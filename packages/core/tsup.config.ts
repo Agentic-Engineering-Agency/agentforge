@@ -6,6 +6,7 @@ export default defineConfig({
     'src/agent.ts',
     'src/sandbox.ts',
     'src/mcp-server.ts',
+    'src/workspace.ts',
   ],
   format: ['esm'],
   dts: true,
@@ -14,5 +15,5 @@ export default defineConfig({
   clean: true,
   outDir: 'dist',
   target: 'es2022',
-  external: ['@mastra/core', '@e2b/code-interpreter'],
+  external: ['@mastra/core', '@mastra/s3', '@e2b/code-interpreter'],
 });
