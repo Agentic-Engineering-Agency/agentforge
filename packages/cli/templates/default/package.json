@@ -8,10 +8,13 @@
     "build": "tsc",
     "convex:dev": "npx convex dev",
     "convex:deploy": "npx convex deploy",
-    "dashboard": "agentforge dashboard"
+    "dashboard": "agentforge dashboard",
+    "dashboard:install": "cd dashboard && pnpm install",
+    "dashboard:dev": "cd dashboard && pnpm dev",
+    "dashboard:build": "cd dashboard && pnpm build"
   },
   "dependencies": {
-    "@agentforge-ai/core": "^0.3.2",
+    "@agentforge-ai/core": "^0.4.0",
     "convex": "^1.17.0",
     "zod": "^3.23.0"
   },

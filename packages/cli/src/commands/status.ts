@@ -4,6 +4,7 @@ import { header, details, success, error, info, dim, colors } from '../lib/displ
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'fs-extra';
+import readline from 'node:readline';
 
 export function registerStatusCommand(program: Command) {
   program
@@ -12,13 +13,13 @@ export function registerStatusCommand(program: Command) {
     .action(async () => {
       header('AgentForge Status');
 
-      // Check project structure
       const cwd = process.cwd();
       const checks: Record<string, string> = {};
 
       checks['Project Root'] = fs.existsSync(path.join(cwd, 'package.json')) ? '✔ Found' : '✖ Not found';
       checks['Convex Dir'] = fs.existsSync(path.join(cwd, 'convex')) ? '✔ Found' : '✖ Not found';
       checks['Skills Dir'] = fs.existsSync(path.join(cwd, 'skills')) ? '✔ Found' : '✖ Not configured';
+      checks['Dashboard Dir'] = fs.existsSync(path.join(cwd, 'dashboard')) ? '✔ Found' : '✖ Not found';
       checks['Env Config'] = fs.existsSync(path.join(cwd, '.env.local')) || fs.existsSync(path.join(cwd, '.env'))
         ? '✔ Found' : '✖ Not found';
 
@@ -53,26 +54,84 @@ export function registerStatusCommand(program: Command) {
     .command('dashboard')
     .description('Launch the web dashboard')
     .option('-p, --port <port>', 'Port for the dashboard', '3000')
+    .option('--install', 'Install dashboard dependencies before starting')
     .action(async (opts) => {
       const cwd = process.cwd();
-      const webDir = path.join(cwd, 'node_modules', '@agentforge-ai', 'web');
-      const localWebDir = path.join(cwd, 'packages', 'web');
+
+      // Search for the dashboard in multiple locations (in priority order)
+      const searchPaths = [
+        path.join(cwd, 'dashboard'),                                    // 1. Bundled in project (agentforge create)
+        path.join(cwd, 'packages', 'web'),                              // 2. Monorepo structure
+        path.join(cwd, 'node_modules', '@agentforge-ai', 'web'),        // 3. Installed as dependency
+      ];
 
       let dashDir = '';
-      if (fs.existsSync(localWebDir)) {
-        dashDir = localWebDir;
-      } else if (fs.existsSync(webDir)) {
-        dashDir = webDir;
-      } else {
-        info('Dashboard not found locally. Starting from the built-in dashboard...');
-        info('Install the dashboard: pnpm add @agentforge-ai/web');
-        info('Or clone the repo: git clone https://github.com/Agentic-Engineering-Agency/agentforge');
+      for (const p of searchPaths) {
+        if (fs.existsSync(path.join(p, 'package.json'))) {
+          dashDir = p;
+          break;
+        }
+      }
+
+      if (!dashDir) {
+        error('Dashboard not found!');
+        console.log();
+        info('The dashboard should be in your project\'s ./dashboard/ directory.');
+        info('If you created this project with an older version of AgentForge,');
+        info('you can add it manually:');
+        console.log();
+        console.log(`  ${colors.cyan}# Option 1: Recreate the project${colors.reset}`);
+        console.log(`  agentforge create my-project`);
+        console.log();
+        console.log(`  ${colors.cyan}# Option 2: Clone the dashboard from the repo${colors.reset}`);
+        console.log(`  git clone https://github.com/Agentic-Engineering-Agency/agentforge /tmp/af`);
+        console.log(`  cp -r /tmp/af/packages/web ./dashboard`);
+        console.log(`  cd dashboard && pnpm install`);
+        console.log();
         return;
+      }
+
+      // Check if node_modules exists, if not install
+      const nodeModulesExists = fs.existsSync(path.join(dashDir, 'node_modules'));
+      if (!nodeModulesExists || opts.install) {
+        header('AgentForge Dashboard — Installing Dependencies');
+        info(`Installing in ${path.relative(cwd, dashDir) || '.'}...`);
+        console.log();
+
+        const installChild = spawn('pnpm', ['install'], {
+          cwd: dashDir,
+          stdio: 'inherit',
+          shell: true,
+        });
+
+        await new Promise<void>((resolve, reject) => {
+          installChild.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`pnpm install exited with code ${code}`));
+          });
+          installChild.on('error', reject);
+        });
+
+        console.log();
+        success('Dependencies installed.');
+        console.log();
+      }
+
+      // Read the Convex URL from .env.local and inject it into the dashboard
+      const envPath = path.join(cwd, '.env.local');
+      if (fs.existsSync(envPath)) {
+        const envContent = fs.readFileSync(envPath, 'utf-8');
+        const convexUrlMatch = envContent.match(/CONVEX_URL=(.+)/);
+        if (convexUrlMatch) {
+          const dashEnvPath = path.join(dashDir, '.env.local');
+          const dashEnvContent = `VITE_CONVEX_URL=${convexUrlMatch[1].trim()}\n`;
+          fs.writeFileSync(dashEnvPath, dashEnvContent);
+        }
       }
 
       header('AgentForge Dashboard');
       info(`Starting dashboard on port ${opts.port}...`);
-      info(`Open http://localhost:${opts.port} in your browser.`);
+      info(`Open ${colors.cyan}http://localhost:${opts.port}${colors.reset} in your browser.`);
       console.log();
 
       const child = spawn('pnpm', ['dev', '--port', opts.port], {
@@ -147,7 +206,6 @@ export function registerStatusCommand(program: Command) {
       console.log();
 
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const { createInterface } = await import('node:readline');
       const answer = await new Promise<string>((r) => rl.question('Resume pending tasks? (y/N): ', (a) => { rl.close(); r(a.trim()); }));
       if (answer.toLowerCase() === 'y') {
         for (const task of items) {
@@ -161,5 +219,3 @@ export function registerStatusCommand(program: Command) {
       }
     });
 }
-
-import readline from 'node:readline';

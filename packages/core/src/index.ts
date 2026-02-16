@@ -15,3 +15,10 @@ export type { SandboxConfig, SandboxRunOptions, SandboxResult } from './sandbox.
 
 export { MCPServer } from './mcp-server.js';
 export type { MCPServerConfig, Tool, ToolSchema } from './mcp-server.js';
+
+export { AgentForgeWorkspace } from './workspace.js';
+export type {
+  LocalWorkspaceConfig,
+  CloudWorkspaceConfig,
+  WorkspaceToolConfig,
+} from './workspace.js';

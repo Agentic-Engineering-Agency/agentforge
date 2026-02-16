@@ -35,15 +35,29 @@ export async function createProject(
   console.log(`\n🔨 Creating AgentForge project: ${projectName}\n`);
 
   // Resolve template directory
-  const templateDir = path.resolve(
-    __dirname,
-    '..', // from dist/commands to dist
-    'templates',
-    options.template
-  );
+  // tsup publicDir copies templates/ contents into dist/, so dist/default/ exists
+  // When running from dist/index.js, __dirname is dist/, so we check:
+  //   1. dist/<template> (built bundle — tsup publicDir)
+  //   2. ../templates/<template> (development — running from src/)
+  //   3. ../../templates/<template> (fallback)
+  const searchDirs = [
+    path.resolve(__dirname, options.template),                        // dist/default (built)
+    path.resolve(__dirname, '..', 'templates', options.template),     // packages/cli/templates/default (dev)
+    path.resolve(__dirname, '..', '..', 'templates', options.template), // fallback
+  ];
 
-  if (!(await fs.pathExists(templateDir))) {
+  let templateDir = '';
+  for (const dir of searchDirs) {
+    if (await fs.pathExists(path.join(dir, 'package.json'))) {
+      templateDir = dir;
+      break;
+    }
+  }
+
+  if (!templateDir) {
     console.error(`Error: Template "${options.template}" not found.`);
+    console.error(`Searched in:`);
+    searchDirs.forEach(d => console.error(`  - ${d}`));
     process.exit(1);
   }
 
@@ -58,9 +72,17 @@ export async function createProject(
     await fs.writeJson(pkgPath, pkg, { spaces: 2 });
   }
 
+  // Update dashboard package.json name
+  const dashPkgPath = path.join(targetDir, 'dashboard', 'package.json');
+  if (await fs.pathExists(dashPkgPath)) {
+    const dashPkg = await fs.readJson(dashPkgPath);
+    dashPkg.name = `${projectName}-dashboard`;
+    await fs.writeJson(dashPkgPath, dashPkg, { spaces: 2 });
+  }
+
   console.log(`  ✅ Project scaffolded at ./${projectName}`);
 
-  // Install dependencies
+  // Install root dependencies
   console.log(`\n📦 Installing dependencies...\n`);
   try {
     execSync('pnpm install', {
@@ -74,12 +96,54 @@ export async function createProject(
     );
   }
 
+  // Install dashboard dependencies
+  const dashDir = path.join(targetDir, 'dashboard');
+  if (await fs.pathExists(dashDir)) {
+    console.log(`\n📦 Installing dashboard dependencies...\n`);
+    try {
+      execSync('pnpm install', {
+        cwd: dashDir,
+        stdio: 'inherit',
+      });
+      console.log(`\n  ✅ Dashboard dependencies installed`);
+    } catch {
+      console.warn(
+        `\n  ⚠️  Could not install dashboard dependencies. Run "cd ${projectName}/dashboard && pnpm install" manually.`
+      );
+    }
+  }
+
+  // Initialize Convex
+  console.log(`\n⚡ Initializing Convex...\n`);
+  try {
+    execSync('npx convex dev --once', {
+      cwd: targetDir,
+      stdio: 'inherit',
+    });
+    console.log(`\n  ✅ Convex initialized`);
+  } catch {
+    console.warn(
+      `\n  ⚠️  Convex initialization skipped. Run "npx convex dev" to set up your backend.`
+    );
+  }
+
   console.log(`
 🎉 AgentForge project "${projectName}" created successfully!
 
 Next steps:
   cd ${projectName}
-  agentforge run
+
+  # Start the Convex backend
+  npx convex dev
+
+  # In another terminal, launch the dashboard
+  agentforge dashboard
+
+  # Or chat with your agent from the CLI
+  agentforge chat
+
+  # Check system status
+  agentforge status
 
 Documentation: https://github.com/Agentic-Engineering-Agency/agentforge
 `);
