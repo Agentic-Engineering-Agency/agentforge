@@ -16,20 +16,20 @@ export const list = query({
     if (args.provider) {
       records = await ctx.db
         .query("usage")
-        .withIndex("byProvider", (q) => q.eq("provider", args.provider))
-        .take(100).collect();
+        .withIndex("byProvider", (q) => q.eq("provider", args.provider!))
+        .collect();
     } else if (args.agentId) {
       records = await ctx.db
         .query("usage")
-        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .take(100).collect();
+        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
+        .collect();
     } else if (args.userId) {
       records = await ctx.db
         .query("usage")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     } else {
-      records = await ctx.db.query("usage").take(100).collect();
+      records = await ctx.db.query("usage").collect();
     }
     
     // Filter by time range if provided
@@ -58,15 +58,15 @@ export const getStats = query({
     if (args.agentId) {
       records = await ctx.db
         .query("usage")
-        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .take(100).collect();
+        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
+        .collect();
     } else if (args.userId) {
       records = await ctx.db
         .query("usage")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     } else {
-      records = await ctx.db.query("usage").take(100).collect();
+      records = await ctx.db.query("usage").collect();
     }
     
     // Filter by time range
@@ -139,10 +139,10 @@ export const getByTimePeriod = query({
     if (args.userId) {
       records = await ctx.db
         .query("usage")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     } else {
-      records = await ctx.db.query("usage").take(100).collect();
+      records = await ctx.db.query("usage").collect();
     }
     
     records = records.filter((r) => r.timestamp >= startTime);
@@ -182,7 +182,7 @@ export const cleanup = mutation({
     const records = await ctx.db
       .query("usage")
       .withIndex("byTimestamp")
-      .take(100).collect();
+      .collect();
     
     const toDelete = records.filter((r) => r.timestamp < args.olderThan);
     

@@ -12,8 +12,8 @@ export const list = query({
     if (args.category) {
       const skills = await ctx.db
         .query("skills")
-        .withIndex("byCategory", (q) => q.eq("category", args.category))
-        .take(100).collect();
+        .withIndex("byCategory", (q) => q.eq("category", args.category!))
+        .collect();
       
       if (args.userId) {
         return skills.filter((s) => s.userId === args.userId);
@@ -27,8 +27,8 @@ export const list = query({
     if (args.isInstalled !== undefined) {
       const skills = await ctx.db
         .query("skills")
-        .withIndex("byIsInstalled", (q) => q.eq("isInstalled", args.isInstalled))
-        .take(100).collect();
+        .withIndex("byIsInstalled", (q) => q.eq("isInstalled", args.isInstalled!))
+        .collect();
       
       if (args.userId) {
         return skills.filter((s) => s.userId === args.userId);
@@ -39,11 +39,11 @@ export const list = query({
     if (args.userId) {
       return await ctx.db
         .query("skills")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     }
     
-    return await ctx.db.query("skills").take(100).collect();
+    return await ctx.db.query("skills").collect();
   },
 });
 
@@ -64,7 +64,7 @@ export const listInstalled = query({
     const skills = await ctx.db
       .query("skills")
       .withIndex("byIsInstalled", (q) => q.eq("isInstalled", true))
-      .take(100).collect();
+      .collect();
     
     if (args.userId) {
       return skills.filter((s) => s.userId === args.userId);

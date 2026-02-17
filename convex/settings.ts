@@ -8,7 +8,7 @@ export const get = query({
     const setting = await ctx.db
       .query("settings")
       .withIndex("byUserIdAndKey", (q) =>
-        q.eq("userId", args.userId).eq("key", args.key)
+        q.eq("userId", args.userId!).eq("key", args.key!)
       )
       .first();
     return setting;
@@ -40,7 +40,7 @@ export const set = mutation({
     const existing = await ctx.db
       .query("settings")
       .withIndex("byUserIdAndKey", (q) =>
-        q.eq("userId", args.userId).eq("key", args.key)
+        q.eq("userId", args.userId!).eq("key", args.key!)
       )
       .first();
 
@@ -68,7 +68,7 @@ export const remove = mutation({
     const existing = await ctx.db
       .query("settings")
       .withIndex("byUserIdAndKey", (q) =>
-        q.eq("userId", args.userId).eq("key", args.key)
+        q.eq("userId", args.userId!).eq("key", args.key!)
       )
       .first();
 

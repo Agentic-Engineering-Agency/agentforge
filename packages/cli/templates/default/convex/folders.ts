@@ -12,25 +12,25 @@ export const list = query({
     if (args.projectId) {
       return await ctx.db
         .query("folders")
-        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId))
-        .take(100).collect();
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
     }
     
     if (args.parentId) {
       return await ctx.db
         .query("folders")
-        .withIndex("byParentId", (q) => q.eq("parentId", args.parentId))
-        .take(100).collect();
+        .withIndex("byParentId", (q) => q.eq("parentId", args.parentId!))
+        .collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("folders")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     }
     
-    return await ctx.db.query("folders").take(100).collect();
+    return await ctx.db.query("folders").collect();
   },
 });
 
@@ -85,8 +85,8 @@ export const remove = mutation({
     // Delete all files in the folder
     const files = await ctx.db
       .query("files")
-      .withIndex("byFolderId", (q) => q.eq("folderId", args.id))
-      .take(100).collect();
+      .withIndex("byFolderId", (q) => q.eq("folderId", args.id!))
+      .collect();
     
     for (const file of files) {
       await ctx.db.delete(file._id);
@@ -95,8 +95,8 @@ export const remove = mutation({
     // Delete all subfolders recursively
     const subfolders = await ctx.db
       .query("folders")
-      .withIndex("byParentId", (q) => q.eq("parentId", args.id))
-      .take(100).collect();
+      .withIndex("byParentId", (q) => q.eq("parentId", args.id!))
+      .collect();
     
     for (const subfolder of subfolders) {
       // Recursive delete (will be called via mutation)

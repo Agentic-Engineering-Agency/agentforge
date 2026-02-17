@@ -11,8 +11,8 @@ export const list = query({
     if (args.isEnabled !== undefined) {
       const connections = await ctx.db
         .query("mcpConnections")
-        .withIndex("byIsEnabled", (q) => q.eq("isEnabled", args.isEnabled))
-        .take(100).collect();
+        .withIndex("byIsEnabled", (q) => q.eq("isEnabled", args.isEnabled!))
+        .collect();
       
       if (args.userId) {
         return connections.filter((c) => c.userId === args.userId);
@@ -23,11 +23,11 @@ export const list = query({
     if (args.userId) {
       return await ctx.db
         .query("mcpConnections")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     }
     
-    return await ctx.db.query("mcpConnections").take(100).collect();
+    return await ctx.db.query("mcpConnections").collect();
   },
 });
 

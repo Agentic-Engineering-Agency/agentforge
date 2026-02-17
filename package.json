@@ -1,6 +1,6 @@
 {
   "name": "agentforge",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "AgentForge: The Minimalist Framework for Collaborative AI Agents",
   "author": "Agentic Engineering <hello@agenticengineering.agency>",
@@ -22,6 +22,7 @@
   "packageManager": "pnpm@9.15.4",
   "devDependencies": {
     "@types/node": "^22.10.5",
-    "@vitest/coverage-v8": "^2.0.0"
+    "@vitest/coverage-v8": "^2.0.0",
+    "typescript": "^5.9.3"
   }
 }

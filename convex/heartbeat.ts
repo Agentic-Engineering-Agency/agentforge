@@ -37,8 +37,8 @@ export const get = query({
   handler: async (ctx, args) => {
     const heartbeats = await ctx.db
       .query("heartbeats")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-      .take(100).collect();
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
+      .collect();
     
     if (args.threadId) {
       return heartbeats.find((h) => h.threadId === args.threadId);
@@ -57,14 +57,14 @@ export const listActive = query({
     const heartbeats = await ctx.db
       .query("heartbeats")
       .withIndex("byStatus", (q) => q.eq("status", "active"))
-      .take(100).collect();
+      .collect();
     
     if (args.userId) {
       // Filter by userId if provided
       const userAgents = await ctx.db
         .query("agents")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
       
       const userAgentIds = new Set(userAgents.map((a) => a.id));
       return heartbeats.filter((h) => userAgentIds.has(h.agentId));
@@ -82,7 +82,7 @@ export const getDueForCheck = query({
     const heartbeats = await ctx.db
       .query("heartbeats")
       .withIndex("byNextCheck")
-      .take(100).collect();
+      .collect();
     
     return heartbeats.filter((h) => h.nextCheck <= now && h.status === "active");
   },
@@ -107,10 +107,10 @@ export const upsert = mutation({
     // Check if heartbeat exists
     const existing = await ctx.db
       .query("heartbeats")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
       .filter((q) =>
         args.threadId
-          ? q.eq(q.field("threadId"), args.threadId)
+          ? q.eq(q.field("threadId"), args.threadId!)
           : q.eq(q.field("threadId"), undefined)
       )
       .first();
@@ -146,10 +146,10 @@ export const updateStatus = mutation({
   handler: async (ctx, args) => {
     const heartbeat = await ctx.db
       .query("heartbeats")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
       .filter((q) =>
         args.threadId
-          ? q.eq(q.field("threadId"), args.threadId)
+          ? q.eq(q.field("threadId"), args.threadId!)
           : q.eq(q.field("threadId"), undefined)
       )
       .first();
@@ -178,10 +178,10 @@ export const addPendingTask = mutation({
   handler: async (ctx, args) => {
     const heartbeat = await ctx.db
       .query("heartbeats")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
       .filter((q) =>
         args.threadId
-          ? q.eq(q.field("threadId"), args.threadId)
+          ? q.eq(q.field("threadId"), args.threadId!)
           : q.eq(q.field("threadId"), undefined)
       )
       .first();
@@ -210,10 +210,10 @@ export const removePendingTask = mutation({
   handler: async (ctx, args) => {
     const heartbeat = await ctx.db
       .query("heartbeats")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
       .filter((q) =>
         args.threadId
-          ? q.eq(q.field("threadId"), args.threadId)
+          ? q.eq(q.field("threadId"), args.threadId!)
           : q.eq(q.field("threadId"), undefined)
       )
       .first();
@@ -242,10 +242,10 @@ export const updateContext = mutation({
   handler: async (ctx, args) => {
     const heartbeat = await ctx.db
       .query("heartbeats")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
       .filter((q) =>
         args.threadId
-          ? q.eq(q.field("threadId"), args.threadId)
+          ? q.eq(q.field("threadId"), args.threadId!)
           : q.eq(q.field("threadId"), undefined)
       )
       .first();
@@ -353,10 +353,10 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const heartbeat = await ctx.db
       .query("heartbeats")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
       .filter((q) =>
         args.threadId
-          ? q.eq(q.field("threadId"), args.threadId)
+          ? q.eq(q.field("threadId"), args.threadId!)
           : q.eq(q.field("threadId"), undefined)
       )
       .first();
