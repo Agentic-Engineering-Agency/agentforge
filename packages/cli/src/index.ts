@@ -14,6 +14,7 @@ import { registerConfigCommand } from './commands/config.js';
 import { registerVaultCommand } from './commands/vault.js';
 import { registerKeysCommand } from './commands/keys.js';
 import { registerStatusCommand } from './commands/status.js';
+import { registerLoginCommand } from './commands/login.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -49,14 +50,28 @@ program
 
 program
   .command('deploy')
-  .description('Deploy the Convex backend to production')
+  .description('Deploy the project to production')
   .option('--env <path>', 'Path to environment file', '.env.production')
   .option('--dry-run', 'Preview deployment without executing', false)
   .option('--rollback', 'Rollback to previous deployment', false)
   .option('--force', 'Skip confirmation prompts', false)
-  .action(async (options: { env: string; dryRun: boolean; rollback: boolean; force: boolean }) => {
+  .option('--provider <provider>', 'Deployment provider (convex or cloud)', 'convex')
+  .option('--project <projectId>', 'Project ID for cloud deployments')
+  .option('--version <tag>', 'Version tag for the deployment')
+  .action(async (options: { 
+    env: string; 
+    dryRun: boolean; 
+    rollback: boolean; 
+    force: boolean;
+    provider: 'convex' | 'cloud';
+    project?: string;
+    version?: string;
+  }) => {
     await deployProject(options);
   });
+
+// ─── Cloud Authentication ────────────────────────────────────────
+registerLoginCommand(program);
 
 // ─── Agent Management ────────────────────────────────────────────
 registerAgentsCommand(program);
