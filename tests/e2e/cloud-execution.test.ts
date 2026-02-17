@@ -23,7 +23,10 @@ let testAgentId: string;
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 
-describe('E2E: Cloud Execution', () => {
+// These tests require a running Cloud API
+const hasCloudApi = !!process.env.AGENTFORGE_CLOUD_URL;
+
+describe.runIf(hasCloudApi)('E2E: Cloud Execution', () => {
   beforeAll(async () => {
     const config = getTestConfig();
     cloudClient = new CloudTestClient(config.cloudUrl, config.apiKey);

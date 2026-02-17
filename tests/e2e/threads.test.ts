@@ -24,7 +24,10 @@ let testAgentId: string;
 
 // ─── Tests ────────────────────────────────────────────────────────────────
 
-describe('E2E: Thread Continuity', () => {
+// These tests require a running Cloud API
+const hasCloudApi = !!process.env.AGENTFORGE_CLOUD_URL;
+
+describe.runIf(hasCloudApi)('E2E: Thread Continuity', () => {
   beforeAll(async () => {
     const config = getTestConfig();
     cloudClient = new CloudTestClient(config.cloudUrl, config.apiKey);
