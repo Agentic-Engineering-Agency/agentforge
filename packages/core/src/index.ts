@@ -33,6 +33,31 @@ export type {
   SnapshotNode,
 } from './browser-tool.js';
 
+export {
+  ChannelAdapter,
+  ChannelRegistry,
+  MessageNormalizer,
+  channelConfigSchema,
+  outboundMessageSchema,
+} from './channel-adapter.js';
+
+export type {
+  MediaType,
+  HealthStatus,
+  ConnectionState,
+  ChatType,
+  MediaAttachment,
+  InboundMessage,
+  OutboundMessage,
+  MessageAction,
+  SendResult,
+  CallbackAction,
+  ChannelCapabilities,
+  ChannelConfig,
+  ChannelEvent,
+  ChannelEventHandler,
+} from './channel-adapter.js';
+
 export { AgentForgeWorkspace } from './workspace.js';
 export type {
   LocalWorkspaceConfig,
