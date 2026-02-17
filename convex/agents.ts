@@ -159,7 +159,7 @@ export const run = action({
     threadId: v.optional(v.id("threads")),
     userId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ threadId: string; message: string; agentId: string }> => {
     // Get agent configuration
     const agent = await ctx.runQuery(api.agents.get, { id: args.agentId });
     
@@ -186,19 +186,19 @@ export const run = action({
     // TODO: Integrate with Mastra to run the agent
     // This will be implemented in the Mastra integration phase
     // For now, return a placeholder response
-    const response = {
-      threadId,
-      message: "Agent execution will be implemented with Mastra integration",
-      agentId: args.agentId,
-    };
+    const responseMessage = "Agent execution will be implemented with Mastra integration";
 
     // Add assistant message placeholder
     await ctx.runMutation(api.messages.add, {
       threadId,
       role: "assistant",
-      content: response.message,
+      content: responseMessage,
     });
 
-    return response;
+    return {
+      threadId: threadId as string,
+      message: responseMessage,
+      agentId: args.agentId,
+    };
   },
 });

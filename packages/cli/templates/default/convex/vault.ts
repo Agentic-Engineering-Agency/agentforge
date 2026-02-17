@@ -1,6 +1,9 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 
+// Convex supports process.env but doesn't ship Node types by default
+declare const process: { env: Record<string, string | undefined> };
+
 // ============================================================
 // SECURE VAULT - Encrypted secrets management
 // ============================================================

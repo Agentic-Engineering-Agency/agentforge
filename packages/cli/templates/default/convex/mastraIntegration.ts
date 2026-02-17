@@ -80,7 +80,7 @@ export const executeAgent = action({
       // Build context from message history
       const context = messages
         .slice(-10) // Last 10 messages for context
-        .map((m) => `${m.role}: ${m.content}`)
+        .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
         .join("\n");
 
       // Execute agent
