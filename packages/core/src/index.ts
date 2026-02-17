@@ -58,6 +58,34 @@ export type {
   ChannelEventHandler,
 } from './channel-adapter.js';
 
+export {
+  SwarmOrchestrator,
+  InMemorySwarmStore,
+  SubTaskRunner,
+  ResultAggregator,
+  swarmDispatchSchema,
+  subTaskInputSchema,
+  DEFAULT_RESOURCE_LIMITS,
+  PRO_RESOURCE_LIMITS,
+  ENTERPRISE_RESOURCE_LIMITS,
+} from './swarm.js';
+
+export type {
+  SwarmJobStatus,
+  SubTaskStatus,
+  TokenUsage,
+  SwarmJob,
+  SubTask,
+  SubTaskResult,
+  SwarmResourceLimits,
+  SubAgentExecutor,
+  SwarmStateStore,
+  SwarmEvent,
+  SwarmEventHandler,
+  SwarmDispatchInput,
+  SubTaskInput,
+} from './swarm.js';
+
 export { AgentForgeWorkspace } from './workspace.js';
 export type {
   LocalWorkspaceConfig,
