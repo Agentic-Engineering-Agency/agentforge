@@ -8,15 +8,27 @@ importers:
 
   .:
     devDependencies:
+      '@types/fs-extra':
+        specifier: ^11.0.4
+        version: 11.0.4
       '@types/node':
         specifier: ^22.10.5
         version: 22.19.11
       '@vitest/coverage-v8':
         specifier: ^2.0.0
         version: 2.1.9(vitest@2.1.9(@types/node@22.19.11)(terser@5.46.0))
+      fs-extra:
+        specifier: ^11.2.0
+        version: 11.3.3
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.19.11)(terser@5.46.0)
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
 
   examples/finforge:
     dependencies:

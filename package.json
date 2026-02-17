@@ -11,6 +11,10 @@
     "test:coverage": "pnpm -r test:coverage",
     "test:core": "pnpm --filter @agentforge-ai/core test",
     "test:cli": "pnpm --filter @agentforge-ai/cli test",
+    "test:e2e": "cd tests/e2e && npx vitest run --config vitest.config.ts",
+    "test:e2e:local": "cd tests/e2e && npx vitest run local.test.ts tools.test.ts --config vitest.config.ts",
+    "test:e2e:cloud": "cd tests/e2e && npx vitest run deploy.test.ts cloud-execution.test.ts threads.test.ts --config vitest.config.ts",
+    "test:e2e:coverage": "cd tests/e2e && npx vitest run --config vitest.config.ts --coverage",
     "lint": "pnpm -r lint",
     "clean": "pnpm -r clean",
     "typecheck": "pnpm -r typecheck"
@@ -21,8 +25,12 @@
   },
   "packageManager": "pnpm@9.15.4",
   "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.10.5",
     "@vitest/coverage-v8": "^2.0.0",
-    "typescript": "^5.9.3"
+    "fs-extra": "^11.2.0",
+    "typescript": "^5.9.3",
+    "vitest": "^2.0.0",
+    "zod": "^3.23.0"
   }
 }

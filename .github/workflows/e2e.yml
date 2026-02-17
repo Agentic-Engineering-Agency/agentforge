@@ -1,0 +1,228 @@
+# E2E Integration Tests — Framework → Cloud
+#
+# Runs the full E2E test suite that validates:
+#   1. Local agent execution (unit-level with mocked LLM)
+#   2. CLI deployment pipeline
+#   3. Cloud API execution
+#   4. Thread continuity
+#   5. Tool/workspace transfer
+#
+# Triggers: PR to main, push to main, manual dispatch
+
+name: E2E Integration Tests
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'packages/core/**'
+      - 'packages/cli/**'
+      - 'convex/**'
+      - 'tests/e2e/**'
+      - '.github/workflows/e2e.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/core/**'
+      - 'packages/cli/**'
+      - 'convex/**'
+      - 'tests/e2e/**'
+  workflow_dispatch:
+    inputs:
+      skip_cloud_tests:
+        description: 'Skip Cloud API tests (useful when Cloud infra is down)'
+        required: false
+        default: 'false'
+        type: boolean
+
+env:
+  NODE_VERSION: '20'
+  PNPM_VERSION: '9'
+
+jobs:
+  # ── Stage 1: Local tests (no infra needed) ──────────────────────────
+  local-tests:
+    name: Local Agent & Tool Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run local E2E tests
+        run: |
+          cd tests/e2e
+          npx vitest run local.test.ts tools.test.ts --config vitest.config.ts
+        env:
+          NODE_ENV: test
+          E2E_TEST: '1'
+
+  # ── Stage 2: Deploy + Cloud tests ───────────────────────────────────
+  cloud-tests:
+    name: Cloud Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: local-tests
+    if: ${{ github.event.inputs.skip_cloud_tests != 'true' }}
+
+    services:
+      convex:
+        image: convex/convex-local:latest
+        ports:
+          - 3210:3210
+        options: >-
+          --health-cmd "curl -f http://localhost:3210/version || exit 1"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+          --health-start-period 10s
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Push Convex schema
+        run: npx convex deploy --url http://localhost:3210
+        env:
+          CONVEX_URL: http://localhost:3210
+
+      - name: Start Cloud API
+        run: |
+          # Start the API server in background
+          node packages/web/dist/server.js &
+          echo "Waiting for Cloud API..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
+              echo "Cloud API ready!"
+              break
+            fi
+            sleep 1
+          done
+        env:
+          PORT: 3001
+          NODE_ENV: test
+          CONVEX_URL: http://localhost:3210
+          AGENTFORGE_API_KEY: test-api-key-e2e
+
+      - name: Run deploy E2E tests
+        run: |
+          cd tests/e2e
+          npx vitest run deploy.test.ts --config vitest.config.ts
+        env:
+          NODE_ENV: test
+          E2E_TEST: '1'
+          AGENTFORGE_CLOUD_URL: http://localhost:3001
+          AGENTFORGE_TEST_API_KEY: test-api-key-e2e
+          CONVEX_URL: http://localhost:3210
+
+      - name: Run Cloud execution E2E tests
+        run: |
+          cd tests/e2e
+          npx vitest run cloud-execution.test.ts --config vitest.config.ts
+        env:
+          NODE_ENV: test
+          E2E_TEST: '1'
+          AGENTFORGE_CLOUD_URL: http://localhost:3001
+          AGENTFORGE_TEST_API_KEY: test-api-key-e2e
+          CONVEX_URL: http://localhost:3210
+
+      - name: Run thread continuity E2E tests
+        run: |
+          cd tests/e2e
+          npx vitest run threads.test.ts --config vitest.config.ts
+        env:
+          NODE_ENV: test
+          E2E_TEST: '1'
+          AGENTFORGE_CLOUD_URL: http://localhost:3001
+          AGENTFORGE_TEST_API_KEY: test-api-key-e2e
+          CONVEX_URL: http://localhost:3210
+
+  # ── Stage 3: Full suite with coverage ───────────────────────────────
+  coverage:
+    name: E2E Coverage Report
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [local-tests, cloud-tests]
+    if: always() && needs.local-tests.result == 'success'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run full E2E suite with coverage
+        run: |
+          cd tests/e2e
+          npx vitest run --config vitest.config.ts --coverage
+        env:
+          NODE_ENV: test
+          E2E_TEST: '1'
+          AGENTFORGE_CLOUD_URL: http://localhost:3001
+          AGENTFORGE_TEST_API_KEY: test-api-key-e2e
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-coverage
+          path: tests/e2e/coverage/
+          retention-days: 14
+
+      - name: Coverage summary
+        run: |
+          echo "## E2E Coverage Report" >> $GITHUB_STEP_SUMMARY
+          if [ -f tests/e2e/coverage/coverage-summary.json ]; then
+            cat tests/e2e/coverage/coverage-summary.json | jq -r '.total | "- Statements: \(.statements.pct)%\n- Branches: \(.branches.pct)%\n- Functions: \(.functions.pct)%\n- Lines: \(.lines.pct)%"' >> $GITHUB_STEP_SUMMARY
+          else
+            echo "Coverage report not generated" >> $GITHUB_STEP_SUMMARY
+          fi

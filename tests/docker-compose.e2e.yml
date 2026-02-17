@@ -1,0 +1,73 @@
+# E2E Test Infrastructure
+#
+# Spins up a local AgentForge Cloud environment for integration testing.
+# Usage:
+#   docker compose -f tests/docker-compose.e2e.yml up -d
+#   pnpm test:e2e
+#   docker compose -f tests/docker-compose.e2e.yml down -v
+#
+# Prerequisites:
+#   - Docker & Docker Compose v2+
+#   - Convex dev image (or use cloud-hosted Convex with CONVEX_URL override)
+
+version: "3.9"
+
+services:
+  # ── Convex Local Backend ──────────────────────────────────────────────
+  convex:
+    image: convex/convex-local:latest
+    ports:
+      - "3210:3210"
+    environment:
+      - CONVEX_SITE_URL=http://localhost:3210
+    volumes:
+      - convex-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3210/version"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # ── AgentForge Cloud API ──────────────────────────────────────────────
+  agentforge-cloud-api:
+    build:
+      context: ../
+      dockerfile: Dockerfile.cloud
+      args:
+        - NODE_ENV=test
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - NODE_ENV=test
+      - CONVEX_URL=http://convex:3210
+      - AGENTFORGE_API_KEY=test-api-key-e2e
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LOG_LEVEL=debug
+    depends_on:
+      convex:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+
+  # ── Schema Seeder (one-shot) ──────────────────────────────────────────
+  # Pushes the Convex schema to the local backend
+  seed:
+    build:
+      context: ../
+      dockerfile: Dockerfile.seed
+    environment:
+      - CONVEX_URL=http://convex:3210
+    depends_on:
+      convex:
+        condition: service_healthy
+    restart: "no"
+
+volumes:
+  convex-data:
+    driver: local
