@@ -215,8 +215,11 @@ A new AgentForge project has the following structure:
 ## Core Concepts
 
 - **Agents**: The fundamental actors in the system. Each agent has a unique identity, instructions, and a configured LLM.
-- **Workspace**: The agent's environment. It provides tools for file management (`filesystem`), code execution (`sandbox`), and skill activation (`skills`).
-- **Skills**: Reusable sets of instructions and tools that can be attached to agents to extend their capabilities.
+- **Workspace**: The agent's environment, powered by Mastra Workspace. It provides a unified interface for:
+  - **Filesystem**: Persistent file storage (local, S3, GCS).
+  - **Sandbox**: Secure code execution (local or E2B).
+  - **Skills**: Reusable capabilities following the Agent Skills specification.
+  - **Search**: Advanced content retrieval (BM25, Vector, Hybrid).
 - **HEARTBEAT**: A system that allows agents to persist their state and resume long-running tasks across interruptions.
 - **Vault**: An encrypted storage for secrets that automatically detects and redacts sensitive information from chat messages.
 
