@@ -9,6 +9,15 @@ import { api } from "./_generated/api";
  * to execute agents and manage workflows.
  */
 
+// Return type for executeAgent to break circular type inference
+type ExecuteAgentResult = {
+  success: boolean;
+  threadId: string;
+  sessionId: string;
+  response: string;
+  usage?: Record<string, unknown>;
+};
+
 // Action: Execute agent with Mastra
 export const executeAgent = action({
   args: {
@@ -18,7 +27,7 @@ export const executeAgent = action({
     userId: v.optional(v.string()),
     stream: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<ExecuteAgentResult> => {
     // Get agent configuration from database
     const agent = await ctx.runQuery(api.agents.get, { id: args.agentId });
     
@@ -75,12 +84,12 @@ export const executeAgent = action({
       });
 
       // Get conversation history for context
-      const messages = await ctx.runQuery(api.messages.list, { threadId });
+      const messages = await ctx.runQuery(api.messages.list, { threadId }) as Array<{ role: string; content: string }>;
       
       // Build context from message history
       const context = messages
         .slice(-10) // Last 10 messages for context
-        .map((m: { role: string; content: string }) => `${m.role}: ${m.content}`)
+        .map((m) => `${m.role}: ${m.content}`)
         .join("\n");
 
       // Execute agent
@@ -90,7 +99,7 @@ export const executeAgent = action({
       });
 
       // Extract response content
-      const responseContent = typeof result === "string" 
+      const responseContent: string = typeof result === "string" 
         ? result 
         : result.text || result.content || JSON.stringify(result);
 
@@ -124,12 +133,14 @@ export const executeAgent = action({
 
       return {
         success: true,
-        threadId,
+        threadId: threadId as string,
         sessionId,
         response: responseContent,
         usage: result.usage,
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
       // Update session status to error
       await ctx.runMutation(api.sessions.updateStatus, {
         sessionId,
@@ -140,7 +151,7 @@ export const executeAgent = action({
       await ctx.runMutation(api.messages.add, {
         threadId,
         role: "assistant",
-        content: `Error: ${error.message}`,
+        content: `Error: ${errorMessage}`,
       });
 
       throw error;
@@ -156,7 +167,7 @@ export const streamAgent = action({
     threadId: v.id("threads"),
     userId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ success: boolean; message: string }> => {
     // Similar to executeAgent but with streaming support
     // This would require WebSocket or SSE implementation
     // For now, return a placeholder
@@ -174,7 +185,7 @@ export const executeWorkflow = action({
     input: v.any(),
     userId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ success: boolean; message: string }> => {
     // Placeholder for workflow execution
     // This would orchestrate multiple agents in sequence or parallel
     return {
