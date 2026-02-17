@@ -13,6 +13,9 @@
  * - **ConvexMCPServer** - MCP tool registry with Convex persistence
  * - **ConvexVault** - AES-256-GCM encrypted secrets store
  * - **ConvexAgent** - Legacy adapter (deprecated, use ConvexAgentAdapter)
+ * - **ModelFailoverChain** - Automatic failover across LLM providers
+ * - **createFailoverChain** - Factory for creating failover chains from model strings
+ * - **createFailoverChainFromConfig** - Factory for creating chains from JSON config
  *
  * @example
  * ```typescript
@@ -63,6 +66,25 @@ export type { ConvexMCPServerConfig } from './convex-mcp-server.js';
 
 // Vault exports
 export { ConvexVault, maskValue } from './convex-vault.js';
+
+// Failover Chain exports
+export {
+  ModelFailoverChain,
+  createFailoverChain,
+  createFailoverChainFromConfig,
+} from './failover-chain.js';
+
+export type {
+  FailoverChainConfig,
+  FailoverModelConfig,
+  RetryPolicy,
+  CircuitBreakerConfig,
+  FailoverEvent,
+  CircuitStateChangeEvent,
+  FailoverErrorCategory,
+  CircuitState,
+  FailoverResult,
+} from './failover-chain.js';
 
 // Additional type exports
 export type {
