@@ -310,12 +310,12 @@ export const processCheck = action({
     agentId: v.string(),
     threadId: v.optional(v.id("threads")),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<{ success: boolean; message?: string; pendingTasks?: number; status?: string }> => {
     // Get heartbeat
     const heartbeat = await ctx.runQuery(api.heartbeat.get, {
       agentId: args.agentId,
       threadId: args.threadId,
-    });
+    }) as { status: string; pendingTasks: string[]; currentTask?: string } | null;
     
     if (!heartbeat) {
       return { success: false, message: "Heartbeat not found" };
