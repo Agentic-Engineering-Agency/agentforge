@@ -1,0 +1,108 @@
+# ─────────────────────────────────────────────────────────────────────────
+# AgentForge Agent Sandbox — Multi-Agent CLI Container
+# ─────────────────────────────────────────────────────────────────────────
+#
+# This Dockerfile builds a container with all supported agent CLIs
+# pre-installed and configured for multi-agent orchestration.
+#
+# Supported Agent CLIs:
+#   - Codex CLI (OpenAI)
+#   - Claude Code (Anthropic)
+#   - Gemini CLI (Google)
+#   - OpenCode
+#   - Aider
+#
+# Build:
+#   docker build -f docker/Dockerfile.agent-sandbox -t agentforge/agent-sandbox .
+#
+# Run:
+#   docker run -it --rm \
+#     -e OPENAI_API_KEY=sk-... \
+#     -e ANTHROPIC_API_KEY=sk-ant-... \
+#     -e GOOGLE_API_KEY=... \
+#     -v $(pwd)/workspace:/workspace \
+#     agentforge/agent-sandbox
+#
+# ─────────────────────────────────────────────────────────────────────────
+
+FROM node:22-bookworm-slim AS base
+
+LABEL maintainer="Agentic Engineering <team@agenticengineering.com>"
+LABEL description="AgentForge Agent Sandbox with multi-agent CLI support"
+LABEL version="1.0.0"
+
+# ── System Dependencies ─────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    wget \
+    git \
+    python3 \
+    python3-pip \
+    python3-venv \
+    build-essential \
+    ca-certificates \
+    jq \
+    ripgrep \
+    fd-find \
+    tree \
+    unzip \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Create agent user (non-root) ────────────────────────────────────────
+RUN useradd -m -s /bin/bash agent && \
+    mkdir -p /workspace /home/agent/.config && \
+    chown -R agent:agent /workspace /home/agent
+
+# ── Install pnpm ────────────────────────────────────────────────────────
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
+# ── Install Python-based Agent CLIs ─────────────────────────────────────
+# Aider — AI pair programming tool
+RUN python3 -m venv /opt/aider && \
+    /opt/aider/bin/pip install --no-cache-dir aider-chat && \
+    ln -s /opt/aider/bin/aider /usr/local/bin/aider
+
+# ── Install Node-based Agent CLIs ───────────────────────────────────────
+
+# Codex CLI (OpenAI) — AI coding assistant
+RUN npm install -g @openai/codex 2>/dev/null || echo "Codex CLI: will install at runtime if not available"
+
+# Claude Code (Anthropic) — Claude-powered coding
+RUN npm install -g @anthropic-ai/claude-code 2>/dev/null || echo "Claude Code: will install at runtime if not available"
+
+# Gemini CLI (Google) — Gemini-powered coding
+RUN npm install -g @anthropic-ai/gemini-cli 2>/dev/null; \
+    npm install -g @google/gemini-cli 2>/dev/null || echo "Gemini CLI: will install at runtime if not available"
+
+# OpenCode — Open-source AI coding assistant
+RUN npm install -g opencode-ai 2>/dev/null || echo "OpenCode: will install at runtime if not available"
+
+# ── Agent Detection Script ──────────────────────────────────────────────
+COPY docker/scripts/detect-agents.sh /usr/local/bin/detect-agents
+RUN chmod +x /usr/local/bin/detect-agents
+
+# ── Agent Runner Script ─────────────────────────────────────────────────
+COPY docker/scripts/run-agent.sh /usr/local/bin/run-agent
+RUN chmod +x /usr/local/bin/run-agent
+
+# ── Health Check Script ─────────────────────────────────────────────────
+COPY docker/scripts/healthcheck.sh /usr/local/bin/healthcheck
+RUN chmod +x /usr/local/bin/healthcheck
+
+# ── Configuration ───────────────────────────────────────────────────────
+ENV AGENTFORGE_SANDBOX=true
+ENV AGENTFORGE_WORKSPACE=/workspace
+ENV NODE_OPTIONS="--max-old-space-size=4096"
+
+# Default working directory
+WORKDIR /workspace
+
+# Switch to non-root user
+USER agent
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD /usr/local/bin/healthcheck
+
+# Default command: detect and list available agents
+CMD ["detect-agents"]
