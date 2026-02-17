@@ -1,0 +1,58 @@
+{
+  "name": "@agentforge-ai/convex-adapter",
+  "version": "0.1.0",
+  "description": "Convex adapter for @agentforge-ai/core - bridges AgentForge agents with Convex backend",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@agentforge-ai/core": "workspace:*",
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/google": "^1.0.0",
+    "@ai-sdk/openai": "^1.0.0",
+    "@ai-sdk/openai-compatible": "^0.1.0",
+    "@mastra/core": "^1.4.0",
+    "ai": "^4.0.0",
+    "convex": "^1.25.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "keywords": [
+    "agentforge",
+    "convex",
+    "ai",
+    "agents",
+    "mcp",
+    "adapter"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Agentic-Engineering-Agency/agentforge.git",
+    "directory": "packages/convex-adapter"
+  }
+}
