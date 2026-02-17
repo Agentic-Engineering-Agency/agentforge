@@ -86,6 +86,18 @@ export type {
   SubTaskInput,
 } from './swarm.js';
 
+export { GitTool, GitToolError } from './git-tool.js';
+export type {
+  GitToolConfig,
+  GitRepository,
+  GitFileStatus,
+  GitWorktreeStatus,
+  GitLogEntry,
+  GitBranch,
+  GitDiff,
+  GitStashEntry,
+} from './git-tool.js';
+
 export { AgentForgeWorkspace } from './workspace.js';
 export type {
   LocalWorkspaceConfig,
