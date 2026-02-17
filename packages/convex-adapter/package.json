@@ -25,7 +25,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentforge-ai/core": "^0.5.3",
+    "@agentforge-ai/core": "workspace:*",
     "@ai-sdk/anthropic": "^1.0.0",
     "@ai-sdk/google": "^1.0.0",
     "@ai-sdk/openai": "^1.0.0",
