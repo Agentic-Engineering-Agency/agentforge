@@ -16,7 +16,7 @@ export function registerProjectsCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .description('List all projects')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('projects:list' as any, {}), 'Failed to list projects');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
       header('Projects');
@@ -38,7 +38,7 @@ export function registerProjectsCommand(program: Command) {
     .description('Create a new project')
     .action(async (name, opts) => {
       const description = opts.description || await prompt('Description (optional): ');
-      const client = createClient();
+      const client = await createClient();
       await safeCall(
         () => client.mutation('projects:create' as any, { name, description, status: 'active' }),
         'Failed to create project'
@@ -51,7 +51,7 @@ export function registerProjectsCommand(program: Command) {
     .argument('<id>', 'Project ID')
     .description('Show project details')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       const projects = await safeCall(() => client.query('projects:list' as any, {}), 'Failed');
       const project = (projects as any[]).find((p: any) => p._id === id || p._id?.endsWith(id));
       if (!project) { error(`Project "${id}" not found.`); process.exit(1); }
@@ -76,7 +76,7 @@ export function registerProjectsCommand(program: Command) {
         const confirm = await prompt(`Delete project "${id}"? (y/N): `);
         if (confirm.toLowerCase() !== 'y') { info('Cancelled.'); return; }
       }
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('projects:remove' as any, { _id: id }), 'Failed');
       success(`Project "${id}" deleted.`);
     });
@@ -86,7 +86,7 @@ export function registerProjectsCommand(program: Command) {
     .argument('<id>', 'Project ID to switch to')
     .description('Set the active project')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       // Verify project exists
       const projects = await safeCall(() => client.query('projects:list' as any, {}), 'Failed');
       const project = (projects as any[]).find((p: any) => p._id === id || p._id?.endsWith(id));

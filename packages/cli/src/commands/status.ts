@@ -25,7 +25,7 @@ export function registerStatusCommand(program: Command) {
 
       // Check Convex connection
       try {
-        const client = createClient();
+        const client = await createClient();
         const agents = await client.query('agents:list' as any, {});
         checks['Convex Connection'] = `✔ Connected (${(agents as any[])?.length || 0} agents)`;
       } catch {
@@ -152,7 +152,7 @@ export function registerStatusCommand(program: Command) {
     .option('--agent <id>', 'Filter by agent ID')
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const args: Record<string, any> = {};
       if (opts.agent) args.agentId = opts.agent;
 
@@ -181,7 +181,7 @@ export function registerStatusCommand(program: Command) {
     .description('Check and resume pending agent tasks')
     .option('--agent <id>', 'Check specific agent')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       header('Heartbeat Check');
 
       const args: Record<string, any> = {};

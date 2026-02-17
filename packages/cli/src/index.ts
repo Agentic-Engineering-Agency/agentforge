@@ -12,6 +12,7 @@ import { registerFilesCommand } from './commands/files.js';
 import { registerProjectsCommand } from './commands/projects.js';
 import { registerConfigCommand } from './commands/config.js';
 import { registerVaultCommand } from './commands/vault.js';
+import { registerKeysCommand } from './commands/keys.js';
 import { registerStatusCommand } from './commands/status.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -87,6 +88,9 @@ registerConfigCommand(program);
 
 // ─── Vault (Secrets) ─────────────────────────────────────────────
 registerVaultCommand(program);
+
+// ─── AI Provider Keys ────────────────────────────────────────────
+registerKeysCommand(program);
 
 // ─── Status, Dashboard, Logs, Heartbeat ──────────────────────────
 registerStatusCommand(program);

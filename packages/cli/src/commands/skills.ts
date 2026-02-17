@@ -19,7 +19,7 @@ export function registerSkillsCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .description('List all skills')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('skills:list' as any, {}), 'Failed to list skills');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
       header('Skills');
@@ -130,7 +130,7 @@ export default { tools };
     .argument('<name>', 'Skill name to install')
     .description('Install a skill')
     .action(async (name) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(
         () => client.mutation('skills:create' as any, {
           name, category: 'custom', version: '1.0.0', isInstalled: true,
@@ -154,7 +154,7 @@ export default { tools };
         }
       }
       // Also remove from Convex
-      const client = createClient();
+      const client = await createClient();
       try {
         const skills = await client.query('skills:list' as any, {});
         const skill = (skills as any[]).find((s: any) => s.name === name);

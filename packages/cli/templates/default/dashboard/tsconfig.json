@@ -16,9 +16,10 @@
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
     "paths": {
-      "~/*": ["./app/*"]
+      "~/*": ["./app/*"],
+      "@convex/*": ["../convex/*"]
     }
   },
-  "include": ["app"],
+  "include": ["app", "../convex"],
   "exclude": ["node_modules", "dist"]
 }

@@ -16,7 +16,7 @@ export function registerMcpCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .description('List all MCP connections')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('mcpConnections:list' as any, {}), 'Failed to list connections');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
       header('MCP Connections');
@@ -45,7 +45,7 @@ export function registerMcpCommand(program: Command) {
 
       if (!name || !type || !endpoint) { error('All fields required.'); process.exit(1); }
 
-      const client = createClient();
+      const client = await createClient();
       await safeCall(
         () => client.mutation('mcpConnections:create' as any, {
           name, type, endpoint, isConnected: false, isEnabled: true,
@@ -60,7 +60,7 @@ export function registerMcpCommand(program: Command) {
     .argument('<id>', 'Connection ID')
     .description('Remove an MCP connection')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('mcpConnections:remove' as any, { _id: id }), 'Failed');
       success(`Connection "${id}" removed.`);
     });
@@ -71,7 +71,7 @@ export function registerMcpCommand(program: Command) {
     .description('Test an MCP connection')
     .action(async (id) => {
       info(`Testing connection "${id}"...`);
-      const client = createClient();
+      const client = await createClient();
       const conns = await safeCall(() => client.query('mcpConnections:list' as any, {}), 'Failed');
       const conn = (conns as any[]).find((c: any) => c._id === id || c._id?.endsWith(id));
       if (!conn) { error(`Connection "${id}" not found.`); process.exit(1); }
@@ -100,7 +100,7 @@ export function registerMcpCommand(program: Command) {
     .argument('<id>', 'Connection ID')
     .description('Enable a connection')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('mcpConnections:update' as any, { _id: id, isEnabled: true }), 'Failed');
       success(`Connection "${id}" enabled.`);
     });
@@ -110,7 +110,7 @@ export function registerMcpCommand(program: Command) {
     .argument('<id>', 'Connection ID')
     .description('Disable a connection')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('mcpConnections:update' as any, { _id: id, isEnabled: false }), 'Failed');
       success(`Connection "${id}" disabled.`);
     });

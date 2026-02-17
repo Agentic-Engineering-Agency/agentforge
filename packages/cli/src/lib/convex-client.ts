@@ -59,10 +59,10 @@ function getConvexUrl(): string {
  * The ConvexHttpClient import is deferred to avoid triggering
  * process.cwd() at module load time (which crashes if CWD is gone).
  */
-export function createClient() {
-  const { ConvexHttpClient } = require('convex/browser');
+export async function createClient(): Promise<import('convex/browser').ConvexHttpClient> {
+  const { ConvexHttpClient } = await import('convex/browser');
   const url = getConvexUrl();
-  return new ConvexHttpClient(url) as import('convex/browser').ConvexHttpClient;
+  return new ConvexHttpClient(url);
 }
 
 /**

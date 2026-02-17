@@ -1,137 +1,104 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState } from 'react';
-// import { useQuery } from 'convex/react';
-// import { api } from '~/../convex/_generated/api';
-import { Bot, Activity, MessageSquare, FileText, Plus, Heart, Zap, ArrowRight, AlertTriangle, CheckCircle } from 'lucide-react';
+import { useQuery } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import { Bot, MessageSquare, FileText, Activity, Zap, Plus, CheckCircle, AlertTriangle } from 'lucide-react';
 
 export const Route = createFileRoute('/')({ component: OverviewPage });
 
-function StatCard({ icon: Icon, title, value, change }) {
+function StatCard({ icon: Icon, title, value, subtitle }: { icon: any; title: string; value: string | number; subtitle?: string }) {
   return (
-    <div className="bg-card p-6 rounded-lg shadow-md flex items-center justify-between">
-      <div>
-        <p className="text-sm text-muted-foreground">{title}</p>
-        <p className="text-3xl font-bold text-foreground">{value}</p>
-        <p className={`text-xs ${change.startsWith('+') ? 'text-green-500' : 'text-red-500'}`}>{change}</p>
+    <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-sm font-medium text-muted-foreground">{title}</span>
+        <Icon className="w-5 h-5 text-primary" />
       </div>
-      <Icon className="w-10 h-10 text-primary" />
+      <p className="text-3xl font-bold text-foreground">{value}</p>
+      {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
     </div>
   );
 }
 
-function QuickActionButton({ icon: Icon, label, to }) {
+function QuickActionButton({ icon: Icon, label, to }: { icon: any; label: string; to: string }) {
   return (
-    <a href={to} className="bg-card hover:bg-primary/10 border border-border p-4 rounded-lg flex flex-col items-center justify-center text-center transition-colors">
-      <Icon className="w-8 h-8 text-primary mb-2" />
-      <span className="text-sm font-medium text-foreground">{label}</span>
-    </a>
+    <Link to={to} className="flex flex-col items-center justify-center p-4 rounded-lg border border-border hover:bg-muted transition-colors gap-2">
+      <Icon className="w-6 h-6 text-primary" />
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+    </Link>
   );
-}
-
-function ActivityItem({ icon: Icon, text, time }) {
-  return (
-    <li className="flex items-center space-x-4 py-3 border-b border-border last:border-b-0">
-      <div className="bg-primary/10 p-2 rounded-full">
-        <Icon className="w-5 h-5 text-primary" />
-      </div>
-      <div className="flex-grow">
-        <p className="text-sm text-foreground">{text}</p>
-      </div>
-      <p className="text-xs text-muted-foreground whitespace-nowrap">{time}</p>
-      <ArrowRight className="w-4 h-4 text-muted-foreground" />
-    </li>
-  );
-}
-
-function SystemHealthIndicator({ isHealthy }) {
-    const Icon = isHealthy ? CheckCircle : AlertTriangle;
-    const text = isHealthy ? 'All systems operational' : 'Service degradation';
-    const color = isHealthy ? 'text-green-500' : 'text-yellow-500';
-
-    return (
-        <div className="flex items-center space-x-2">
-            <Icon className={`w-5 h-5 ${color}`} />
-            <span className={`text-sm font-medium ${color}`}>{text}</span>
-        </div>
-    );
 }
 
 function OverviewPage() {
-  // Local state with realistic initial values, simulating data from Convex
-  const [stats, setStats] = useState({
-    totalAgents: 12,
-    activeSessions: 3,
-    messagesToday: 1402,
-    totalFiles: 256,
-  });
+  const agents = useQuery(api.agents.list, {});
+  const sessions = useQuery(api.sessions.list, {});
+  const files = useQuery(api.files.list, {});
+  const usage = useQuery(api.usage.list, {});
+  const logs = useQuery(api.logs.list, { limit: 5 });
 
-  const [activity, setActivity] = useState([
-    { id: 1, icon: Bot, text: 'New agent "SupportBot" created.', time: '5m ago' },
-    { id: 2, icon: MessageSquare, text: 'Session #1245 ended with 52 messages.', time: '1h ago' },
-    { id: 3, icon: FileText, text: 'Uploaded "project_spec.pdf".', time: '3h ago' },
-    { id: 4, icon: Zap, text: 'Agent "DataAnalyzer" completed a task.', time: '5h ago' },
-    { id: 5, icon: Bot, text: 'Agent "CodeGenerator" was updated.', time: '1d ago' },
-  ]);
-
-  const [systemHealth, setSystemHealth] = useState({ isHealthy: true });
-
-  // Commented-out Convex hooks for future integration
-  /*
-  const overviewStats = useQuery(api.overview.getStats);
-  const recentActivity = useQuery(api.overview.getRecentActivity, { count: 5 });
-  const systemStatus = useQuery(api.heartbeat.getStatus);
-
-  // In a real implementation, you would use the data from hooks:
-  // const stats = overviewStats || { totalAgents: 0, activeSessions: 0, messagesToday: 0, totalFiles: 0 };
-  // const activity = recentActivity || [];
-  // const systemHealth = { isHealthy: systemStatus === 'operational' };
-  */
+  const totalAgents = agents?.length ?? 0;
+  const activeSessions = sessions?.filter((s: any) => s.status === 'active').length ?? 0;
+  const totalFiles = files?.length ?? 0;
+  const totalTokens = usage?.reduce((sum: number, u: any) => sum + (u.totalTokens || 0), 0) ?? 0;
+  const isLoading = agents === undefined;
 
   return (
     <DashboardLayout>
-      <div className="p-6 md:p-8 space-y-8 bg-background text-foreground">
+      <div className="space-y-8">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-            <div>
-                <h1 className="text-3xl font-bold">Overview</h1>
-                <p className="text-muted-foreground">Welcome back, here's a snapshot of your workspace.</p>
-            </div>
-            <SystemHealthIndicator isHealthy={systemHealth.isHealthy} />
+          <div>
+            <h1 className="text-3xl font-bold">Overview</h1>
+            <p className="text-muted-foreground">Welcome back. Here is a snapshot of your workspace.</p>
+          </div>
+          <div className="flex items-center space-x-2">
+            {isLoading ? (
+              <span className="text-sm text-muted-foreground animate-pulse">Connecting to Convex...</span>
+            ) : (
+              <><CheckCircle className="w-5 h-5 text-green-500" /><span className="text-sm font-medium text-green-500">All systems operational</span></>
+            )}
+          </div>
         </div>
 
-        {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard icon={Bot} title="Total Agents" value={stats.totalAgents} change="+2 this week" />
-          <StatCard icon={Activity} title="Active Sessions" value={stats.activeSessions} change="-1 since yesterday" />
-          <StatCard icon={MessageSquare} title="Messages Today" value={stats.messagesToday.toLocaleString()} change="+15%" />
-          <StatCard icon={FileText} title="Total Files" value={stats.totalFiles} change="+12 files" />
+          <StatCard icon={Bot} title="Total Agents" value={totalAgents} subtitle={`${agents?.filter((a: any) => a.isActive).length ?? 0} active`} />
+          <StatCard icon={Activity} title="Active Sessions" value={activeSessions} />
+          <StatCard icon={MessageSquare} title="Total Tokens Used" value={totalTokens.toLocaleString()} />
+          <StatCard icon={FileText} title="Total Files" value={totalFiles} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Recent Activity */}
-          <div className="lg:col-span-2 bg-card p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 flex items-center"><Activity className="w-6 h-6 mr-2 text-primary"/>Recent Activity</h2>
-            {activity.length > 0 ? (
+          <div className="lg:col-span-2 bg-card p-6 rounded-lg shadow-sm border border-border">
+            <h2 className="text-xl font-semibold mb-4 flex items-center"><Activity className="w-6 h-6 mr-2 text-primary" />Recent Activity</h2>
+            {logs && logs.length > 0 ? (
               <ul>
-                {activity.map(item => (
-                  <ActivityItem key={item.id} icon={item.icon} text={item.text} time={item.time} />
+                {logs.map((log: any) => (
+                  <li key={log._id} className="flex items-center space-x-4 py-3 border-b border-border last:border-b-0">
+                    <div className="bg-primary/10 p-2 rounded-full">
+                      {log.level === 'error' ? <AlertTriangle className="w-5 h-5 text-destructive" /> : <Activity className="w-5 h-5 text-primary" />}
+                    </div>
+                    <div className="flex-grow min-w-0">
+                      <p className="text-sm text-foreground truncate">{log.message}</p>
+                      <p className="text-xs text-muted-foreground">{log.source}</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</p>
+                  </li>
                 ))}
               </ul>
             ) : (
               <div className="text-center py-10">
-                <p className="text-muted-foreground">No recent activity to display.</p>
+                <Activity className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-muted-foreground">No recent activity yet.</p>
+                <p className="text-sm text-muted-foreground mt-1">Activity will appear here as you use your agents.</p>
               </div>
             )}
           </div>
 
-          {/* Quick Actions */}
-          <div className="bg-card p-6 rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-4 flex items-center"><Zap className="w-6 h-6 mr-2 text-primary"/>Quick Actions</h2>
+          <div className="bg-card p-6 rounded-lg shadow-sm border border-border">
+            <h2 className="text-xl font-semibold mb-4 flex items-center"><Zap className="w-6 h-6 mr-2 text-primary" />Quick Actions</h2>
             <div className="grid grid-cols-2 gap-4">
-              <QuickActionButton icon={Bot} label="Create Agent" to="/agents/new" />
+              <QuickActionButton icon={Bot} label="Create Agent" to="/agents" />
               <QuickActionButton icon={MessageSquare} label="Start Chat" to="/chat" />
               <QuickActionButton icon={FileText} label="Upload File" to="/files" />
-              <QuickActionButton icon={Plus} label="New Project" to="/projects/new" />
+              <QuickActionButton icon={Plus} label="New Project" to="/projects" />
             </div>
           </div>
         </div>

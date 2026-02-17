@@ -1,413 +1,274 @@
-
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import React, { useState, useMemo } from 'react';
-// import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../convex/_generated/api';
-import { Plug, Plus, RefreshCw, CheckCircle, XCircle, Trash2, MoreVertical, Edit, Search } from 'lucide-react';
-
-// --- Mock Data and Types ---
-type ConnectionStatus = 'connected' | 'disconnected' | 'testing';
-type ConnectionType = 'MCP' | 'API' | 'Webhook';
-
-interface Connection {
-  id: string;
-  name: string;
-  type: ConnectionType;
-  status: ConnectionStatus;
-  lastConnected: string | null;
-  serverUrl: string;
-  protocol: string;
-  enabled: boolean;
-}
-
-const mockConnections: Connection[] = [
-  {
-    id: '1',
-    name: 'Cloudflare MCP',
-    type: 'MCP',
-    status: 'connected',
-    lastConnected: new Date(Date.now() - 86400000).toISOString(),
-    serverUrl: 'https://mcp.cloudflare.com',
-    protocol: 'mcp',
-    enabled: true,
-  },
-  {
-    id: '2',
-    name: 'Stripe API',
-    type: 'API',
-    status: 'disconnected',
-    lastConnected: new Date(Date.now() - 604800000).toISOString(),
-    serverUrl: 'https://api.stripe.com',
-    protocol: 'https',
-    enabled: true,
-  },
-  {
-    id: '3',
-    name: 'GitHub Webhook',
-    type: 'Webhook',
-    status: 'connected',
-    lastConnected: new Date().toISOString(),
-    serverUrl: 'https://api.github.com/webhooks',
-    protocol: 'https',
-    enabled: false,
-  },
-];
-
-// --- Reusable UI Components (assuming these are in a components/ui folder) ---
-const Button = ({ children, className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
-  <button className={`px-4 py-2 rounded-md font-semibold transition-colors ${className}`} {...props}>
-    {children}
-  </button>
-);
-
-const Input = (props: React.InputHTMLAttributes<HTMLInputElement>) => (
-    <input {...props} className={`w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${props.className}`} />
-);
-
-const Select = ({ children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) => (
-    <select {...props} className={`w-full px-3 py-2 bg-background border border-border rounded-md focus:outline-none focus:ring-2 focus:ring-primary ${props.className}`}>
-        {children}
-    </select>
-);
-
-const Card = ({ children, className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={`bg-card border border-border rounded-lg shadow-sm ${className}`} {...props}>
-    {children}
-  </div>
-);
-
-const Dialog = ({ open, onClose, children }: { open: boolean; onClose: () => void; children: React.ReactNode }) => {
-    if (!open) return null;
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-            <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-md m-4">
-                {children}
-            </div>
-        </div>
-    );
-};
-
-const DialogHeader = ({ children }: { children: React.ReactNode }) => <div className="p-4 border-b border-border">{children}</div>;
-const DialogTitle = ({ children }: { children: React.ReactNode }) => <h2 className="text-lg font-semibold text-foreground">{children}</h2>;
-const DialogContent = ({ children }: { children: React.ReactNode }) => <div className="p-4 space-y-4">{children}</div>;
-const DialogFooter = ({ children }: { children: React.ReactNode }) => <div className="p-4 border-t border-border flex justify-end space-x-2">{children}</div>;
-
-const Switch = ({ checked, onCheckedChange }: { checked: boolean; onCheckedChange: (checked: boolean) => void }) => (
-    <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onCheckedChange(!checked)}
-        className={`${checked ? 'bg-primary' : 'bg-muted'} relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 focus:ring-offset-background`}
-    >
-        <span className={`${checked ? 'translate-x-5' : 'translate-x-0'} pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out`} />
-    </button>
-);
-
-// --- Page Specific Components ---
-
-function ConnectionCard({ connection, onTest, onEdit, onDelete, onToggle }: {
-    connection: Connection;
-    onTest: (id: string) => void;
-    onEdit: (connection: Connection) => void;
-    onDelete: (id: string) => void;
-    onToggle: (id: string, enabled: boolean) => void;
-}) {
-    const StatusIndicator = () => {
-        switch (connection.status) {
-            case 'connected': return <CheckCircle className="h-5 w-5 text-green-500" />;
-            case 'disconnected': return <XCircle className="h-5 w-5 text-red-500" />;
-            case 'testing': return <RefreshCw className="h-5 w-5 text-yellow-500 animate-spin" />;
-        }
-    };
-
-    return (
-        <Card className="flex flex-col justify-between">
-            <div className="p-4">
-                <div className="flex justify-between items-start">
-                    <div className="flex items-center space-x-3">
-                        <Plug className="h-8 w-8 text-primary" />
-                        <div>
-                            <h3 className="font-bold text-foreground">{connection.name}</h3>
-                            <p className="text-sm text-muted-foreground">{connection.type}</p>
-                        </div>
-                    </div>
-                    <Switch checked={connection.enabled} onCheckedChange={(checked) => onToggle(connection.id, checked)} />
-                </div>
-                <div className="mt-4 space-y-2 text-sm">
-                    <div className="flex items-center space-x-2">
-                        <StatusIndicator />
-                        <span className="capitalize text-muted-foreground">{connection.status}</span>
-                    </div>
-                    <div className="flex items-center space-x-2 text-muted-foreground">
-                        <RefreshCw className="h-4 w-4" />
-                        <span>Last connected: {connection.lastConnected ? new Date(connection.lastConnected).toLocaleDateString() : 'Never'}</span>
-                    </div>
-                </div>
-            </div>
-            <div className="p-4 bg-background/50 border-t border-border flex items-center justify-end space-x-2">
-                <Button onClick={() => onTest(connection.id)} className="bg-secondary text-secondary-foreground hover:bg-secondary/80 text-sm">Test</Button>
-                <Button onClick={() => onEdit(connection)} className="bg-secondary text-secondary-foreground hover:bg-secondary/80 text-sm"><Edit className="h-4 w-4" /></Button>
-                <Button onClick={() => onDelete(connection.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/80 text-sm"><Trash2 className="h-4 w-4" /></Button>
-            </div>
-        </Card>
-    );
-}
-
-function ConnectionFormModal({ open, onClose, onSave, connection: initialConnection }: {
-    open: boolean;
-    onClose: () => void;
-    onSave: (connection: Omit<Connection, 'id' | 'status' | 'lastConnected'> & { id?: string }) => void;
-    connection: Connection | null;
-}) {
-    const [name, setName] = useState('');
-    const [type, setType] = useState<ConnectionType>('MCP');
-    const [serverUrl, setServerUrl] = useState('');
-    const [credentials, setCredentials] = useState('');
-    const [isTesting, setIsTesting] = useState(false);
-    const [testStatus, setTestStatus] = useState<'success' | 'error' | null>(null);
-
-    React.useEffect(() => {
-        if (initialConnection) {
-            setName(initialConnection.name);
-            setType(initialConnection.type);
-            setServerUrl(initialConnection.serverUrl);
-            setCredentials('********'); // Don't expose credentials
-        } else {
-            setName('');
-            setType('MCP');
-            setServerUrl('');
-            setCredentials('');
-        }
-        setTestStatus(null);
-    }, [initialConnection, open]);
-
-    const handleTest = async () => {
-        setIsTesting(true);
-        setTestStatus(null);
-        // const testConnection = useMutation(api.mcpConnections.test);
-        // In a real app, you'd call the mutation:
-        // try {
-        //   await testConnection({ serverUrl, credentials });
-        //   setTestStatus('success');
-        // } catch (error) {
-        //   setTestStatus('error');
-        // }
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate network delay
-        if (serverUrl.includes('fail')) {
-            setTestStatus('error');
-        } else {
-            setTestStatus('success');
-        }
-        setIsTesting(false);
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        onSave({
-            id: initialConnection?.id,
-            name,
-            type,
-            serverUrl,
-            protocol: type === 'MCP' ? 'mcp' : 'https',
-            enabled: initialConnection?.enabled ?? true,
-            // Credentials would be handled securely, not passed like this
-        });
-        onClose();
-    };
-
-    return (
-        <Dialog open={open} onClose={onClose}>
-            <form onSubmit={handleSubmit}>
-                <DialogHeader>
-                    <DialogTitle>{initialConnection ? 'Edit Connection' : 'Add New Connection'}</DialogTitle>
-                </DialogHeader>
-                <DialogContent>
-                    <div className="space-y-2">
-                        <label htmlFor="name" className="text-sm font-medium text-muted-foreground">Name</label>
-                        <Input id="name" value={name} onChange={e => setName(e.target.value)} placeholder="My Awesome API" required />
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="type" className="text-sm font-medium text-muted-foreground">Type</label>
-                        <Select id="type" value={type} onChange={e => setType(e.target.value as ConnectionType)} required>
-                            <option value="MCP">MCP</option>
-                            <option value="API">API</option>
-                            <option value="Webhook">Webhook</option>
-                        </Select>
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="serverUrl" className="text-sm font-medium text-muted-foreground">Server URL</label>
-                        <Input id="serverUrl" value={serverUrl} onChange={e => setServerUrl(e.target.value)} placeholder="https://example.com/api" required />
-                    </div>
-                    <div className="space-y-2">
-                        <label htmlFor="credentials" className="text-sm font-medium text-muted-foreground">Credentials (e.g., API Key)</label>
-                        <Input id="credentials" type="password" value={credentials} onChange={e => setCredentials(e.target.value)} placeholder={initialConnection ? 'Enter new key to update' : 'Your secret key'} />
-                    </div>
-                    {testStatus && (
-                        <div className={`flex items-center space-x-2 text-sm p-2 rounded-md ${testStatus === 'success' ? 'bg-green-900/50 text-green-400' : 'bg-red-900/50 text-red-400'}`}>
-                            {testStatus === 'success' ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
-                            <span>{testStatus === 'success' ? 'Connection successful!' : 'Connection failed.'}</span>
-                        </div>
-                    )}
-                </DialogContent>
-                <DialogFooter>
-                    <Button type="button" onClick={handleTest} className="bg-secondary text-secondary-foreground hover:bg-secondary/80" disabled={isTesting}>
-                        {isTesting ? <><RefreshCw className="h-4 w-4 mr-2 animate-spin" /> Testing...</> : 'Test Connection'}
-                    </Button>
-                    <Button type="button" onClick={onClose} className="bg-muted text-muted-foreground hover:bg-muted/80">Cancel</Button>
-                    <Button type="submit" className="bg-primary text-primary-foreground hover:bg-primary/80">{initialConnection ? 'Save Changes' : 'Add Connection'}</Button>
-                </DialogFooter>
-            </form>
-        </Dialog>
-    );
-}
-
-// --- Main Page Component ---
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import { Plug, Plus, Trash2, Search, X, Check, ExternalLink, Globe, Database, Mail, MessageSquare, FileText, Code, Zap, Shield } from 'lucide-react';
 
 export const Route = createFileRoute('/connections')({ component: ConnectionsPage });
 
+// ─── MCP Integrations Catalog ─────────────────────────────────────
+const MCP_CATALOG = [
+  {
+    name: 'GitHub',
+    description: 'Access repositories, issues, pull requests, and code search. Automate GitHub workflows from your agents.',
+    serverUrl: 'npx -y @modelcontextprotocol/server-github',
+    protocol: 'mcp',
+    category: 'Development',
+    icon: Code,
+    authFields: [{ key: 'GITHUB_PERSONAL_ACCESS_TOKEN', label: 'Personal Access Token', placeholder: 'ghp_xxxxxxxxxxxxxxxxxxxx', helpUrl: 'https://github.com/settings/tokens' }],
+    capabilities: ['repos', 'issues', 'pull_requests', 'code_search', 'actions'],
+  },
+  {
+    name: 'Slack',
+    description: 'Send messages, read channels, manage conversations, and automate Slack workflows.',
+    serverUrl: 'npx -y @modelcontextprotocol/server-slack',
+    protocol: 'mcp',
+    category: 'Communication',
+    icon: MessageSquare,
+    authFields: [{ key: 'SLACK_BOT_TOKEN', label: 'Bot Token', placeholder: 'xoxb-xxxxxxxxxxxx', helpUrl: 'https://api.slack.com/apps' }],
+    capabilities: ['send_messages', 'read_channels', 'manage_users'],
+  },
+  {
+    name: 'Google Drive',
+    description: 'Search, read, and manage files in Google Drive. Access documents, spreadsheets, and presentations.',
+    serverUrl: 'npx -y @modelcontextprotocol/server-gdrive',
+    protocol: 'mcp',
+    category: 'Productivity',
+    icon: FileText,
+    authFields: [{ key: 'GOOGLE_CLIENT_ID', label: 'Client ID', placeholder: 'xxxxx.apps.googleusercontent.com', helpUrl: 'https://console.cloud.google.com/apis/credentials' }, { key: 'GOOGLE_CLIENT_SECRET', label: 'Client Secret', placeholder: 'GOCSPX-xxxxxxxxxxxx' }],
+    capabilities: ['search_files', 'read_files', 'create_files', 'manage_permissions'],
+  },
+  {
+    name: 'PostgreSQL',
+    description: 'Query and manage PostgreSQL databases. Run read-only queries, inspect schemas, and analyze data.',
+    serverUrl: 'npx -y @modelcontextprotocol/server-postgres',
+    protocol: 'mcp',
+    category: 'Database',
+    icon: Database,
+    authFields: [{ key: 'POSTGRES_CONNECTION_STRING', label: 'Connection String', placeholder: 'postgresql://user:pass@host:5432/db' }],
+    capabilities: ['query', 'schema_inspection', 'data_analysis'],
+  },
+  {
+    name: 'Brave Search',
+    description: 'Web and local search powered by Brave. Get real-time search results with privacy-focused indexing.',
+    serverUrl: 'npx -y @modelcontextprotocol/server-brave-search',
+    protocol: 'mcp',
+    category: 'Search',
+    icon: Globe,
+    authFields: [{ key: 'BRAVE_API_KEY', label: 'API Key', placeholder: 'BSAxxxxxxxxxxxxxxxxxxxx', helpUrl: 'https://brave.com/search/api/' }],
+    capabilities: ['web_search', 'local_search', 'news_search'],
+  },
+  {
+    name: 'Notion',
+    description: 'Search, read, and create pages in Notion. Manage databases, blocks, and workspace content.',
+    serverUrl: 'npx -y @modelcontextprotocol/server-notion',
+    protocol: 'mcp',
+    category: 'Productivity',
+    icon: FileText,
+    authFields: [{ key: 'NOTION_API_KEY', label: 'Integration Token', placeholder: 'ntn_xxxxxxxxxxxxxxxxxxxx', helpUrl: 'https://www.notion.so/my-integrations' }],
+    capabilities: ['search_pages', 'read_pages', 'create_pages', 'manage_databases'],
+  },
+  {
+    name: 'Sentry',
+    description: 'Monitor errors, performance issues, and releases. Query issues and analyze stack traces.',
+    serverUrl: 'npx -y @modelcontextprotocol/server-sentry',
+    protocol: 'mcp',
+    category: 'Development',
+    icon: Shield,
+    authFields: [{ key: 'SENTRY_AUTH_TOKEN', label: 'Auth Token', placeholder: 'sntrys_xxxxxxxxxxxxxxxxxxxx', helpUrl: 'https://sentry.io/settings/auth-tokens/' }],
+    capabilities: ['list_issues', 'get_issue_details', 'search_events'],
+  },
+  {
+    name: 'Filesystem',
+    description: 'Read, write, and manage files on the local filesystem. Useful for agents that need file access.',
+    serverUrl: 'npx -y @modelcontextprotocol/server-filesystem /path/to/allowed/dir',
+    protocol: 'mcp',
+    category: 'System',
+    icon: FileText,
+    authFields: [],
+    capabilities: ['read_files', 'write_files', 'list_directories', 'search_files'],
+  },
+];
+
+const CATEGORIES = ['All', 'Development', 'Communication', 'Productivity', 'Database', 'Search', 'System'];
+
 function ConnectionsPage() {
-    // --- Convex Hooks (Commented Out) ---
-    // const connections = useQuery(api.mcpConnections.list) ?? [];
-    // const createConnection = useMutation(api.mcpConnections.create);
-    // const updateConnection = useMutation(api.mcpConnections.update);
-    // const deleteConnection = useMutation(api.mcpConnections.delete);
-    // const testConnection = useMutation(api.mcpConnections.test);
-    // const toggleConnection = useMutation(api.mcpConnections.toggle);
+  const connections = useQuery(api.mcpConnections.list, {}) ?? [];
+  const createConnection = useMutation(api.mcpConnections.create);
+  const removeConnection = useMutation(api.mcpConnections.remove);
+  const toggleConnection = useMutation(api.mcpConnections.toggleEnabled);
 
-    // --- Local State Management ---
-    const [connections, setConnections] = useState<Connection[]>(mockConnections);
-    const [isLoading, setIsLoading] = useState(false); // For initial load
-    const [error, setError] = useState<string | null>(null);
-    const [searchTerm, setSearchTerm] = useState('');
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [editingConnection, setEditingConnection] = useState<Connection | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('All');
+  const [tab, setTab] = useState<'catalog' | 'connected'>('catalog');
+  const [connectingItem, setConnectingItem] = useState<typeof MCP_CATALOG[0] | null>(null);
+  const [authValues, setAuthValues] = useState<Record<string, string>>({});
 
-    const filteredConnections = useMemo(() =>
-        connections.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())),
-        [connections, searchTerm]
-    );
+  const connectedNames = new Set(connections.map((c: any) => c.name));
 
-    const handleAdd = () => {
-        setEditingConnection(null);
-        setIsModalOpen(true);
-    };
+  const filteredCatalog = useMemo(() => {
+    let result = MCP_CATALOG;
+    if (categoryFilter !== 'All') result = result.filter(s => s.category === categoryFilter);
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(s => s.name.toLowerCase().includes(q) || s.description.toLowerCase().includes(q));
+    }
+    return result;
+  }, [searchQuery, categoryFilter]);
 
-    const handleEdit = (connection: Connection) => {
-        setEditingConnection(connection);
-        setIsModalOpen(true);
-    };
+  const handleConnect = async () => {
+    if (!connectingItem) return;
+    await createConnection({
+      name: connectingItem.name,
+      serverUrl: connectingItem.serverUrl,
+      protocol: connectingItem.protocol,
+      credentials: connectingItem.authFields.length > 0 ? authValues : undefined,
+      capabilities: connectingItem.capabilities,
+    });
+    setConnectingItem(null);
+    setAuthValues({});
+    setTab('connected');
+  };
 
-    const handleDelete = (id: string) => {
-        if (window.confirm('Are you sure you want to delete this connection?')) {
-            // await deleteConnection({ id });
-            setConnections(prev => prev.filter(c => c.id !== id));
-        }
-    };
+  const handleDisconnect = async (id: any) => {
+    if (confirm('Disconnect this integration?')) {
+      await removeConnection({ id });
+    }
+  };
 
-    const handleSave = (data: Omit<Connection, 'id' | 'status' | 'lastConnected'> & { id?: string }) => {
-        if (data.id) { // Update
-            // await updateConnection({ id: data.id, ...data });
-            setConnections(prev => prev.map(c => c.id === data.id ? { ...c, ...data } : c));
-        } else { // Create
-            const newId = (Math.random() * 100000).toString();
-            // const newId = await createConnection(data);
-            const newConnection: Connection = {
-                ...data,
-                id: newId,
-                status: 'disconnected',
-                lastConnected: null,
-            };
-            setConnections(prev => [newConnection, ...prev]);
-        }
-    };
+  return (
+    <DashboardLayout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">Integrations</h1>
+          <p className="text-muted-foreground">Connect MCP servers and external services to extend your agents.</p>
+        </div>
 
-    const handleTest = async (id: string) => {
-        setConnections(prev => prev.map(c => c.id === id ? { ...c, status: 'testing' } : c));
-        // const result = await testConnection({ id });
-        await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate test
-        const result = { success: Math.random() > 0.3 }; // Simulate success/fail
+        <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
+          <button onClick={() => setTab('catalog')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'catalog' ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Plug className="w-4 h-4 inline mr-2" />Catalog ({MCP_CATALOG.length})
+          </button>
+          <button onClick={() => setTab('connected')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'connected' ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Check className="w-4 h-4 inline mr-2" />Connected ({connections.length})
+          </button>
+        </div>
 
-        setConnections(prev => prev.map(c => c.id === id ? {
-            ...c,
-            status: result.success ? 'connected' : 'disconnected',
-            lastConnected: result.success ? new Date().toISOString() : c.lastConnected,
-        } : c));
-    };
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <input type="text" placeholder="Search integrations..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-3 py-2 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full" />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {CATEGORIES.map(cat => (
+              <button key={cat} onClick={() => setCategoryFilter(cat)} className={`px-3 py-1.5 rounded-lg text-sm ${categoryFilter === cat ? 'bg-primary text-primary-foreground' : 'bg-card border border-border text-muted-foreground hover:text-foreground'}`}>{cat}</button>
+            ))}
+          </div>
+        </div>
 
-    const handleToggle = (id: string, enabled: boolean) => {
-        // await toggleConnection({ id, enabled });
-        setConnections(prev => prev.map(c => c.id === id ? { ...c, enabled } : c));
-    };
-
-    return (
-        <DashboardLayout>
-            <div className="bg-background text-foreground p-4 sm:p-6 lg:p-8">
-                <header className="flex flex-col sm:flex-row justify-between sm:items-center mb-6 gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold">Connections</h1>
-                        <p className="text-muted-foreground">Manage your MCP, API, and Webhook connections.</p>
+        {tab === 'catalog' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredCatalog.map(item => {
+              const isConnected = connectedNames.has(item.name);
+              const Icon = item.icon;
+              return (
+                <div key={item.name} className="bg-card border border-border rounded-lg p-5 shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center"><Icon className="w-5 h-5 text-primary" /></div>
+                      <div>
+                        <h3 className="font-semibold text-foreground">{item.name}</h3>
+                        <p className="text-xs text-muted-foreground">{item.category}</p>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                        <div className="relative w-full sm:w-auto">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="text"
-                                placeholder="Search connections..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="pl-10 w-full sm:w-64"
-                            />
-                        </div>
-                        <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2">
-                            <Plus className="h-4 w-4" />
-                            <span>Add Connection</span>
-                        </Button>
-                    </div>
-                </header>
-
-                {isLoading ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {[...Array(3)].map((_, i) => <Card key={i} className="h-48 animate-pulse"></Card>)}
-                    </div>
-                ) : error ? (
-                    <div className="flex flex-col items-center justify-center text-center h-64 bg-card rounded-lg">
-                        <XCircle className="h-12 w-12 text-destructive mb-4" />
-                        <h3 className="text-xl font-semibold">Failed to load connections</h3>
-                        <p className="text-muted-foreground">{error}</p>
-                    </div>
-                ) : filteredConnections.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {filteredConnections.map(conn => (
-                            <ConnectionCard
-                                key={conn.id}
-                                connection={conn}
-                                onTest={handleTest}
-                                onEdit={handleEdit}
-                                onDelete={handleDelete}
-                                onToggle={handleToggle}
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <div className="flex flex-col items-center justify-center text-center h-64 bg-card rounded-lg border-2 border-dashed border-border">
-                        <Plug className="h-12 w-12 text-muted-foreground mb-4" />
-                        <h3 className="text-xl font-semibold">No Connections Found</h3>
-                        <p className="text-muted-foreground mb-4">Get started by adding your first connection.</p>
-                        <Button onClick={handleAdd} className="bg-primary text-primary-foreground hover:bg-primary/90">
-                            Add Connection
-                        </Button>
-                    </div>
-                )}
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3 line-clamp-2">{item.description}</p>
+                  <div className="flex flex-wrap gap-1 mb-4">
+                    {item.capabilities.slice(0, 3).map(cap => (
+                      <span key={cap} className="text-xs bg-muted px-2 py-0.5 rounded">{cap.replace(/_/g, ' ')}</span>
+                    ))}
+                    {item.capabilities.length > 3 && <span className="text-xs text-muted-foreground">+{item.capabilities.length - 3} more</span>}
+                  </div>
+                  <div className="pt-3 border-t border-border">
+                    {isConnected ? (
+                      <span className="text-xs text-green-500 flex items-center gap-1"><Check className="w-3.5 h-3.5" /> Connected</span>
+                    ) : (
+                      <button onClick={() => { setConnectingItem(item); setAuthValues({}); }} className="w-full bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm hover:bg-primary/90 flex items-center justify-center gap-2">
+                        <Plug className="w-4 h-4" /> Connect
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          connections.length === 0 ? (
+            <div className="text-center py-16 bg-card border border-border rounded-lg">
+              <Plug className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No integrations connected</h3>
+              <p className="text-muted-foreground">Browse the catalog to connect your first integration.</p>
             </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {connections.map((conn: any) => (
+                <div key={conn._id} className="bg-card border border-border rounded-lg p-5 shadow-sm">
+                  <div className="flex items-start justify-between mb-3">
+                    <h3 className="font-semibold text-foreground">{conn.name}</h3>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${conn.isEnabled ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}`}>{conn.isEnabled ? 'Active' : 'Disabled'}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-1 font-mono truncate">{conn.serverUrl}</p>
+                  <p className="text-xs text-muted-foreground mb-4">Protocol: {conn.protocol}</p>
+                  <div className="flex items-center justify-between pt-3 border-t border-border">
+                    <button onClick={() => toggleConnection({ id: conn._id })} className="text-xs text-muted-foreground hover:text-foreground">{conn.isEnabled ? 'Disable' : 'Enable'}</button>
+                    <button onClick={() => handleDisconnect(conn._id)} className="p-1.5 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
 
-            <ConnectionFormModal
-                open={isModalOpen}
-                onClose={() => setIsModalOpen(false)}
-                onSave={handleSave}
-                connection={editingConnection}
-            />
-        </DashboardLayout>
-    );
+        {/* Connect Modal */}
+        {connectingItem && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-lg">
+              <div className="flex justify-between items-center p-4 border-b border-border">
+                <h2 className="text-lg font-bold">Connect {connectingItem.name}</h2>
+                <button onClick={() => setConnectingItem(null)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <p className="text-sm text-muted-foreground">{connectingItem.description}</p>
+                {connectingItem.authFields.length > 0 ? (
+                  <div className="space-y-3">
+                    <h3 className="text-sm font-semibold">Authentication</h3>
+                    {connectingItem.authFields.map(field => (
+                      <div key={field.key}>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-sm font-medium">{field.label}</label>
+                          {field.helpUrl && <a href={field.helpUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">Get token <ExternalLink className="w-3 h-3" /></a>}
+                        </div>
+                        <input type="password" placeholder={field.placeholder} value={authValues[field.key] || ''} onChange={(e) => setAuthValues(prev => ({ ...prev, [field.key]: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-green-500">No authentication required for this integration.</p>
+                )}
+                <div className="bg-muted/50 rounded-lg p-3">
+                  <p className="text-xs text-muted-foreground font-mono">{connectingItem.serverUrl}</p>
+                </div>
+              </div>
+              <div className="p-4 border-t border-border flex justify-end gap-2">
+                <button onClick={() => setConnectingItem(null)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
+                <button onClick={handleConnect} disabled={connectingItem.authFields.length > 0 && connectingItem.authFields.some(f => !authValues[f.key])} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                  <Plug className="w-4 h-4" /> Connect
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
+  );
 }

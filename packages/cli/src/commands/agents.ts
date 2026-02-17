@@ -17,7 +17,7 @@ export function registerAgentsCommand(program: Command) {
     .option('--active', 'Show only active agents')
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(
         () => client.query('agents:list' as any, {}),
         'Failed to list agents'
@@ -63,7 +63,7 @@ export function registerAgentsCommand(program: Command) {
       const provider = model.includes(':') ? model.split(':')[0] : 'openai';
       const agentId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
-      const client = createClient();
+      const client = await createClient();
       await safeCall(
         () => client.mutation('agents:create' as any, {
           id: agentId,
@@ -83,7 +83,7 @@ export function registerAgentsCommand(program: Command) {
     .argument('<id>', 'Agent ID')
     .description('Show detailed agent information')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       const agent = await safeCall(
         () => client.query('agents:getByAgentId' as any, { id }),
         'Failed to fetch agent'
@@ -117,7 +117,7 @@ export function registerAgentsCommand(program: Command) {
     .option('--instructions <text>', 'New instructions')
     .description('Edit an agent')
     .action(async (id, opts) => {
-      const client = createClient();
+      const client = await createClient();
       const agent = await safeCall(
         () => client.query('agents:getByAgentId' as any, { id }),
         'Failed to fetch agent'
@@ -161,7 +161,7 @@ export function registerAgentsCommand(program: Command) {
         const confirm = await prompt(`Delete agent "${id}"? (y/N): `);
         if (confirm.toLowerCase() !== 'y') { info('Cancelled.'); return; }
       }
-      const client = createClient();
+      const client = await createClient();
       const agent = await safeCall(
         () => client.query('agents:getByAgentId' as any, { id }),
         'Failed to fetch agent'
@@ -179,7 +179,7 @@ export function registerAgentsCommand(program: Command) {
     .argument('<id>', 'Agent ID')
     .description('Enable an agent')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       const agent = await safeCall(() => client.query('agents:getByAgentId' as any, { id }), 'Failed to fetch agent');
       if (!agent) { error(`Agent "${id}" not found.`); process.exit(1); }
       await safeCall(() => client.mutation('agents:update' as any, { _id: (agent as any)._id, isActive: true }), 'Failed');
@@ -191,7 +191,7 @@ export function registerAgentsCommand(program: Command) {
     .argument('<id>', 'Agent ID')
     .description('Disable an agent')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       const agent = await safeCall(() => client.query('agents:getByAgentId' as any, { id }), 'Failed to fetch agent');
       if (!agent) { error(`Agent "${id}" not found.`); process.exit(1); }
       await safeCall(() => client.mutation('agents:update' as any, { _id: (agent as any)._id, isActive: false }), 'Failed');

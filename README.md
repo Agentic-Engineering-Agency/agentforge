@@ -21,6 +21,9 @@ AgentForge is a "NanoClaw made with Mastra" — a powerful, lightweight framewor
 | ⏰ **Cron Jobs** | Schedule agents to run tasks at specific intervals using cron expressions. |
 | 🔌 **MCP Connections** | Integrate with external services and tools using the Model Context Protocol (MCP). |
 | 🔐 **Secure Vault** | Safely store and manage API keys and other secrets with built-in encryption and auto-redaction. |
+| 🔑 **AI Provider Keys** | Manage API keys for 8+ providers (OpenAI, Anthropic, Google, xAI, Groq, etc.) with test and rotate. |
+| 🏪 **Integrations Marketplace** | Browse and connect MCP servers (GitHub, Slack, Notion, Brave Search, etc.) from the dashboard. |
+| 🧩 **Prebuilt Skills** | Ready-to-use skills for web search, code execution, file operations, and more. |
 | 💓 **HEARTBEAT System** | Ensures task continuity by allowing agents to monitor and resume long-running operations. |
 | 📊 **Usage Tracking** | Monitor token usage and estimate costs across different LLM providers. |
 | 🚀 **Cloudflare Ready** | Deploy your frontend to Cloudflare Pages and file storage to R2 with zero egress fees. |
@@ -162,6 +165,17 @@ AgentForge provides a comprehensive CLI for managing every aspect of your projec
 | `agentforge projects list` | List all projects. |
 | `agentforge projects create <name>` | Create a new project. |
 | `agentforge projects switch <id>` | Set the active project for CLI commands. |
+
+### AI Provider Keys
+
+| Command | Description |
+|---|---|
+| `agentforge keys list` | List all configured AI provider API keys. |
+| `agentforge keys add <provider> [key]` | Add an API key for a provider (omit key for secure prompt). |
+| `agentforge keys remove <provider>` | Remove an API key. |
+| `agentforge keys test <provider>` | Test an API key by making a simple request. |
+
+Supported providers: `openai`, `anthropic`, `openrouter`, `google`, `xai`, `groq`, `together`, `perplexity`.
 
 ### Configuration & Secrets
 
