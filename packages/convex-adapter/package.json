@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/convex-adapter",
-  "version": "0.5.3",
+  "version": "0.5.4",
   "description": "Convex adapter for @agentforge-ai/core - bridges AgentForge agents with Convex backend",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
