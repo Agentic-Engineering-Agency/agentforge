@@ -291,39 +291,10 @@ async function deployToCloud(
   let attempts = 0;
 
   while (attempts < maxAttempts) {
+    let status;
     try {
-      const status = await client.getDeploymentStatus(deploymentId);
+      status = await client.getDeploymentStatus(deploymentId);
       attempts++;
-
-      if (status.status === 'completed') {
-        pollSpinner.succeed('Deployment completed successfully!');
-        console.log();
-        console.log(chalk.green('✔'), `Deployed to ${chalk.bold(`https://cloud.agentforge.ai/projects/${projectId}`)}`);
-        if (status.url) {
-          console.log(chalk.green('✔'), `Deployment URL: ${chalk.cyan(status.url)}`);
-        }
-        console.log();
-        return;
-      } else if (status.status === 'failed') {
-        pollSpinner.fail('Deployment failed');
-        console.error();
-        console.error(chalk.red('✖'), 'Error:', status.errorMessage || 'Unknown error');
-        console.error();
-        process.exit(1);
-        return; // Ensure we don't continue after process.exit
-      } else if (status.progress !== undefined) {
-        pollSpinner.text = `Deploying... ${status.progress}%`;
-      } else {
-        const statuses: Record<string, string> = {
-          pending: 'Waiting to start...',
-          building: 'Building...',
-          deploying: 'Deploying...',
-        };
-        pollSpinner.text = statuses[status.status] || `Status: ${status.status}`;
-      }
-
-      // Wait 3 seconds before polling again
-      await new Promise((resolve) => setTimeout(resolve, 3000));
     } catch (err: any) {
       // Continue polling on network errors, but track failures
       attempts++;
@@ -334,10 +305,39 @@ async function deployToCloud(
         console.error(`   Check status at: https://cloud.agentforge.ai/projects/${projectId}/deployments/${deploymentId}`);
         console.error();
         process.exit(1);
-        return; // Ensure we don't continue after process.exit
       }
       await new Promise((resolve) => setTimeout(resolve, 3000));
+      continue;
     }
+
+    if (status.status === 'completed') {
+      pollSpinner.succeed('Deployment completed successfully!');
+      console.log();
+      console.log(chalk.green('✔'), `Deployed to ${chalk.bold(`https://cloud.agentforge.ai/projects/${projectId}`)}`);
+      if (status.url) {
+        console.log(chalk.green('✔'), `Deployment URL: ${chalk.cyan(status.url)}`);
+      }
+      console.log();
+      return;
+    } else if (status.status === 'failed') {
+      pollSpinner.fail('Deployment failed');
+      console.error();
+      console.error(chalk.red('✖'), 'Error:', status.errorMessage || 'Unknown error');
+      console.error();
+      process.exit(1);
+    } else if (status.progress !== undefined) {
+      pollSpinner.text = `Deploying... ${status.progress}%`;
+    } else {
+      const statuses: Record<string, string> = {
+        pending: 'Waiting to start...',
+        building: 'Building...',
+        deploying: 'Deploying...',
+      };
+      pollSpinner.text = statuses[status.status] || `Status: ${status.status}`;
+    }
+
+    // Wait 3 seconds before polling again
+    await new Promise((resolve) => setTimeout(resolve, 3000));
   }
 
   pollSpinner.fail('Deployment timed out');
