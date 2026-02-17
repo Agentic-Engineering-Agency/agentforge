@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/cloud-client",
-  "version": "0.5.1",
+  "version": "0.5.3",
   "description": "HTTP client for AgentForge Cloud deployment API",
   "type": "module",
   "main": "./dist/index.js",

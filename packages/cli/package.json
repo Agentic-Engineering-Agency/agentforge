@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/cli",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "description": "CLI tool for creating, running, and managing AgentForge projects",
   "type": "module",
   "bin": {
@@ -22,7 +22,6 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentforge-ai/cloud-client": "workspace:*",
     "commander": "^12.0.0",
     "convex": "^1.17.0",
     "chalk": "^5.3.0",

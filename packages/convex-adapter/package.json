@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/convex-adapter",
-  "version": "0.5.1",
+  "version": "0.5.3",
   "description": "Convex adapter for @agentforge-ai/core - bridges AgentForge agents with Convex backend",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -25,7 +25,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentforge-ai/core": "workspace:*",
+    "@agentforge-ai/core": "^0.5.3",
     "@ai-sdk/anthropic": "^1.0.0",
     "@ai-sdk/google": "^1.0.0",
     "@ai-sdk/openai": "^1.0.0",
