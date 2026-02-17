@@ -13,7 +13,7 @@ export function registerFilesCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .description('List files')
     .action(async (folder, opts) => {
-      const client = createClient();
+      const client = await createClient();
       const args = folder ? { folderId: folder } : {};
       const result = await safeCall(() => client.query('files:list' as any, args), 'Failed to list files');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
@@ -51,7 +51,7 @@ export function registerFilesCommand(program: Command) {
       };
       const mimeType = mimeTypes[ext] || 'application/octet-stream';
 
-      const client = createClient();
+      const client = await createClient();
       await safeCall(
         () => client.mutation('files:create' as any, {
           name, mimeType, size: stat.size,
@@ -68,7 +68,7 @@ export function registerFilesCommand(program: Command) {
     .argument('<id>', 'File ID')
     .description('Delete a file')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('files:remove' as any, { _id: id }), 'Failed to delete file');
       success(`File "${id}" deleted.`);
     });
@@ -81,7 +81,7 @@ export function registerFilesCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .description('List all folders')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('folders:list' as any, {}), 'Failed to list folders');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
       header('Folders');
@@ -101,7 +101,7 @@ export function registerFilesCommand(program: Command) {
     .option('--parent <id>', 'Parent folder ID')
     .description('Create a folder')
     .action(async (name, opts) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(
         () => client.mutation('folders:create' as any, { name, parentId: opts.parent }),
         'Failed to create folder'
@@ -114,7 +114,7 @@ export function registerFilesCommand(program: Command) {
     .argument('<id>', 'Folder ID')
     .description('Delete a folder')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('folders:remove' as any, { _id: id }), 'Failed to delete folder');
       success(`Folder "${id}" deleted.`);
     });

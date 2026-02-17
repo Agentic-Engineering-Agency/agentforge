@@ -10,7 +10,7 @@ export function registerChatCommand(program: Command) {
     .option('-s, --session <id>', 'Resume an existing session')
     .description('Start an interactive chat session with an agent')
     .action(async (agentId, opts) => {
-      const client = createClient();
+      const client = await createClient();
 
       if (!agentId && !opts.session) {
         const agents = await safeCall(() => client.query('agents:list' as any, {}), 'Failed to list agents');

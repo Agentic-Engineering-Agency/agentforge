@@ -11,7 +11,7 @@ export function registerSessionsCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .description('List all sessions')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('sessions:list' as any, {}), 'Failed to list sessions');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
       header('Sessions');
@@ -33,7 +33,7 @@ export function registerSessionsCommand(program: Command) {
     .argument('<id>', 'Session ID')
     .description('Show session details')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       const session = await safeCall(() => client.query('sessions:getById' as any, { id }), 'Failed to fetch session');
       if (!session) { error(`Session "${id}" not found.`); process.exit(1); }
       const s = session as any;
@@ -46,7 +46,7 @@ export function registerSessionsCommand(program: Command) {
     .argument('<id>', 'Session ID')
     .description('End an active session')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('sessions:update' as any, { _id: id, status: 'ended' }), 'Failed to end session');
       success(`Session "${id}" ended.`);
     });
@@ -61,7 +61,7 @@ export function registerThreadsCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .description('List all threads')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const args = opts.agent ? { agentId: opts.agent } : {};
       const result = await safeCall(() => client.query('threads:list' as any, args), 'Failed to list threads');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
@@ -82,7 +82,7 @@ export function registerThreadsCommand(program: Command) {
     .argument('<id>', 'Thread ID')
     .description('Show thread messages')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       const messages = await safeCall(() => client.query('messages:listByThread' as any, { threadId: id }), 'Failed to fetch messages');
       header(`Thread: ${id}`);
       const items = (messages as any[]) || [];
@@ -99,7 +99,7 @@ export function registerThreadsCommand(program: Command) {
     .argument('<id>', 'Thread ID')
     .description('Delete a thread and its messages')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('threads:remove' as any, { _id: id }), 'Failed to delete thread');
       success(`Thread "${id}" deleted.`);
     });

@@ -53,7 +53,7 @@ export function registerVaultCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .description('List all stored secrets (values hidden)')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('vault:list' as any, {}), 'Failed to list secrets');
       if (opts.json) {
         const safe = ((result as any[]) || []).map((s: any) => ({ ...s, encryptedValue: undefined }));
@@ -85,7 +85,7 @@ export function registerVaultCommand(program: Command) {
       }
       if (!value) { error('Value is required.'); process.exit(1); }
 
-      const client = createClient();
+      const client = await createClient();
       await safeCall(
         () => client.mutation('vault:store' as any, {
           name,
@@ -104,7 +104,7 @@ export function registerVaultCommand(program: Command) {
     .option('--reveal', 'Show the actual value (use with caution)')
     .description('Retrieve a secret')
     .action(async (name, opts) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('vault:list' as any, {}), 'Failed');
       const secret = ((result as any[]) || []).find((s: any) => s.name === name);
       if (!secret) { error(`Secret "${name}" not found.`); process.exit(1); }
@@ -134,7 +134,7 @@ export function registerVaultCommand(program: Command) {
         const confirm = await prompt(`Delete secret "${name}"? This cannot be undone. (y/N): `);
         if (confirm.toLowerCase() !== 'y') { info('Cancelled.'); return; }
       }
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('vault:list' as any, {}), 'Failed');
       const secret = ((result as any[]) || []).find((s: any) => s.name === name);
       if (!secret) { error(`Secret "${name}" not found.`); process.exit(1); }
@@ -147,7 +147,7 @@ export function registerVaultCommand(program: Command) {
     .argument('<name>', 'Secret name')
     .description('Rotate a secret (set a new value)')
     .action(async (name) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('vault:list' as any, {}), 'Failed');
       const secret = ((result as any[]) || []).find((s: any) => s.name === name);
       if (!secret) { error(`Secret "${name}" not found.`); process.exit(1); }

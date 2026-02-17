@@ -16,7 +16,7 @@ export function registerCronCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .description('List all cron jobs')
     .action(async (opts) => {
-      const client = createClient();
+      const client = await createClient();
       const result = await safeCall(() => client.query('cronJobs:list' as any, {}), 'Failed to list cron jobs');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
       header('Cron Jobs');
@@ -50,7 +50,7 @@ export function registerCronCommand(program: Command) {
         error('All fields are required.'); process.exit(1);
       }
 
-      const client = createClient();
+      const client = await createClient();
       await safeCall(
         () => client.mutation('cronJobs:create' as any, { name, schedule, agentId, action, isEnabled: true }),
         'Failed to create cron job'
@@ -63,7 +63,7 @@ export function registerCronCommand(program: Command) {
     .argument('<id>', 'Cron job ID')
     .description('Delete a cron job')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('cronJobs:remove' as any, { _id: id }), 'Failed to delete');
       success(`Cron job "${id}" deleted.`);
     });
@@ -73,7 +73,7 @@ export function registerCronCommand(program: Command) {
     .argument('<id>', 'Cron job ID')
     .description('Enable a cron job')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('cronJobs:update' as any, { _id: id, isEnabled: true }), 'Failed');
       success(`Cron job "${id}" enabled.`);
     });
@@ -83,7 +83,7 @@ export function registerCronCommand(program: Command) {
     .argument('<id>', 'Cron job ID')
     .description('Disable a cron job')
     .action(async (id) => {
-      const client = createClient();
+      const client = await createClient();
       await safeCall(() => client.mutation('cronJobs:update' as any, { _id: id, isEnabled: false }), 'Failed');
       success(`Cron job "${id}" disabled.`);
     });
