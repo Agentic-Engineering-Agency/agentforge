@@ -477,8 +477,9 @@ export class BrowserActionExecutor {
         }
 
         const children: any[] = [];
-        for (const child of element.children) {
-          const childNode = buildTree(child, depth + 1);
+        for (let i = 0; i < element.children.length; i++) {
+          const child = element.children[i];
+          const childNode = buildTree(child as Element, depth + 1);
           if (childNode) {
             children.push(childNode);
           }
