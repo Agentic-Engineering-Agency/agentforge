@@ -54,6 +54,7 @@ export const executeAgent = action({
 
     try {
       // Import Mastra dynamically (Node.js runtime)
+      // @ts-expect-error - Mastra is installed at runtime in the user's project
       const { Agent } = await import("@mastra/core/agent");
       
       // Format model string for Mastra
@@ -83,7 +84,7 @@ export const executeAgent = action({
         .join("\n");
 
       // Execute agent
-      const result = await mastraAgent.generate(args.prompt, {
+      const result: any = await mastraAgent.generate(args.prompt, {
         ...(args.stream && { stream: args.stream }),
         context: context || undefined,
       });

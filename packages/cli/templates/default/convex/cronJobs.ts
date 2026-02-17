@@ -12,8 +12,8 @@ export const list = query({
     if (args.isEnabled !== undefined) {
       const jobs = await ctx.db
         .query("cronJobs")
-        .withIndex("byIsEnabled", (q) => q.eq("isEnabled", args.isEnabled))
-        .take(100).collect();
+        .withIndex("byIsEnabled", (q) => q.eq("isEnabled", args.isEnabled!))
+        .collect();
       
       if (args.userId) {
         return jobs.filter((j) => j.userId === args.userId);
@@ -27,18 +27,18 @@ export const list = query({
     if (args.agentId) {
       return await ctx.db
         .query("cronJobs")
-        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .take(100).collect();
+        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
+        .collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("cronJobs")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     }
     
-    return await ctx.db.query("cronJobs").take(100).collect();
+    return await ctx.db.query("cronJobs").collect();
   },
 });
 
@@ -58,7 +58,7 @@ export const getDueJobs = query({
     const jobs = await ctx.db
       .query("cronJobs")
       .withIndex("byNextRun")
-      .take(100).collect();
+      .collect();
     
     return jobs.filter((j) => j.isEnabled && j.nextRun && j.nextRun <= now);
   },
@@ -162,8 +162,8 @@ export const remove = mutation({
     // Delete all run history
     const runs = await ctx.db
       .query("cronJobRuns")
-      .withIndex("byCronJobId", (q) => q.eq("cronJobId", args.id))
-      .take(100).collect();
+      .withIndex("byCronJobId", (q) => q.eq("cronJobId", args.id!))
+      .collect();
     
     for (const run of runs) {
       await ctx.db.delete(run._id);
@@ -209,8 +209,8 @@ export const getRunHistory = query({
   handler: async (ctx, args) => {
     const runs = await ctx.db
       .query("cronJobRuns")
-      .withIndex("byCronJobId", (q) => q.eq("cronJobId", args.cronJobId))
-      .take(100).collect();
+      .withIndex("byCronJobId", (q) => q.eq("cronJobId", args.cronJobId!))
+      .collect();
     
     // Sort by startedAt descending
     runs.sort((a, b) => b.startedAt - a.startedAt);

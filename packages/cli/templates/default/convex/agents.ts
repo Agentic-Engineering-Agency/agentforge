@@ -11,10 +11,10 @@ export const list = query({
     if (args.userId) {
       return await ctx.db
         .query("agents")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     }
-    return await ctx.db.query("agents").take(100).collect();
+    return await ctx.db.query("agents").collect();
   },
 });
 
@@ -24,7 +24,7 @@ export const get = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("agents")
-      .withIndex("byAgentId", (q) => q.eq("id", args.id))
+      .withIndex("byAgentId", (q) => q.eq("id", args.id!))
       .first();
   },
 });
@@ -35,11 +35,11 @@ export const listActive = query({
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db
+    const activeQuery = ctx.db
       .query("agents")
       .withIndex("byIsActive", (q) => q.eq("isActive", true));
     
-    const agents = await query.take(100).collect();
+    const agents = await activeQuery.collect();
     
     if (args.userId) {
       return agents.filter((agent) => agent.userId === args.userId);
@@ -117,7 +117,7 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const agent = await ctx.db
       .query("agents")
-      .withIndex("byAgentId", (q) => q.eq("id", args.id))
+      .withIndex("byAgentId", (q) => q.eq("id", args.id!))
       .first();
 
     if (!agent) {
@@ -135,7 +135,7 @@ export const toggleActive = mutation({
   handler: async (ctx, args) => {
     const agent = await ctx.db
       .query("agents")
-      .withIndex("byAgentId", (q) => q.eq("id", args.id))
+      .withIndex("byAgentId", (q) => q.eq("id", args.id!))
       .first();
 
     if (!agent) {

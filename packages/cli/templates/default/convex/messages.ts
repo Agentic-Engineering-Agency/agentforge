@@ -57,8 +57,8 @@ export const list = query({
   handler: async (ctx, args) => {
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
-      .take(100).collect();
+      .withIndex("byThread", (q) => q.eq("threadId", args.threadId!))
+      .collect();
     return messages;
   },
 });
@@ -78,8 +78,8 @@ export const clearThread = mutation({
   handler: async (ctx, args) => {
     const messages = await ctx.db
       .query("messages")
-      .withIndex("by_thread", (q) => q.eq("threadId", args.threadId))
-      .take(100).collect();
+      .withIndex("byThread", (q) => q.eq("threadId", args.threadId!))
+      .collect();
     
     for (const message of messages) {
       await ctx.db.delete(message._id);

@@ -12,25 +12,25 @@ export const list = query({
     if (args.projectId) {
       return await ctx.db
         .query("threads")
-        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId))
-        .take(100).collect();
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
     }
     
     if (args.agentId) {
       return await ctx.db
         .query("threads")
-        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .take(100).collect();
+        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
+        .collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("threads")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     }
     
-    return await ctx.db.query("threads").take(100).collect();
+    return await ctx.db.query("threads").collect();
   },
 });
 
@@ -86,8 +86,8 @@ export const remove = mutation({
     // Delete all messages in the thread
     const messages = await ctx.db
       .query("messages")
-      .withIndex("byThread", (q) => q.eq("threadId", args.id))
-      .take(100).collect();
+      .withIndex("byThread", (q) => q.eq("threadId", args.id!))
+      .collect();
     
     for (const message of messages) {
       await ctx.db.delete(message._id);

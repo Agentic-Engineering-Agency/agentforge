@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query, action } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 
 // ============================================================
 // SECURE VAULT - Encrypted secrets management
@@ -35,10 +35,20 @@ function maskSecret(value: string): string {
   return value.substring(0, 6) + "..." + value.substring(value.length - 4);
 }
 
-// Simple XOR-based encoding (in production, use proper AES-256-GCM with a KMS)
-// This provides a layer of obfuscation in the database
+// Encryption key from Convex environment variable.
+// Set VAULT_ENCRYPTION_KEY in your Convex dashboard under Settings > Environment Variables.
+// If not set, a default key is used (NOT SECURE for production).
+function getEncryptionKey(): string {
+  return process.env.VAULT_ENCRYPTION_KEY ?? "agentforge-default-key-set-env-var";
+}
+
+// XOR-based encoding with per-entry IV for database obfuscation.
+// For production deployments with sensitive data, consider integrating
+// with a proper KMS (e.g., AWS KMS, Cloudflare Workers Secrets).
 function encodeSecret(value: string, key: string): { encrypted: string; iv: string } {
-  const iv = Array.from({ length: 16 }, () => Math.floor(Math.random() * 256).toString(16).padStart(2, "0")).join("");
+  const iv = Array.from({ length: 16 }, () =>
+    Math.floor(Math.random() * 256).toString(16).padStart(2, "0")
+  ).join("");
   const combined = key + iv;
   let encrypted = "";
   for (let i = 0; i < value.length; i++) {
@@ -52,14 +62,13 @@ function decodeSecret(encrypted: string, iv: string, key: string): string {
   const combined = key + iv;
   let decoded = "";
   for (let i = 0; i < encrypted.length; i += 4) {
-    const charCode = parseInt(encrypted.substring(i, i + 4), 16) ^ combined.charCodeAt((i / 4) % combined.length);
+    const charCode =
+      parseInt(encrypted.substring(i, i + 4), 16) ^
+      combined.charCodeAt((i / 4) % combined.length);
     decoded += String.fromCharCode(charCode);
   }
   return decoded;
 }
-
-// The encryption key should come from environment variables in production
-const VAULT_ENCRYPTION_KEY = "agentforge-vault-key-change-in-production-2026";
 
 // ---- Queries ----
 
@@ -69,11 +78,21 @@ export const list = query({
     category: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let q = ctx.db.query("vault");
+    let entries;
     if (args.userId) {
-      q = ctx.db.query("vault").withIndex("byUserId", (q) => q.eq("userId", args.userId));
+      entries = await ctx.db
+        .query("vault")
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .order("desc")
+        .collect();
+    } else {
+      entries = await ctx.db.query("vault").order("desc").collect();
     }
-    const entries = await q.order("desc").take(100);
+
+    if (args.category) {
+      entries = entries.filter((e) => e.category === args.category);
+    }
+
     // Never return encrypted values - only masked
     return entries.map((entry) => ({
       _id: entry._id,
@@ -99,13 +118,13 @@ export const getAuditLog = query({
   handler: async (ctx, args) => {
     const limit = args.limit ?? 50;
     if (args.vaultEntryId) {
-      return ctx.db
+      return await ctx.db
         .query("vaultAuditLog")
         .withIndex("byVaultEntryId", (q) => q.eq("vaultEntryId", args.vaultEntryId!))
         .order("desc")
         .take(limit);
     }
-    return ctx.db.query("vaultAuditLog").order("desc").take(limit);
+    return await ctx.db.query("vaultAuditLog").order("desc").take(limit);
   },
 });
 
@@ -116,12 +135,13 @@ export const store = mutation({
     name: v.string(),
     category: v.string(),
     provider: v.optional(v.string()),
-    value: v.string(), // Raw secret value - will be encrypted before storage
+    value: v.string(),
     userId: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { encrypted, iv } = encodeSecret(args.value, VAULT_ENCRYPTION_KEY);
+    const key = getEncryptionKey();
+    const { encrypted, iv } = encodeSecret(args.value, key);
     const masked = maskSecret(args.value);
     const now = Date.now();
 
@@ -134,14 +154,12 @@ export const store = mutation({
       maskedValue: masked,
       isActive: true,
       expiresAt: args.expiresAt,
-      lastAccessedAt: undefined,
       accessCount: 0,
       userId: args.userId,
       createdAt: now,
       updatedAt: now,
     });
 
-    // Audit log
     await ctx.db.insert("vaultAuditLog", {
       vaultEntryId: id,
       action: "created",
@@ -163,7 +181,8 @@ export const storeFromChat = mutation({
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { encrypted, iv } = encodeSecret(args.value, VAULT_ENCRYPTION_KEY);
+    const key = getEncryptionKey();
+    const { encrypted, iv } = encodeSecret(args.value, key);
     const masked = maskSecret(args.value);
     const now = Date.now();
 
@@ -181,7 +200,6 @@ export const storeFromChat = mutation({
       updatedAt: now,
     });
 
-    // Audit log with auto_captured source
     await ctx.db.insert("vaultAuditLog", {
       vaultEntryId: id,
       action: "auto_captured",
@@ -207,14 +225,15 @@ export const update = mutation({
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Vault entry not found");
 
-    const updates: any = { updatedAt: Date.now() };
+    const updates: Record<string, unknown> = { updatedAt: Date.now() };
 
     if (args.name !== undefined) updates.name = args.name;
     if (args.isActive !== undefined) updates.isActive = args.isActive;
     if (args.expiresAt !== undefined) updates.expiresAt = args.expiresAt;
 
     if (args.value) {
-      const { encrypted, iv } = encodeSecret(args.value, VAULT_ENCRYPTION_KEY);
+      const key = getEncryptionKey();
+      const { encrypted, iv } = encodeSecret(args.value, key);
       updates.encryptedValue = encrypted;
       updates.iv = iv;
       updates.maskedValue = maskSecret(args.value);
@@ -241,7 +260,6 @@ export const remove = mutation({
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Vault entry not found");
 
-    // Log deletion before removing
     await ctx.db.insert("vaultAuditLog", {
       vaultEntryId: args.id,
       action: "deleted",
@@ -254,8 +272,8 @@ export const remove = mutation({
   },
 });
 
-// Retrieve decrypted value (for internal agent use only - never expose to frontend)
-export const retrieveSecret = mutation({
+// Internal-only: Retrieve decrypted value (only callable from other Convex functions)
+export const retrieveSecret = internalMutation({
   args: {
     id: v.id("vault"),
     userId: v.optional(v.string()),
@@ -265,13 +283,11 @@ export const retrieveSecret = mutation({
     if (!entry) throw new Error("Vault entry not found");
     if (!entry.isActive) throw new Error("Vault entry is disabled");
 
-    // Update access tracking
     await ctx.db.patch(args.id, {
       lastAccessedAt: Date.now(),
       accessCount: entry.accessCount + 1,
     });
 
-    // Audit log
     await ctx.db.insert("vaultAuditLog", {
       vaultEntryId: args.id,
       action: "accessed",
@@ -280,14 +296,13 @@ export const retrieveSecret = mutation({
       timestamp: Date.now(),
     });
 
-    // Decrypt and return
-    const decrypted = decodeSecret(entry.encryptedValue, entry.iv, VAULT_ENCRYPTION_KEY);
+    const key = getEncryptionKey();
+    const decrypted = decodeSecret(entry.encryptedValue, entry.iv, key);
     return decrypted;
   },
 });
 
 // ---- Secret Detection Utility ----
-// This is exported for use by the chat message handler
 
 export const detectSecrets = query({
   args: { text: v.string() },
@@ -329,7 +344,7 @@ export const censorMessage = mutation({
   },
   handler: async (ctx, args) => {
     let censoredText = args.text;
-    const storedSecrets: Array<{ name: string; masked: string; id: any }> = [];
+    const storedSecrets: Array<{ name: string; masked: string; id: unknown }> = [];
 
     for (const { pattern, category, provider, name } of SECRET_PATTERNS) {
       const regex = new RegExp(pattern, "g");
@@ -338,12 +353,11 @@ export const censorMessage = mutation({
         const secretValue = match[0];
         const masked = maskSecret(secretValue);
 
-        // Replace in censored text
         censoredText = censoredText.replace(secretValue, `[REDACTED: ${masked}]`);
 
-        // Auto-store if enabled
         if (args.autoStore !== false) {
-          const { encrypted, iv } = encodeSecret(secretValue, VAULT_ENCRYPTION_KEY);
+          const key = getEncryptionKey();
+          const { encrypted, iv } = encodeSecret(secretValue, key);
           const now = Date.now();
 
           const id = await ctx.db.insert("vault", {

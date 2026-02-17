@@ -10,11 +10,11 @@ export const list = query({
     if (args.userId) {
       return await ctx.db
         .query("projects")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     }
     
-    return await ctx.db.query("projects").take(100).collect();
+    return await ctx.db.query("projects").collect();
   },
 });
 
@@ -70,15 +70,15 @@ export const remove = mutation({
     // Delete all threads in the project
     const threads = await ctx.db
       .query("threads")
-      .withIndex("byProjectId", (q) => q.eq("projectId", args.id))
-      .take(100).collect();
+      .withIndex("byProjectId", (q) => q.eq("projectId", args.id!))
+      .collect();
     
     for (const thread of threads) {
       // Delete messages in thread
       const messages = await ctx.db
         .query("messages")
         .withIndex("byThread", (q) => q.eq("threadId", thread._id))
-        .take(100).collect();
+        .collect();
       
       for (const message of messages) {
         await ctx.db.delete(message._id);
@@ -90,8 +90,8 @@ export const remove = mutation({
     // Delete all files in the project
     const files = await ctx.db
       .query("files")
-      .withIndex("byProjectId", (q) => q.eq("projectId", args.id))
-      .take(100).collect();
+      .withIndex("byProjectId", (q) => q.eq("projectId", args.id!))
+      .collect();
     
     for (const file of files) {
       await ctx.db.delete(file._id);
@@ -100,8 +100,8 @@ export const remove = mutation({
     // Delete all folders in the project
     const folders = await ctx.db
       .query("folders")
-      .withIndex("byProjectId", (q) => q.eq("projectId", args.id))
-      .take(100).collect();
+      .withIndex("byProjectId", (q) => q.eq("projectId", args.id!))
+      .collect();
     
     for (const folder of folders) {
       await ctx.db.delete(folder._id);

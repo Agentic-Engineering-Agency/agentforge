@@ -12,25 +12,25 @@ export const list = query({
     if (args.folderId) {
       return await ctx.db
         .query("files")
-        .withIndex("byFolderId", (q) => q.eq("folderId", args.folderId))
-        .take(100).collect();
+        .withIndex("byFolderId", (q) => q.eq("folderId", args.folderId!))
+        .collect();
     }
     
     if (args.projectId) {
       return await ctx.db
         .query("files")
-        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId))
-        .take(100).collect();
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("files")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     }
     
-    return await ctx.db.query("files").take(100).collect();
+    return await ctx.db.query("files").collect();
   },
 });
 

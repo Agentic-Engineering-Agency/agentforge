@@ -12,8 +12,8 @@ export const list = query({
     if (args.status) {
       const sessions = await ctx.db
         .query("sessions")
-        .withIndex("byStatus", (q) => q.eq("status", args.status as any))
-        .take(100).collect();
+        .withIndex("byStatus", (q) => q.eq("status", args.status! as any))
+        .collect();
       
       if (args.userId) {
         return sessions.filter((s) => s.userId === args.userId);
@@ -27,18 +27,18 @@ export const list = query({
     if (args.agentId) {
       return await ctx.db
         .query("sessions")
-        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .take(100).collect();
+        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
+        .collect();
     }
     
     if (args.userId) {
       return await ctx.db
         .query("sessions")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId))
-        .take(100).collect();
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
     }
     
-    return await ctx.db.query("sessions").take(100).collect();
+    return await ctx.db.query("sessions").collect();
   },
 });
 
@@ -48,7 +48,7 @@ export const get = query({
   handler: async (ctx, args) => {
     return await ctx.db
       .query("sessions")
-      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId))
+      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
       .first();
   },
 });
@@ -62,7 +62,7 @@ export const listActive = query({
     const sessions = await ctx.db
       .query("sessions")
       .withIndex("byStatus", (q) => q.eq("status", "active"))
-      .take(100).collect();
+      .collect();
     
     if (args.userId) {
       return sessions.filter((s) => s.userId === args.userId);
@@ -103,7 +103,7 @@ export const updateActivity = mutation({
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
-      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId))
+      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
       .first();
     
     if (!session) {
@@ -133,7 +133,7 @@ export const updateStatus = mutation({
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
-      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId))
+      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
       .first();
     
     if (!session) {
@@ -161,7 +161,7 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
-      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId))
+      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
       .first();
     
     if (!session) {
