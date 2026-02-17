@@ -11,9 +11,8 @@ export default defineConfig({
         'src/convex-agent.ts',
         'src/convex-mcp-server.ts',
         'src/convex-vault.ts',
-        'src/types.ts',
       ],
-      exclude: ['src/**/*.test.ts', 'src/index.ts'],
+      exclude: ['src/**/*.test.ts', 'src/index.ts', 'src/types.ts'],
       thresholds: {
         lines: 80,
         functions: 80,

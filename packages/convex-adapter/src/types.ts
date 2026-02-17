@@ -6,6 +6,90 @@
 
 import type { AgentConfig as CoreAgentConfig, AgentModel, AgentResponse, StreamChunk } from '@agentforge-ai/core';
 
+// =====================================================
+// Model Provider Types (for model-resolver.ts)
+// =====================================================
+
+/**
+ * Supported LLM providers for BYOK (Bring Your Own Key) model resolution.
+ */
+export type LLMProvider =
+  | 'openai'
+  | 'anthropic'
+  | 'google'
+  | 'venice'
+  | 'openrouter'
+  | 'custom';
+
+/**
+ * Configuration for resolving a model from a provider.
+ * Supports all 6 providers used in AgentForge Cloud.
+ */
+export interface ModelResolverConfig {
+  /** The LLM provider to use */
+  provider: LLMProvider;
+  /** The model ID (e.g., 'gpt-4o', 'claude-3-opus-20240229') */
+  modelId: string;
+  /** API key for the provider (BYOK) - falls back to env vars if not provided */
+  apiKey?: string;
+  /** Custom base URL for the provider API */
+  baseUrl?: string;
+  /** Temperature for generation (0-2) */
+  temperature?: number;
+  /** Maximum tokens to generate */
+  maxTokens?: number;
+}
+
+// =====================================================
+// Adapter Types (for convex-agent.ts adapter pattern)
+// =====================================================
+
+/**
+ * Role of a message in the conversation.
+ */
+export type MessageRole = 'user' | 'assistant' | 'system';
+
+/**
+ * A single message in the conversation.
+ */
+export interface Message {
+  role: MessageRole;
+  content: string;
+}
+
+/**
+ * Callback function for usage tracking.
+ */
+export type UsageCallback = (usage: UsageMetrics) => void | Promise<void>;
+
+/**
+ * Options for running an agent in a Convex action.
+ */
+export interface RunInActionOptions {
+  /** Callback for recording token usage */
+  onUsage?: UsageCallback;
+  /** Additional metadata to pass through */
+  metadata?: Record<string, unknown>;
+}
+
+/**
+ * Result from running an agent in a Convex action.
+ */
+export interface RunResult {
+  /** The generated text content */
+  content: string;
+  /** The model used for generation */
+  model: string;
+  /** Token usage information */
+  usage?: UsageMetrics;
+  /** Latency in milliseconds */
+  latencyMs: number;
+}
+
+// =====================================================
+// Convex Context Types
+// =====================================================
+
 /**
  * Minimal interface for a Convex ActionCtx.
  * Accepts any Convex action context without requiring schema-specific generated types.
@@ -18,6 +102,11 @@ export interface ConvexActionCtx {
   /** Execute a Convex action from within an action. */
   runAction: (action: any, args?: any) => Promise<any>;
 }
+
+/**
+ * @deprecated Use ConvexActionCtx instead
+ */
+export type ActionCtx = ConvexActionCtx;
 
 /**
  * Minimal interface for a Convex MutationCtx.
