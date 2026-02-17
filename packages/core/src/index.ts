@@ -16,6 +16,23 @@ export type { SandboxConfig, SandboxRunOptions, SandboxResult } from './sandbox.
 export { MCPServer } from './mcp-server.js';
 export type { MCPServerConfig, Tool, ToolSchema } from './mcp-server.js';
 
+export {
+  BrowserSessionManager,
+  BrowserActionExecutor,
+  createBrowserTool,
+  registerBrowserTool,
+  browserActionSchema,
+  browserActionResultSchema,
+} from './browser-tool.js';
+
+export type {
+  BrowserAction,
+  BrowserActionKind,
+  BrowserActionResult,
+  BrowserToolConfig,
+  SnapshotNode,
+} from './browser-tool.js';
+
 export { AgentForgeWorkspace } from './workspace.js';
 export type {
   LocalWorkspaceConfig,
