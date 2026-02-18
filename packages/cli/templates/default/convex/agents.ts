@@ -38,13 +38,13 @@ export const listActive = query({
     const activeQuery = ctx.db
       .query("agents")
       .withIndex("byIsActive", (q) => q.eq("isActive", true));
-    
+
     const agents = await activeQuery.collect();
-    
+
     if (args.userId) {
       return agents.filter((agent) => agent.userId === args.userId);
     }
-    
+
     return agents;
   },
 });
@@ -151,7 +151,12 @@ export const toggleActive = mutation({
   },
 });
 
-// Action: Run agent with Mastra (to be implemented with Mastra integration)
+/**
+ * Run an agent with a prompt.
+ *
+ * Delegates to `chat.sendMessage` for the actual LLM execution.
+ * This action handles thread creation if no threadId is provided.
+ */
 export const run = action({
   args: {
     agentId: v.string(),
@@ -162,7 +167,7 @@ export const run = action({
   handler: async (ctx, args): Promise<{ threadId: string; message: string; agentId: string }> => {
     // Get agent configuration
     const agent = await ctx.runQuery(api.agents.get, { id: args.agentId });
-    
+
     if (!agent) {
       throw new Error(`Agent with id ${args.agentId} not found`);
     }
@@ -176,28 +181,17 @@ export const run = action({
       });
     }
 
-    // Add user message
-    await ctx.runMutation(api.messages.add, {
+    // Delegate to the chat action for actual LLM execution
+    const result = await ctx.runAction(api.chat.sendMessage, {
+      agentId: args.agentId,
       threadId,
-      role: "user",
       content: args.prompt,
-    });
-
-    // TODO: Integrate with Mastra to run the agent
-    // This will be implemented in the Mastra integration phase
-    // For now, return a placeholder response
-    const responseMessage = "Agent execution will be implemented with Mastra integration";
-
-    // Add assistant message placeholder
-    await ctx.runMutation(api.messages.add, {
-      threadId,
-      role: "assistant",
-      content: responseMessage,
+      userId: args.userId,
     });
 
     return {
       threadId: threadId as string,
-      message: responseMessage,
+      message: result.response,
       agentId: args.agentId,
     };
   },
