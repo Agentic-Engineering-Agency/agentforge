@@ -48,6 +48,12 @@ export interface CreateDeploymentRequest {
   version: string;
 }
 
+export interface ErrorResponse {
+  message?: string;
+  error?: string;
+  code?: string;
+}
+
 export interface CreateDeploymentResponse {
   deploymentId: string;
   status: string;
@@ -181,7 +187,7 @@ export class CloudClient {
     const isJson = contentType?.includes('application/json');
 
     if (!response.ok) {
-      const errorBody = isJson ? await response.json() : null;
+      const errorBody = isJson ? (await response.json() as ErrorResponse) : null;
       const message = errorBody?.message || errorBody?.error || `HTTP ${response.status}: ${response.statusText}`;
       throw new CloudClientError(
         message,

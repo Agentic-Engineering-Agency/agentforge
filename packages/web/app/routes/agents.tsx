@@ -56,7 +56,7 @@ function AgentsPage() {
   const [agents, setAgents] = useState(initialAgents);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAgent, setEditingAgent] = useState(null);
+  const [editingAgent, setEditingAgent] = useState<any>(null);
 
   const filteredAgents = useMemo(() =>
     agents.filter(agent =>
@@ -76,7 +76,7 @@ function AgentsPage() {
     setIsModalOpen(false);
   };
 
-  const handleSaveAgent = (agentData) => {
+  const handleSaveAgent = (agentData: any) => {
     if (editingAgent) {
       // updateAgent({ id: editingAgent.id, ...agentData });
       setAgents(agents.map(a => a.id === editingAgent.id ? { ...a, ...agentData } : a));
@@ -87,7 +87,7 @@ function AgentsPage() {
     closeModal();
   };
 
-  const handleDeleteAgent = (agentId) => {
+  const handleDeleteAgent = (agentId: string) => {
     if (window.confirm('Are you sure you want to delete this agent?')) {
       // deleteAgent({ id: agentId });
       setAgents(agents.filter(a => a.id !== agentId));
@@ -136,7 +136,7 @@ function AgentsPage() {
   );
 }
 
-function AgentCard({ agent, onEdit, onDelete }) {
+function AgentCard({ agent, onEdit, onDelete }: { agent: any; onEdit: (agent: any) => void; onDelete: (id: string) => void }) {
   return (
     <div className="bg-card border border-border rounded-lg p-4 flex flex-col justify-between hover:shadow-lg transition-shadow">
       <div>
@@ -166,7 +166,7 @@ function AgentCard({ agent, onEdit, onDelete }) {
   );
 }
 
-function AgentModal({ agent, onSave, onClose }) {
+function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any) => void; onClose: () => void }) {
   const [formData, setFormData] = useState({
     name: agent?.name || '',
     description: agent?.description || '',
@@ -177,22 +177,22 @@ function AgentModal({ agent, onSave, onClose }) {
     maxTokens: agent?.maxTokens || 4096,
   });
 
-  const handleChange = (e) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSliderChange = (e) => {
+  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, temperature: parseFloat(e.target.value) }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formData);
   };
 
   const providers = ['OpenAI', 'Anthropic', 'OpenRouter', 'Google', 'xAI'];
-  const models = {
+  const models: Record<string, string[]> = {
     OpenAI: ['gpt-4.1-mini', 'gpt-4o', 'gpt-3.5-turbo'],
     Google: ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'],
     Anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
@@ -218,19 +218,19 @@ function AgentModal({ agent, onSave, onClose }) {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Instructions</label>
-            <textarea name="instructions" value={formData.instructions} onChange={handleChange} rows="6" className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary" required />
+            <textarea name="instructions" value={formData.instructions} onChange={handleChange} rows={6} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary" required />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Provider</label>
               <select name="provider" value={formData.provider} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
-                {providers.map(p => <option key={p} value={p}>{p}</option>)}
+                {providers.map((p: string) => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Model</label>
               <select name="model" value={formData.model} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
-                {(models[formData.provider] || []).map(m => <option key={m} value={m}>{m}</option>)}
+                {(models[formData.provider] || []).map((m: string) => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
           </div>

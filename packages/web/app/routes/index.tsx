@@ -7,7 +7,7 @@ import { Bot, Activity, MessageSquare, FileText, Plus, Heart, Zap, ArrowRight, A
 
 export const Route = createFileRoute('/')({ component: OverviewPage });
 
-function StatCard({ icon: Icon, title, value, change }) {
+function StatCard({ icon: Icon, title, value, change }: { icon: React.ElementType; title: string; value: string | number; change: string }) {
   return (
     <div className="bg-card p-6 rounded-lg shadow-md flex items-center justify-between">
       <div>
@@ -20,7 +20,7 @@ function StatCard({ icon: Icon, title, value, change }) {
   );
 }
 
-function QuickActionButton({ icon: Icon, label, to }) {
+function QuickActionButton({ icon: Icon, label, to }: { icon: React.ElementType; label: string; to: string }) {
   return (
     <a href={to} className="bg-card hover:bg-primary/10 border border-border p-4 rounded-lg flex flex-col items-center justify-center text-center transition-colors">
       <Icon className="w-8 h-8 text-primary mb-2" />
@@ -29,7 +29,7 @@ function QuickActionButton({ icon: Icon, label, to }) {
   );
 }
 
-function ActivityItem({ icon: Icon, text, time }) {
+function ActivityItem({ icon: Icon, text, time }: { icon: React.ElementType; text: string; time: string }) {
   return (
     <li className="flex items-center space-x-4 py-3 border-b border-border last:border-b-0">
       <div className="bg-primary/10 p-2 rounded-full">
@@ -44,7 +44,7 @@ function ActivityItem({ icon: Icon, text, time }) {
   );
 }
 
-function SystemHealthIndicator({ isHealthy }) {
+function SystemHealthIndicator({ isHealthy }: { isHealthy: boolean }) {
     const Icon = isHealthy ? CheckCircle : AlertTriangle;
     const text = isHealthy ? 'All systems operational' : 'Service degradation';
     const color = isHealthy ? 'text-green-500' : 'text-yellow-500';

@@ -86,8 +86,8 @@ function CronPageComponent() {
   };
 
   const handleToggleStatus = (job: CronJob) => {
-    const newStatus = job.status === 'enabled' ? 'disabled' : 'enabled';
-    const updatedJob = { ...job, status: newStatus };
+    const newStatus: 'enabled' | 'disabled' = job.status === 'enabled' ? 'disabled' : 'enabled';
+    const updatedJob: CronJob = { ...job, status: newStatus };
     setCronJobs(cronJobs.map(j => j.id === job.id ? updatedJob : j));
     // updateCronJob({ id: job.id, status: newStatus });
   };
