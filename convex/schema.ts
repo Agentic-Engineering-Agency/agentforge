@@ -9,7 +9,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     instructions: v.string(),
     model: v.string(),
-    provider: v.string(), // "openai", "openrouter", "anthropic", etc.
+    provider: v.string(), // "openai", "openrouter", "anthropic", "google", "venice", "custom"
     tools: v.optional(v.any()),
     temperature: v.optional(v.number()),
     maxTokens: v.optional(v.number()),
@@ -18,6 +18,15 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     userId: v.optional(v.string()),
+    // Model failover configuration (per-agent)
+    failoverModels: v.optional(
+      v.array(
+        v.object({
+          provider: v.string(),
+          model: v.string(),
+        })
+      )
+    ),
   })
     .index("byAgentId", ["id"])
     .index("byUserId", ["userId"])

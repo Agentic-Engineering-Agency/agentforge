@@ -8,6 +8,8 @@ export default defineConfig({
     'src/convex-vault.ts',
     'src/model-resolver.ts',
     'src/types.ts',
+    'src/provider-registry.ts',
+    'src/failover-chain.ts',
   ],
   format: ['esm'],
   dts: true,
