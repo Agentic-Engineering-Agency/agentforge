@@ -1,0 +1,83 @@
+# =============================================================================
+# AgentForge Sandbox — Lightweight Execution Image
+# =============================================================================
+#
+# A minimal, security-hardened container image for running agent tool code
+# inside Docker-based sandboxes managed by @agentforge-ai/sandbox.
+#
+# This is the default image used by DockerSandbox when configured with
+# image: 'agentforge/sandbox:latest' or via DOCKER_IMAGE env var.
+#
+# Includes Node.js 22 and Python 3 runtimes with common utilities.
+#
+# Build:
+#   docker build -f docker/Dockerfile.sandbox -t agentforge/sandbox:latest .
+#
+# Usage:
+#   Automatically used by DockerSandbox / SandboxManager when the
+#   'agentforge/sandbox' image is specified in configuration.
+# =============================================================================
+
+FROM node:22-slim AS base
+
+# Metadata
+LABEL maintainer="Agentic Engineering <hello@agenticengineering.agency>"
+LABEL org.opencontainers.image.title="AgentForge Sandbox"
+LABEL org.opencontainers.image.description="Secure execution environment for AgentForge agent tools"
+LABEL org.opencontainers.image.vendor="Agentic Engineering"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+LABEL agentforge.managed="true"
+LABEL agentforge.type="sandbox"
+
+# Avoid interactive prompts during package installation
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies:
+# - Python 3 + pip for Python-based agent tools
+# - curl, wget for HTTP tools
+# - git for repository operations
+# - jq for JSON processing
+# - ca-certificates for HTTPS
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    curl \
+    wget \
+    git \
+    jq \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install common Node.js tools globally
+RUN npm install -g \
+    typescript@5 \
+    tsx \
+    && npm cache clean --force
+
+# Create a non-root user for agent execution
+RUN groupadd -r agentforge && useradd -r -g agentforge -m -d /home/agentforge agentforge
+
+# Create workspace directory
+RUN mkdir -p /workspace && chown agentforge:agentforge /workspace
+
+# Create tmp directory for agent scratch space
+RUN mkdir -p /tmp/agentforge && chown agentforge:agentforge /tmp/agentforge
+
+# Set working directory
+WORKDIR /workspace
+
+# Switch to non-root user
+USER agentforge
+
+# Default environment
+ENV NODE_ENV=production
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Health check — verify Node.js and Python are available
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+    CMD node --version && python3 --version || exit 1
+
+# Keep container alive for exec-based usage
+CMD ["/bin/sh", "-c", "while true; do sleep 3600; done"]
