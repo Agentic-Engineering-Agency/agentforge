@@ -100,6 +100,14 @@ const BUILTIN_REGISTRY: RegistryEntry[] = [
     author: 'AgentForge',
     source: 'builtin',
   },
+  {
+    name: 'browser-automation',
+    description: 'Browser automation using Playwright. Navigate web pages, click elements, type text, extract content, take screenshots, and run JavaScript. Supports Docker sandbox mode for secure execution.',
+    version: '1.0.0',
+    tags: ['web', 'browser', 'automation', 'scraping'],
+    author: 'AgentForge',
+    source: 'builtin',
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -225,6 +233,7 @@ function generateBuiltinSkill(name: string): Map<string, string> | null {
     'data-analyst': generateDataAnalystSkill,
     'api-tester': generateApiTesterSkill,
     'git-workflow': generateGitWorkflowSkill,
+    'browser-automation': generateBrowserAutomationSkill,
   };
 
   const generator = generators[name];
@@ -1078,6 +1087,138 @@ for (const [type, label] of Object.entries(typeLabels)) {
 }
 
 console.log(JSON.stringify({ changelog, totalCommits: commits.length, types: Object.keys(grouped) }));
+`);
+
+  return files;
+}
+
+function generateBrowserAutomationSkill(): Map<string, string> {
+  const files = new Map<string, string>();
+
+  files.set('SKILL.md', `---
+name: browser-automation
+description: Browser automation using Playwright. Navigate web pages, interact with elements, extract content, take screenshots, and run JavaScript.
+version: 1.0.0
+tags:
+  - web
+  - browser
+  - automation
+  - scraping
+---
+
+# Browser Automation
+
+You are a browser automation assistant. Help users interact with web pages programmatically.
+
+## Capabilities
+
+1. **Navigate** — Go to any URL and wait for the page to load
+2. **Click** — Click elements by CSS selector
+3. **Type** — Fill text into input fields
+4. **Screenshot** — Capture the current page as an image
+5. **Extract Text** — Get readable text content from pages or specific elements
+6. **Snapshot** — Get the accessibility tree for understanding page structure
+7. **Evaluate** — Run arbitrary JavaScript on the page
+8. **Wait** — Wait for elements to appear or for a specific duration
+9. **Scroll** — Scroll the page up or down
+10. **Select** — Choose options from dropdown menus
+11. **Hover** — Hover over elements to trigger menus or tooltips
+12. **Navigation** — Go back, forward, or reload the page
+
+## How to Use
+
+### Setup
+
+\`\`\`typescript
+import { createBrowserTool, MCPServer } from '@agentforge-ai/core';
+
+const server = new MCPServer({ name: 'my-tools' });
+const { tool, shutdown } = createBrowserTool({ headless: true });
+server.registerTool(tool);
+\`\`\`
+
+### Docker Sandbox Mode
+
+For secure, isolated execution:
+
+\`\`\`typescript
+const { tool, shutdown } = createBrowserTool({
+  sandboxMode: true,
+  headless: true,
+});
+\`\`\`
+
+## Agent Instructions
+
+1. Navigate to the target URL first
+2. Wait for key elements before interacting
+3. Use snapshot to understand page structure
+4. Use extractText to get readable content
+5. Use click and type for form interactions
+6. Take screenshots for visual verification
+7. Always close sessions when done
+
+## Guidelines
+
+- Prefer \`#id\` selectors over class-based selectors
+- Use \`wait\` before clicking or typing on dynamic pages
+- Use \`extractText\` with a selector for specific content
+- Take screenshots before and after critical actions
+- Close sessions to free resources
+`);
+
+  files.set('references/selectors.md', `# CSS Selector Guide for Browser Automation
+
+## Recommended Selectors (most to least reliable)
+
+1. \`#id\` — Element with a specific ID
+2. \`[data-testid="value"]\` — Test ID attributes
+3. \`[aria-label="value"]\` — Accessibility labels
+4. \`button:has-text("Click me")\` — Playwright text selectors
+5. \`.class-name\` — CSS class selectors
+6. \`tag.class\` — Tag + class combination
+
+## Examples
+
+\`\`\`
+#login-button           → Click the login button
+input[name="email"]      → Type into email field
+.nav-menu a:first-child → Click first nav link
+form button[type=submit] → Submit a form
+\`\`\`
+
+## Tips
+
+- Avoid fragile selectors like \`div > div > span:nth-child(3)\`
+- Use Playwright's text selectors: \`text=Submit\`
+- For dynamic content, wait for the element first
+- Use \`snapshot\` action to discover available selectors
+`);
+
+  files.set('scripts/scrape.ts', `#!/usr/bin/env npx tsx
+/**
+ * Example: Scrape a web page and extract its text content
+ *
+ * Usage: npx tsx scripts/scrape.ts <url>
+ */
+
+const url = process.argv[2];
+if (!url) {
+  console.error('Usage: npx tsx scripts/scrape.ts <url>');
+  process.exit(1);
+}
+
+console.log(JSON.stringify({
+  instruction: 'Use the browser tool to scrape this URL',
+  url,
+  steps: [
+    { action: 'navigate', url },
+    { action: 'wait', timeMs: 2000 },
+    { action: 'extractText' },
+    { action: 'screenshot', fullPage: true },
+    { action: 'close' },
+  ],
+}));
 `);
 
   return files;

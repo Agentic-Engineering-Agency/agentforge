@@ -11,6 +11,8 @@
  * - Accessibility tree snapshot for LLM context
  * - Cookie/auth state persistence per agent
  * - CDP (Chrome DevTools Protocol) support
+ * - Docker sandbox mode for secure execution
+ * - Text extraction from pages
  *
  * @packageDocumentation
  */
@@ -39,7 +41,8 @@ export type BrowserActionKind =
   | 'goBack'
   | 'goForward'
   | 'reload'
-  | 'close';
+  | 'close'
+  | 'extractText';
 
 /**
  * Browser action discriminated union.
@@ -58,7 +61,8 @@ export type BrowserAction =
   | { kind: 'goBack' }
   | { kind: 'goForward' }
   | { kind: 'reload' }
-  | { kind: 'close' };
+  | { kind: 'close' }
+  | { kind: 'extractText'; selector?: string };
 
 /**
  * Result from a browser action.
@@ -106,6 +110,12 @@ export interface BrowserToolConfig {
   launchArgs?: string[];
   /** CDP endpoint URL (for connecting to existing browser) */
   cdpEndpoint?: string;
+  /** Enable Docker sandbox mode for secure execution. Default: false */
+  sandboxMode?: boolean;
+  /** Docker image to use in sandbox mode. Default: 'mcr.microsoft.com/playwright:v1.52.0-noble' */
+  sandboxImage?: string;
+  /** Maximum number of concurrent sessions. Default: 5 */
+  maxSessions?: number;
 }
 
 /**
@@ -135,6 +145,9 @@ export interface SnapshotNode {
  *
  * Each session gets its own BrowserContext with isolated cookies,
  * storage, and state. Sessions can optionally persist state.
+ *
+ * When `sandboxMode` is enabled, the browser runs inside a Docker
+ * container for secure, isolated execution.
  */
 export class BrowserSessionManager {
   private config: Required<BrowserToolConfig>;
@@ -155,12 +168,18 @@ export class BrowserSessionManager {
       statePath: config.statePath ?? '',
       launchArgs: config.launchArgs ?? [],
       cdpEndpoint: config.cdpEndpoint ?? '',
+      sandboxMode: config.sandboxMode ?? false,
+      sandboxImage: config.sandboxImage ?? 'mcr.microsoft.com/playwright:v1.52.0-noble',
+      maxSessions: config.maxSessions ?? 5,
     };
   }
 
   /**
    * Initialize the browser instance.
    * Must be called before any session operations.
+   *
+   * In sandbox mode, this starts a Docker container with Playwright
+   * and connects via CDP.
    */
   async initialize(): Promise<void> {
     if (this.browser) return;
@@ -179,7 +198,11 @@ export class BrowserSessionManager {
       throw new Error(`Unsupported browser type: ${this.config.browserType}`);
     }
 
-    if (this.config.cdpEndpoint) {
+    if (this.config.sandboxMode && !this.config.cdpEndpoint) {
+      // Launch browser inside Docker container
+      const cdpEndpoint = await this.launchSandboxBrowser();
+      this.browser = await browserModule.connectOverCDP(cdpEndpoint);
+    } else if (this.config.cdpEndpoint) {
       // Connect to existing browser via CDP
       this.browser = await browserModule.connectOverCDP(this.config.cdpEndpoint);
     } else {
@@ -188,9 +211,69 @@ export class BrowserSessionManager {
         args: [
           '--no-sandbox',
           '--disable-setuid-sandbox',
+          '--disable-dev-shm-usage',
           ...this.config.launchArgs,
         ],
       });
+    }
+  }
+
+  /**
+   * Launch a Playwright browser inside a Docker container and return the CDP endpoint.
+   * This provides secure, isolated browser execution.
+   */
+  private async launchSandboxBrowser(): Promise<string> {
+    const { execSync } = await import('child_process');
+    const port = 9222 + Math.floor(Math.random() * 1000);
+
+    try {
+      // Start Docker container with Playwright browser
+      const containerId = execSync(
+        `docker run -d --rm ` +
+        `--name agentforge-browser-${port} ` +
+        `-p ${port}:9222 ` +
+        `--shm-size=2gb ` +
+        `${this.config.sandboxImage} ` +
+        `npx playwright launch --browser ${this.config.browserType} --headless ` +
+        `-- --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0`,
+        { encoding: 'utf-8', timeout: 30_000 }
+      ).trim();
+
+      // Wait for browser to be ready
+      let retries = 10;
+      while (retries > 0) {
+        try {
+          const response = execSync(
+            `curl -s http://localhost:${port}/json/version`,
+            { encoding: 'utf-8', timeout: 5_000 }
+          );
+          if (response.includes('webSocketDebuggerUrl')) {
+            const data = JSON.parse(response);
+            return data.webSocketDebuggerUrl || `ws://localhost:${port}`;
+          }
+        } catch {
+          // Browser not ready yet
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+        retries--;
+      }
+
+      // Cleanup on failure
+      try {
+        execSync(`docker stop agentforge-browser-${port}`, { timeout: 5_000 });
+      } catch {
+        // Ignore cleanup errors
+      }
+
+      throw new Error('Docker sandbox browser failed to start within timeout');
+    } catch (error) {
+      if (error instanceof Error && error.message.includes('Docker sandbox browser')) {
+        throw error;
+      }
+      throw new Error(
+        `Failed to launch Docker sandbox browser: ${error instanceof Error ? error.message : String(error)}. ` +
+        'Ensure Docker is installed and running.'
+      );
     }
   }
 
@@ -200,6 +283,14 @@ export class BrowserSessionManager {
   async getPage(sessionId: string = 'default'): Promise<any> {
     if (this.pages.has(sessionId)) {
       return this.pages.get(sessionId);
+    }
+
+    // Enforce max sessions
+    if (this.contexts.size >= this.config.maxSessions) {
+      throw new Error(
+        `Maximum concurrent sessions (${this.config.maxSessions}) reached. ` +
+        'Close an existing session before opening a new one.'
+      );
     }
 
     if (!this.browser) {
@@ -271,6 +362,20 @@ export class BrowserSessionManager {
    */
   getActiveSessions(): string[] {
     return Array.from(this.contexts.keys());
+  }
+
+  /**
+   * Check if sandbox mode is enabled.
+   */
+  isSandboxMode(): boolean {
+    return this.config.sandboxMode;
+  }
+
+  /**
+   * Get the current configuration (read-only copy).
+   */
+  getConfig(): Readonly<Required<BrowserToolConfig>> {
+    return { ...this.config };
   }
 }
 
@@ -350,6 +455,9 @@ export class BrowserActionExecutor {
             latencyMs: Date.now() - startTime,
           };
           return result;
+        case 'extractText':
+          result = await this.extractText(page, action.selector);
+          break;
         default:
           throw new Error(`Unknown browser action: ${(action as any).kind}`);
       }
@@ -676,6 +784,67 @@ export class BrowserActionExecutor {
       latencyMs: 0,
     };
   }
+
+  /**
+   * Extract text content from the page or a specific element.
+   */
+  private async extractText(
+    page: any,
+    selector?: string
+  ): Promise<BrowserActionResult> {
+    let text: string;
+
+    if (selector) {
+      text = await page.textContent(selector) ?? '';
+    } else {
+      text = await page.evaluate(() => {
+        // Extract meaningful text, skipping scripts and styles
+        const walker = document.createTreeWalker(
+          document.body,
+          NodeFilter.SHOW_TEXT,
+          {
+            acceptNode: (node: Text) => {
+              const parent = node.parentElement;
+              if (!parent) return NodeFilter.FILTER_REJECT;
+              const tag = parent.tagName.toLowerCase();
+              if (['script', 'style', 'noscript'].includes(tag)) {
+                return NodeFilter.FILTER_REJECT;
+              }
+              const style = window.getComputedStyle(parent);
+              if (style.display === 'none' || style.visibility === 'hidden') {
+                return NodeFilter.FILTER_REJECT;
+              }
+              if (!node.textContent?.trim()) {
+                return NodeFilter.FILTER_REJECT;
+              }
+              return NodeFilter.FILTER_ACCEPT;
+            },
+          }
+        );
+
+        const parts: string[] = [];
+        let node: Text | null;
+        while ((node = walker.nextNode() as Text | null)) {
+          const trimmed = node.textContent?.trim();
+          if (trimmed) parts.push(trimmed);
+        }
+        return parts.join('\n');
+      });
+    }
+
+    // Truncate very long text for LLM context
+    const maxLength = 50_000;
+    const truncated = text.length > maxLength
+      ? text.substring(0, maxLength) + `\n... (truncated, ${text.length} total chars)`
+      : text;
+
+    return {
+      success: true,
+      action: 'extractText',
+      data: truncated,
+      latencyMs: 0,
+    };
+  }
 }
 
 // =====================================================
@@ -720,6 +889,10 @@ export const browserActionSchema = z.object({
     z.object({ kind: z.literal('goForward') }),
     z.object({ kind: z.literal('reload') }),
     z.object({ kind: z.literal('close') }),
+    z.object({
+      kind: z.literal('extractText'),
+      selector: z.string().optional(),
+    }),
   ]),
   sessionId: z.string().optional(),
 });
@@ -759,6 +932,15 @@ export const browserActionResultSchema = z.object({
  * // Cleanup when done
  * await shutdown();
  * ```
+ *
+ * @example
+ * ```typescript
+ * // Docker sandbox mode for secure execution
+ * const { tool, shutdown } = createBrowserTool({
+ *   sandboxMode: true,
+ *   headless: true,
+ * });
+ * ```
  */
 export function createBrowserTool(config: BrowserToolConfig = {}): {
   tool: Tool<typeof browserActionSchema, typeof browserActionResultSchema>;
@@ -773,8 +955,9 @@ export function createBrowserTool(config: BrowserToolConfig = {}): {
     description:
       'Interact with web pages using browser automation. ' +
       'Supports: navigate, click, type, screenshot, snapshot (accessibility tree), ' +
-      'evaluate JS, wait, scroll, select, hover, goBack, goForward, reload, close. ' +
-      'Each session has isolated cookies and state.',
+      'evaluate JS, wait, scroll, select, hover, goBack, goForward, reload, close, extractText. ' +
+      'Each session has isolated cookies and state.' +
+      (config.sandboxMode ? ' Running in Docker sandbox mode for secure execution.' : ''),
     inputSchema: browserActionSchema,
     outputSchema: browserActionResultSchema,
     handler: async (input) => {

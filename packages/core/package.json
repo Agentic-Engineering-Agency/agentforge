@@ -22,6 +22,10 @@
       "types": "./dist/mcp-server.d.ts",
       "import": "./dist/mcp-server.js"
     },
+    "./browser": {
+      "types": "./dist/browser-tool.d.ts",
+      "import": "./dist/browser-tool.js"
+    },
     "./workspace": {
       "types": "./dist/workspace.d.ts",
       "import": "./dist/workspace.js"
@@ -50,6 +54,14 @@
     "ai": "^4.0.0",
     "zod": "^3.23.0"
   },
+  "peerDependencies": {
+    "playwright": ">=1.40.0"
+  },
+  "peerDependenciesMeta": {
+    "playwright": {
+      "optional": true
+    }
+  },
   "devDependencies": {
     "playwright": "^1.58.2",
     "tsup": "^8.0.0",
@@ -66,7 +78,10 @@
     "workspace",
     "multi-agent",
     "telegram",
-    "channels"
+    "channels",
+    "browser",
+    "playwright",
+    "automation"
   ],
   "license": "Apache-2.0",
   "repository": {
