@@ -71,7 +71,6 @@ export function registerAgentsCommand(program: Command) {
           instructions,
           model,
           provider,
-          isActive: true,
         }),
         'Failed to create agent'
       );
@@ -85,7 +84,7 @@ export function registerAgentsCommand(program: Command) {
     .action(async (id) => {
       const client = await createClient();
       const agent = await safeCall(
-        () => client.query('agents:getByAgentId' as any, { id }),
+        () => client.query('agents:get' as any, { id }),
         'Failed to fetch agent'
       );
       if (!agent) {
@@ -119,7 +118,7 @@ export function registerAgentsCommand(program: Command) {
     .action(async (id, opts) => {
       const client = await createClient();
       const agent = await safeCall(
-        () => client.query('agents:getByAgentId' as any, { id }),
+        () => client.query('agents:get' as any, { id }),
         'Failed to fetch agent'
       );
       if (!agent) { error(`Agent "${id}" not found.`); process.exit(1); }
@@ -145,7 +144,7 @@ export function registerAgentsCommand(program: Command) {
       if (Object.keys(updates).length === 0) { info('No changes made.'); return; }
 
       await safeCall(
-        () => client.mutation('agents:update' as any, { _id: (agent as any)._id, ...updates }),
+        () => client.mutation('agents:update' as any, { id, ...updates }),
         'Failed to update agent'
       );
       success(`Agent "${id}" updated.`);
@@ -163,12 +162,12 @@ export function registerAgentsCommand(program: Command) {
       }
       const client = await createClient();
       const agent = await safeCall(
-        () => client.query('agents:getByAgentId' as any, { id }),
+        () => client.query('agents:get' as any, { id }),
         'Failed to fetch agent'
       );
       if (!agent) { error(`Agent "${id}" not found.`); process.exit(1); }
       await safeCall(
-        () => client.mutation('agents:remove' as any, { _id: (agent as any)._id }),
+        () => client.mutation('agents:remove' as any, { id }),
         'Failed to delete agent'
       );
       success(`Agent "${id}" deleted.`);
@@ -180,9 +179,9 @@ export function registerAgentsCommand(program: Command) {
     .description('Enable an agent')
     .action(async (id) => {
       const client = await createClient();
-      const agent = await safeCall(() => client.query('agents:getByAgentId' as any, { id }), 'Failed to fetch agent');
+      const agent = await safeCall(() => client.query('agents:get' as any, { id }), 'Failed to fetch agent');
       if (!agent) { error(`Agent "${id}" not found.`); process.exit(1); }
-      await safeCall(() => client.mutation('agents:update' as any, { _id: (agent as any)._id, isActive: true }), 'Failed');
+      await safeCall(() => client.mutation('agents:update' as any, { id, isActive: true }), 'Failed');
       success(`Agent "${id}" enabled.`);
     });
 
@@ -192,9 +191,9 @@ export function registerAgentsCommand(program: Command) {
     .description('Disable an agent')
     .action(async (id) => {
       const client = await createClient();
-      const agent = await safeCall(() => client.query('agents:getByAgentId' as any, { id }), 'Failed to fetch agent');
+      const agent = await safeCall(() => client.query('agents:get' as any, { id }), 'Failed to fetch agent');
       if (!agent) { error(`Agent "${id}" not found.`); process.exit(1); }
-      await safeCall(() => client.mutation('agents:update' as any, { _id: (agent as any)._id, isActive: false }), 'Failed');
+      await safeCall(() => client.mutation('agents:update' as any, { id, isActive: false }), 'Failed');
       success(`Agent "${id}" disabled.`);
     });
 }

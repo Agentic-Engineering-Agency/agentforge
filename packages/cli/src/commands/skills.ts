@@ -133,7 +133,8 @@ export default { tools };
       const client = await createClient();
       await safeCall(
         () => client.mutation('skills:create' as any, {
-          name, category: 'custom', version: '1.0.0', isInstalled: true,
+          name, displayName: name, description: `Skill: ${name}`,
+          category: 'custom', version: '1.0.0', code: '// TODO: implement',
         }),
         'Failed to install skill'
       );
@@ -159,7 +160,7 @@ export default { tools };
         const skills = await client.query('skills:list' as any, {});
         const skill = (skills as any[]).find((s: any) => s.name === name);
         if (skill) {
-          await client.mutation('skills:remove' as any, { _id: skill._id });
+          await client.mutation('skills:remove' as any, { id: skill._id });
           success(`Skill "${name}" removed from database.`);
         }
       } catch { /* ignore if not in db */ }
