@@ -48,7 +48,7 @@ export async function createProject(
 
   let templateDir = '';
   for (const dir of searchDirs) {
-    if (await fs.pathExists(path.join(dir, 'package.json'))) {
+    if (await fs.pathExists(dir)) {
       templateDir = dir;
       break;
     }
