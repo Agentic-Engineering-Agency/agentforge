@@ -33,6 +33,10 @@
     "./channels/telegram": {
       "types": "./dist/channels/telegram.d.ts",
       "import": "./dist/channels/telegram.js"
+    },
+    "./channels/whatsapp": {
+      "types": "./dist/channels/whatsapp.d.ts",
+      "import": "./dist/channels/whatsapp.js"
     }
   },
   "files": [
@@ -78,6 +82,7 @@
     "workspace",
     "multi-agent",
     "telegram",
+    "whatsapp",
     "channels",
     "browser",
     "playwright",

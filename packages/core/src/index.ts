@@ -107,3 +107,6 @@ export type {
 
 export { TelegramChannel, startTelegramChannel } from './channels/telegram.js';
 export type { TelegramChannelConfig } from './channels/telegram.js';
+
+export { WhatsAppChannel, startWhatsAppChannel } from './channels/whatsapp.js';
+export type { WhatsAppChannelConfig } from './channels/whatsapp.js';
