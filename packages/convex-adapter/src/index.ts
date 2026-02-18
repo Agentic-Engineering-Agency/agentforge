@@ -16,6 +16,8 @@
  * - **ModelFailoverChain** - Automatic failover across LLM providers
  * - **createFailoverChain** - Factory for creating failover chains from model strings
  * - **createFailoverChainFromConfig** - Factory for creating chains from JSON config
+ * - **createFailoverChainFromAgent** - Factory for creating chains from agent records
+ * - **ProviderRegistry** - Centralized provider management with cost & latency tracking
  *
  * @example
  * ```typescript
@@ -72,6 +74,7 @@ export {
   ModelFailoverChain,
   createFailoverChain,
   createFailoverChainFromConfig,
+  createFailoverChainFromAgent,
 } from './failover-chain.js';
 
 export type {
@@ -85,6 +88,21 @@ export type {
   CircuitState,
   FailoverResult,
 } from './failover-chain.js';
+
+// Provider Registry exports
+export {
+  ProviderRegistry,
+  getProviderRegistry,
+  resetProviderRegistry,
+} from './provider-registry.js';
+
+export type {
+  ModelPricing,
+  RegisteredModel,
+  RegisteredProvider,
+  ProviderMetrics,
+  CostEstimate,
+} from './provider-registry.js';
 
 // Additional type exports
 export type {
