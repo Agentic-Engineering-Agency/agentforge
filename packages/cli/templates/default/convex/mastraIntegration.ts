@@ -1,24 +1,89 @@
+/**
+ * Mastra Integration Actions for Convex
+ *
+ * These actions run in the Convex Node.js runtime and execute LLM calls
+ * using the Vercel AI SDK with OpenRouter as the default provider.
+ *
+ * Architecture:
+ * - For chat: use `chat.sendMessage` (preferred entry point)
+ * - For programmatic agent execution: use `mastraIntegration.executeAgent`
+ * - Model resolution: uses AI SDK providers directly (OpenRouter, OpenAI, etc.)
+ *
+ * This replaces the previous broken approach of dynamically importing
+ * @mastra/core inside Convex actions. The AI SDK is the correct way to
+ * call LLMs from Convex Node.js actions.
+ */
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 
-/**
- * Mastra Integration Actions for Convex
- * 
- * These actions run in the Node.js runtime and can use Mastra
- * to execute agents and manage workflows.
- */
-
-// Return type for executeAgent to break circular type inference
+// Return type for executeAgent
 type ExecuteAgentResult = {
   success: boolean;
   threadId: string;
   sessionId: string;
   response: string;
-  usage?: Record<string, unknown>;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 };
 
-// Action: Execute agent with Mastra
+/**
+ * Resolve a model instance from provider + modelId using the AI SDK.
+ *
+ * Supports: openrouter, openai, anthropic, google, venice, custom.
+ * Falls back to OpenRouter for unknown providers (it routes to all models).
+ */
+async function resolveModel(provider: string, modelId: string) {
+  const { createOpenAI } = await import("@ai-sdk/openai");
+
+  switch (provider) {
+    case "openai": {
+      const openai = createOpenAI({
+        apiKey: process.env.OPENAI_API_KEY,
+      });
+      return openai(modelId);
+    }
+
+    case "anthropic": {
+      const { createAnthropic } = await import("@ai-sdk/anthropic");
+      const anthropic = createAnthropic({
+        apiKey: process.env.ANTHROPIC_API_KEY,
+      });
+      return anthropic(modelId);
+    }
+
+    case "google": {
+      const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
+      const google = createGoogleGenerativeAI({
+        apiKey: process.env.GEMINI_API_KEY,
+      });
+      return google(modelId);
+    }
+
+    case "openrouter":
+    default: {
+      // OpenRouter is OpenAI-compatible and routes to all providers
+      const openrouter = createOpenAI({
+        baseURL: "https://openrouter.ai/api/v1",
+        apiKey: process.env.OPENROUTER_API_KEY,
+      });
+      const routerModelId = modelId.includes("/")
+        ? modelId
+        : `${provider}/${modelId}`;
+      return openrouter(routerModelId);
+    }
+  }
+}
+
+/**
+ * Execute an agent with a prompt and return the response.
+ *
+ * This is the programmatic API for agent execution. For chat UI,
+ * prefer `chat.sendMessage` which handles thread management automatically.
+ */
 export const executeAgent = action({
   args: {
     agentId: v.string(),
@@ -30,7 +95,7 @@ export const executeAgent = action({
   handler: async (ctx, args): Promise<ExecuteAgentResult> => {
     // Get agent configuration from database
     const agent = await ctx.runQuery(api.agents.get, { id: args.agentId });
-    
+
     if (!agent) {
       throw new Error(`Agent ${args.agentId} not found`);
     }
@@ -58,50 +123,36 @@ export const executeAgent = action({
       threadId,
       agentId: args.agentId,
       userId: args.userId,
-      channel: "dashboard",
+      channel: "api",
     });
 
     try {
-      // Import Mastra dynamically (Node.js runtime)
-      // @ts-expect-error - Mastra is installed at runtime in the user's project
-      const { Agent } = await import("@mastra/core/agent");
-      
-      // Format model string for Mastra
-      const modelString = agent.model.includes("/")
-        ? agent.model
-        : `${agent.provider}/${agent.model}`;
+      const { generateText } = await import("ai");
 
-      // Create Mastra agent
-      const mastraAgent = new Agent({
-        id: agent.id,
-        name: agent.name,
-        instructions: agent.instructions,
-        model: modelString,
-        tools: agent.tools || {},
-        ...(agent.temperature && { temperature: agent.temperature }),
-        ...(agent.maxTokens && { maxTokens: agent.maxTokens }),
-        ...(agent.topP && { topP: agent.topP }),
-      });
+      // Resolve the model
+      const provider = agent.provider || "openrouter";
+      const modelId = agent.model || "openai/gpt-4o-mini";
+      const model = await resolveModel(provider, modelId);
 
       // Get conversation history for context
-      const messages = await ctx.runQuery(api.messages.list, { threadId }) as Array<{ role: string; content: string }>;
-      
-      // Build context from message history
-      const context = messages
-        .slice(-10) // Last 10 messages for context
-        .map((m) => `${m.role}: ${m.content}`)
-        .join("\n");
+      const messages = await ctx.runQuery(api.messages.list, { threadId });
+      const conversationMessages = (messages as Array<{ role: string; content: string }>)
+        .slice(-20)
+        .map((m) => ({
+          role: m.role as "user" | "assistant" | "system",
+          content: m.content,
+        }));
 
-      // Execute agent
-      const result: any = await mastraAgent.generate(args.prompt, {
-        ...(args.stream && { stream: args.stream }),
-        context: context || undefined,
+      // Execute the LLM call
+      const result = await generateText({
+        model,
+        system: agent.instructions || "You are a helpful AI assistant.",
+        messages: conversationMessages,
+        ...(agent.temperature != null && { temperature: agent.temperature }),
+        ...(agent.maxTokens != null && { maxTokens: agent.maxTokens }),
       });
 
-      // Extract response content
-      const responseContent: string = typeof result === "string" 
-        ? result 
-        : result.text || result.content || JSON.stringify(result);
+      const responseContent = result.text;
 
       // Add assistant message to thread
       await ctx.runMutation(api.messages.add, {
@@ -116,17 +167,27 @@ export const executeAgent = action({
         status: "completed",
       });
 
-      // Record usage (if available in result)
-      if (result.usage) {
+      // Build usage data
+      const usage = result.usage
+        ? {
+            promptTokens: result.usage.promptTokens || 0,
+            completionTokens: result.usage.completionTokens || 0,
+            totalTokens:
+              (result.usage.promptTokens || 0) +
+              (result.usage.completionTokens || 0),
+          }
+        : undefined;
+
+      // Record usage
+      if (usage) {
         await ctx.runMutation(api.usage.record, {
           agentId: args.agentId,
           sessionId,
-          provider: agent.provider,
-          model: agent.model,
-          promptTokens: result.usage.promptTokens || 0,
-          completionTokens: result.usage.completionTokens || 0,
-          totalTokens: result.usage.totalTokens || 0,
-          cost: result.usage.cost,
+          provider: agent.provider || "openrouter",
+          model: agent.model || "unknown",
+          promptTokens: usage.promptTokens,
+          completionTokens: usage.completionTokens,
+          totalTokens: usage.totalTokens,
           userId: args.userId,
         });
       }
@@ -136,10 +197,11 @@ export const executeAgent = action({
         threadId: threadId as string,
         sessionId,
         response: responseContent,
-        usage: result.usage,
+        usage,
       };
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
 
       // Update session status to error
       await ctx.runMutation(api.sessions.updateStatus, {
@@ -147,11 +209,24 @@ export const executeAgent = action({
         status: "error",
       });
 
-      // Add error message
+      // Add error message to thread
       await ctx.runMutation(api.messages.add, {
         threadId,
         role: "assistant",
         content: `Error: ${errorMessage}`,
+      });
+
+      // Log the error
+      await ctx.runMutation(api.logs.add, {
+        level: "error",
+        source: "mastraIntegration",
+        message: `Agent execution failed: ${errorMessage}`,
+        metadata: {
+          agentId: args.agentId,
+          threadId,
+          sessionId,
+        },
+        userId: args.userId,
       });
 
       throw error;
@@ -159,7 +234,12 @@ export const executeAgent = action({
   },
 });
 
-// Action: Stream agent response
+/**
+ * Stream agent response (placeholder — streaming requires SSE/WebSocket).
+ *
+ * For now, this falls back to non-streaming execution.
+ * Full streaming support will be added via Convex HTTP actions + SSE.
+ */
 export const streamAgent = action({
   args: {
     agentId: v.string(),
@@ -168,26 +248,31 @@ export const streamAgent = action({
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ success: boolean; message: string }> => {
-    // Similar to executeAgent but with streaming support
-    // This would require WebSocket or SSE implementation
-    // For now, return a placeholder
+    // Fall back to non-streaming execution
+    const result = await ctx.runAction(api.mastraIntegration.executeAgent, {
+      agentId: args.agentId,
+      prompt: args.prompt,
+      threadId: args.threadId,
+      userId: args.userId,
+    });
+
     return {
-      success: true,
-      message: "Streaming support coming soon",
+      success: result.success,
+      message: result.response,
     };
   },
 });
 
-// Action: Execute workflow with multiple agents
+/**
+ * Execute workflow with multiple agents (placeholder).
+ */
 export const executeWorkflow = action({
   args: {
     workflowId: v.string(),
     input: v.any(),
     userId: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{ success: boolean; message: string }> => {
-    // Placeholder for workflow execution
-    // This would orchestrate multiple agents in sequence or parallel
+  handler: async (_ctx, _args): Promise<{ success: boolean; message: string }> => {
     return {
       success: true,
       message: "Workflow execution coming soon",
