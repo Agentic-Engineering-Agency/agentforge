@@ -3,11 +3,18 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useState } from 'react';
 // import { useQuery } from 'convex/react';
 // import { api } from '~/../convex/_generated/api';
-import { Bot, Activity, MessageSquare, FileText, Plus, Heart, Zap, ArrowRight, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Bot, Activity, MessageSquare, FileText, Plus, Heart, Zap, ArrowRight, AlertTriangle, CheckCircle, LucideIcon } from 'lucide-react';
 
 export const Route = createFileRoute('/')({ component: OverviewPage });
 
-function StatCard({ icon: Icon, title, value, change }) {
+interface StatCardProps {
+  icon: LucideIcon;
+  title: string;
+  value: string | number;
+  change: string;
+}
+
+function StatCard({ icon: Icon, title, value, change }: StatCardProps) {
   return (
     <div className="bg-card p-6 rounded-lg shadow-md flex items-center justify-between">
       <div>
@@ -20,7 +27,13 @@ function StatCard({ icon: Icon, title, value, change }) {
   );
 }
 
-function QuickActionButton({ icon: Icon, label, to }) {
+interface QuickActionButtonProps {
+  icon: LucideIcon;
+  label: string;
+  to: string;
+}
+
+function QuickActionButton({ icon: Icon, label, to }: QuickActionButtonProps) {
   return (
     <a href={to} className="bg-card hover:bg-primary/10 border border-border p-4 rounded-lg flex flex-col items-center justify-center text-center transition-colors">
       <Icon className="w-8 h-8 text-primary mb-2" />
@@ -29,7 +42,13 @@ function QuickActionButton({ icon: Icon, label, to }) {
   );
 }
 
-function ActivityItem({ icon: Icon, text, time }) {
+interface ActivityItemProps {
+  icon: LucideIcon;
+  text: string;
+  time: string;
+}
+
+function ActivityItem({ icon: Icon, text, time }: ActivityItemProps) {
   return (
     <li className="flex items-center space-x-4 py-3 border-b border-border last:border-b-0">
       <div className="bg-primary/10 p-2 rounded-full">
@@ -44,7 +63,11 @@ function ActivityItem({ icon: Icon, text, time }) {
   );
 }
 
-function SystemHealthIndicator({ isHealthy }) {
+interface SystemHealthIndicatorProps {
+  isHealthy: boolean;
+}
+
+function SystemHealthIndicator({ isHealthy }: SystemHealthIndicatorProps) {
     const Icon = isHealthy ? CheckCircle : AlertTriangle;
     const text = isHealthy ? 'All systems operational' : 'Service degradation';
     const color = isHealthy ? 'text-green-500' : 'text-yellow-500';
@@ -59,14 +82,14 @@ function SystemHealthIndicator({ isHealthy }) {
 
 function OverviewPage() {
   // Local state with realistic initial values, simulating data from Convex
-  const [stats, setStats] = useState({
+  const [stats] = useState({
     totalAgents: 12,
     activeSessions: 3,
     messagesToday: 1402,
     totalFiles: 256,
   });
 
-  const [activity, setActivity] = useState([
+  const [activity] = useState([
     { id: 1, icon: Bot, text: 'New agent "SupportBot" created.', time: '5m ago' },
     { id: 2, icon: MessageSquare, text: 'Session #1245 ended with 52 messages.', time: '1h ago' },
     { id: 3, icon: FileText, text: 'Uploaded "project_spec.pdf".', time: '3h ago' },
@@ -74,19 +97,7 @@ function OverviewPage() {
     { id: 5, icon: Bot, text: 'Agent "CodeGenerator" was updated.', time: '1d ago' },
   ]);
 
-  const [systemHealth, setSystemHealth] = useState({ isHealthy: true });
-
-  // Commented-out Convex hooks for future integration
-  /*
-  const overviewStats = useQuery(api.overview.getStats);
-  const recentActivity = useQuery(api.overview.getRecentActivity, { count: 5 });
-  const systemStatus = useQuery(api.heartbeat.getStatus);
-
-  // In a real implementation, you would use the data from hooks:
-  // const stats = overviewStats || { totalAgents: 0, activeSessions: 0, messagesToday: 0, totalFiles: 0 };
-  // const activity = recentActivity || [];
-  // const systemHealth = { isHealthy: systemStatus === 'operational' };
-  */
+  const [systemHealth] = useState({ isHealthy: true });
 
   return (
     <DashboardLayout>
