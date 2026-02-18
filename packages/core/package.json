@@ -25,6 +25,10 @@
     "./workspace": {
       "types": "./dist/workspace.d.ts",
       "import": "./dist/workspace.js"
+    },
+    "./channels/telegram": {
+      "types": "./dist/channels/telegram.d.ts",
+      "import": "./dist/channels/telegram.js"
     }
   },
   "files": [
@@ -60,7 +64,9 @@
     "e2b",
     "sandbox",
     "workspace",
-    "multi-agent"
+    "multi-agent",
+    "telegram",
+    "channels"
   ],
   "license": "Apache-2.0",
   "repository": {

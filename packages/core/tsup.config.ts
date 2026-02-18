@@ -7,6 +7,7 @@ export default defineConfig({
     'src/sandbox.ts',
     'src/mcp-server.ts',
     'src/workspace.ts',
+    'src/channels/telegram.ts',
   ],
   format: ['esm'],
   dts: true,

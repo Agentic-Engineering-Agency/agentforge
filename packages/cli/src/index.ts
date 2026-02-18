@@ -15,6 +15,7 @@ import { registerVaultCommand } from './commands/vault.js';
 import { registerKeysCommand } from './commands/keys.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerLoginCommand } from './commands/login.js';
+import { registerChannelTelegramCommand } from './commands/channel-telegram.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -106,6 +107,9 @@ registerVaultCommand(program);
 
 // ─── AI Provider Keys ────────────────────────────────────────────
 registerKeysCommand(program);
+
+// ─── Channels ───────────────────────────────────────────────────
+registerChannelTelegramCommand(program);
 
 // ─── Status, Dashboard, Logs, Heartbeat ──────────────────────────
 registerStatusCommand(program);
