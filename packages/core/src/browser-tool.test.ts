@@ -38,6 +38,7 @@ const mockPage = {
   url: vi.fn().mockReturnValue('https://example.com'),
   title: vi.fn().mockResolvedValue('Example Page'),
   close: vi.fn().mockResolvedValue(undefined),
+  textContent: vi.fn().mockResolvedValue('Extracted text content'),
 };
 
 const mockContext = {
@@ -130,6 +131,79 @@ describe('BrowserSessionManager', () => {
     expect(manager.getActiveSessions()).toHaveLength(0);
     expect(mockBrowser.close).toHaveBeenCalled();
   });
+
+  it('should report sandbox mode status', () => {
+    const normalManager = new BrowserSessionManager({ headless: true });
+    expect(normalManager.isSandboxMode()).toBe(false);
+
+    const sandboxManager = new BrowserSessionManager({ sandboxMode: true });
+    expect(sandboxManager.isSandboxMode()).toBe(true);
+  });
+
+  it('should return config via getConfig', () => {
+    const m = new BrowserSessionManager({
+      headless: false,
+      browserType: 'firefox',
+      viewportWidth: 1920,
+      maxSessions: 10,
+    });
+    const config = m.getConfig();
+    expect(config.headless).toBe(false);
+    expect(config.browserType).toBe('firefox');
+    expect(config.viewportWidth).toBe(1920);
+    expect(config.maxSessions).toBe(10);
+  });
+
+  it('should apply default config values', () => {
+    const m = new BrowserSessionManager();
+    const config = m.getConfig();
+    expect(config.headless).toBe(true);
+    expect(config.defaultTimeout).toBe(30_000);
+    expect(config.browserType).toBe('chromium');
+    expect(config.viewportWidth).toBe(1280);
+    expect(config.viewportHeight).toBe(720);
+    expect(config.userAgent).toBe('');
+    expect(config.persistState).toBe(false);
+    expect(config.statePath).toBe('');
+    expect(config.launchArgs).toEqual([]);
+    expect(config.cdpEndpoint).toBe('');
+    expect(config.sandboxMode).toBe(false);
+    expect(config.sandboxImage).toBe('mcr.microsoft.com/playwright:v1.52.0-noble');
+    expect(config.maxSessions).toBe(5);
+  });
+
+  it('should enforce max sessions limit', async () => {
+    const limitedManager = new BrowserSessionManager({
+      headless: true,
+      maxSessions: 2,
+    });
+
+    await limitedManager.getPage('s1');
+    await limitedManager.getPage('s2');
+
+    await expect(limitedManager.getPage('s3')).rejects.toThrow(
+      'Maximum concurrent sessions (2) reached'
+    );
+
+    await limitedManager.shutdown();
+  });
+
+  it('should allow new session after closing one at max capacity', async () => {
+    const limitedManager = new BrowserSessionManager({
+      headless: true,
+      maxSessions: 2,
+    });
+
+    await limitedManager.getPage('s1');
+    await limitedManager.getPage('s2');
+    await limitedManager.closeSession('s1');
+
+    // Should now be able to create a new session
+    const page = await limitedManager.getPage('s3');
+    expect(page).toBeDefined();
+
+    await limitedManager.shutdown();
+  });
 });
 
 describe('BrowserActionExecutor', () => {
@@ -176,12 +250,32 @@ describe('BrowserActionExecutor', () => {
     expect(mockPage.fill).toHaveBeenCalledWith('#input', 'Hello World');
   });
 
+  it('should truncate long text in type result', async () => {
+    const longText = 'A'.repeat(100);
+    const result = await executor.execute({
+      kind: 'type',
+      selector: '#input',
+      text: longText,
+    });
+    expect(result.success).toBe(true);
+    expect(result.data).toContain('...');
+  });
+
   it('should execute screenshot action', async () => {
     const result = await executor.execute({ kind: 'screenshot' });
     expect(result.success).toBe(true);
     expect(result.action).toBe('screenshot');
     expect(result.screenshot).toBeDefined();
     expect(typeof result.screenshot).toBe('string');
+  });
+
+  it('should execute full-page screenshot', async () => {
+    const result = await executor.execute({ kind: 'screenshot', fullPage: true });
+    expect(result.success).toBe(true);
+    expect(mockPage.screenshot).toHaveBeenCalledWith({
+      fullPage: true,
+      type: 'png',
+    });
   });
 
   it('should execute snapshot action', async () => {
@@ -201,6 +295,16 @@ describe('BrowserActionExecutor', () => {
     expect(result.data).toBe('evaluated result');
   });
 
+  it('should handle non-string evaluate results', async () => {
+    mockPage.evaluate.mockResolvedValueOnce({ key: 'value' });
+    const result = await executor.execute({
+      kind: 'evaluate',
+      js: 'JSON.parse("{\\"key\\":\\"value\\"}")',
+    });
+    expect(result.success).toBe(true);
+    expect(result.data).toContain('"key"');
+  });
+
   it('should execute wait with selector', async () => {
     const result = await executor.execute({
       kind: 'wait',
@@ -218,6 +322,12 @@ describe('BrowserActionExecutor', () => {
     expect(mockPage.waitForTimeout).toHaveBeenCalledWith(1000);
   });
 
+  it('should handle wait with no condition', async () => {
+    const result = await executor.execute({ kind: 'wait' });
+    expect(result.success).toBe(true);
+    expect(result.data).toBe('No wait condition specified');
+  });
+
   it('should execute scroll action', async () => {
     const result = await executor.execute({
       kind: 'scroll',
@@ -226,6 +336,16 @@ describe('BrowserActionExecutor', () => {
     });
     expect(result.success).toBe(true);
     expect(result.action).toBe('scroll');
+  });
+
+  it('should scroll up with default amount', async () => {
+    const result = await executor.execute({
+      kind: 'scroll',
+      direction: 'up',
+    });
+    expect(result.success).toBe(true);
+    expect(result.data).toContain('up');
+    expect(result.data).toContain('500');
   });
 
   it('should execute select action', async () => {
@@ -271,6 +391,38 @@ describe('BrowserActionExecutor', () => {
     expect(result.action).toBe('close');
   });
 
+  it('should execute extractText action with selector', async () => {
+    mockPage.textContent.mockResolvedValueOnce('Hello from element');
+    const result = await executor.execute({
+      kind: 'extractText',
+      selector: '#content',
+    });
+    expect(result.success).toBe(true);
+    expect(result.action).toBe('extractText');
+    expect(result.data).toBe('Hello from element');
+    expect(mockPage.textContent).toHaveBeenCalledWith('#content');
+  });
+
+  it('should execute extractText action without selector (full page)', async () => {
+    mockPage.evaluate.mockResolvedValueOnce('Full page text content');
+    const result = await executor.execute({
+      kind: 'extractText',
+    });
+    expect(result.success).toBe(true);
+    expect(result.action).toBe('extractText');
+    expect(result.data).toBe('Full page text content');
+  });
+
+  it('should handle null textContent gracefully', async () => {
+    mockPage.textContent.mockResolvedValueOnce(null);
+    const result = await executor.execute({
+      kind: 'extractText',
+      selector: '#empty',
+    });
+    expect(result.success).toBe(true);
+    expect(result.data).toBe('');
+  });
+
   it('should handle errors gracefully', async () => {
     mockPage.click.mockRejectedValueOnce(new Error('Element not found'));
     const result = await executor.execute({
@@ -296,6 +448,30 @@ describe('BrowserActionExecutor', () => {
       url: 'https://example.com',
     });
     expect(result.latencyMs).toBeGreaterThanOrEqual(0);
+  });
+
+  it('should handle page info errors gracefully', async () => {
+    mockPage.url.mockImplementationOnce(() => { throw new Error('Page closed'); });
+    const result = await executor.execute({
+      kind: 'navigate',
+      url: 'https://example.com',
+    });
+    // Should still succeed — page info errors are swallowed
+    expect(result.success).toBe(true);
+  });
+
+  it('should use different sessions independently', async () => {
+    const result1 = await executor.execute(
+      { kind: 'navigate', url: 'https://site-a.com' },
+      'session-a'
+    );
+    const result2 = await executor.execute(
+      { kind: 'navigate', url: 'https://site-b.com' },
+      'session-b'
+    );
+    expect(result1.success).toBe(true);
+    expect(result2.success).toBe(true);
+    expect(mockBrowser.newContext).toHaveBeenCalledTimes(2);
   });
 });
 
@@ -328,6 +504,20 @@ describe('Zod Schemas', () => {
     expect(result.success).toBe(true);
   });
 
+  it('should validate extractText action', () => {
+    const result = browserActionSchema.safeParse({
+      action: { kind: 'extractText' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should validate extractText action with selector', () => {
+    const result = browserActionSchema.safeParse({
+      action: { kind: 'extractText', selector: '#content' },
+    });
+    expect(result.success).toBe(true);
+  });
+
   it('should reject invalid action kind', () => {
     const result = browserActionSchema.safeParse({
       action: { kind: 'invalid' },
@@ -351,6 +541,69 @@ describe('Zod Schemas', () => {
       currentUrl: 'https://example.com',
       pageTitle: 'Example',
       latencyMs: 150,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should validate result schema with error', () => {
+    const result = browserActionResultSchema.safeParse({
+      success: false,
+      action: 'click',
+      error: 'Element not found',
+      latencyMs: 50,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should validate result schema with screenshot', () => {
+    const result = browserActionResultSchema.safeParse({
+      success: true,
+      action: 'screenshot',
+      screenshot: 'base64data',
+      data: 'Screenshot captured (10KB)',
+      latencyMs: 200,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject navigate with invalid URL', () => {
+    const result = browserActionSchema.safeParse({
+      action: { kind: 'navigate', url: 'not-a-url' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should validate scroll action', () => {
+    const result = browserActionSchema.safeParse({
+      action: { kind: 'scroll', direction: 'down', amount: 500 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should validate select action', () => {
+    const result = browserActionSchema.safeParse({
+      action: { kind: 'select', selector: '#dropdown', value: 'opt1' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should validate hover action', () => {
+    const result = browserActionSchema.safeParse({
+      action: { kind: 'hover', selector: '.menu' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should validate navigation actions', () => {
+    expect(browserActionSchema.safeParse({ action: { kind: 'goBack' } }).success).toBe(true);
+    expect(browserActionSchema.safeParse({ action: { kind: 'goForward' } }).success).toBe(true);
+    expect(browserActionSchema.safeParse({ action: { kind: 'reload' } }).success).toBe(true);
+    expect(browserActionSchema.safeParse({ action: { kind: 'close' } }).success).toBe(true);
+  });
+
+  it('should validate wait action with both params', () => {
+    const result = browserActionSchema.safeParse({
+      action: { kind: 'wait', selector: '#el', timeMs: 5000 },
     });
     expect(result.success).toBe(true);
   });
@@ -386,6 +639,32 @@ describe('createBrowserTool', () => {
     expect(sessionManager).toBeInstanceOf(BrowserSessionManager);
     shutdown();
   });
+
+  it('should include sandbox mode in description when enabled', () => {
+    const { tool, shutdown } = createBrowserTool({ sandboxMode: true });
+    expect(tool.description).toContain('Docker sandbox mode');
+    shutdown();
+  });
+
+  it('should not include sandbox mode in description when disabled', () => {
+    const { tool, shutdown } = createBrowserTool({ sandboxMode: false });
+    expect(tool.description).not.toContain('Docker sandbox mode');
+    shutdown();
+  });
+
+  it('should include extractText in description', () => {
+    const { tool, shutdown } = createBrowserTool();
+    expect(tool.description).toContain('extractText');
+    shutdown();
+  });
+
+  it('should have valid input and output schemas', () => {
+    const { tool, shutdown } = createBrowserTool();
+    expect(tool.inputSchema).toBeDefined();
+    expect(tool.outputSchema).toBeDefined();
+    expect(typeof tool.handler).toBe('function');
+    shutdown();
+  });
 });
 
 describe('registerBrowserTool', () => {
@@ -408,6 +687,16 @@ describe('registerBrowserTool', () => {
     });
 
     expect(sessionManager).toBeInstanceOf(BrowserSessionManager);
+    shutdown();
+  });
+
+  it('should register tool with sandbox mode config', () => {
+    const server = new MCPServer({ name: 'test' });
+    const { sessionManager, shutdown } = registerBrowserTool(server, {
+      sandboxMode: true,
+    });
+
+    expect(sessionManager.isSandboxMode()).toBe(true);
     shutdown();
   });
 });

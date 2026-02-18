@@ -6,6 +6,7 @@ export default defineConfig({
     'src/agent.ts',
     'src/sandbox.ts',
     'src/mcp-server.ts',
+    'src/browser-tool.ts',
     'src/workspace.ts',
     'src/channels/telegram.ts',
   ],
