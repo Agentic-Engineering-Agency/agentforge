@@ -104,3 +104,6 @@ export type {
   CloudWorkspaceConfig,
   WorkspaceToolConfig,
 } from './workspace.js';
+
+export { TelegramChannel, startTelegramChannel } from './channels/telegram.js';
+export type { TelegramChannelConfig } from './channels/telegram.js';
