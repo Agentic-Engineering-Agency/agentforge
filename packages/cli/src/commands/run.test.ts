@@ -22,7 +22,7 @@ describe('runProject', () => {
   const originalExit = process.exit;
 
   beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentforge-run-test-'));
+    tmpDir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agentforge-run-test-')));
     process.chdir(tmpDir);
     mockSpawn.mockClear();
     mockOn.mockClear();

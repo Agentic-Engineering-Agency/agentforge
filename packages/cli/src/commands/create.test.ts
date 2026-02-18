@@ -16,7 +16,7 @@ describe('createProject', () => {
   const originalExit = process.exit;
 
   beforeEach(async () => {
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentforge-test-'));
+    tmpDir = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), 'agentforge-test-')));
     process.chdir(tmpDir);
     mockExecSync.mockReset();
     // Mock process.exit to throw instead of exiting
