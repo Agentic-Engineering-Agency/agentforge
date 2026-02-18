@@ -3,17 +3,26 @@ import path from 'node:path';
 import fs from 'fs-extra';
 
 /**
+ * Supported sandbox providers for agent tool execution.
+ */
+export type SandboxType = 'local' | 'docker' | 'e2b' | 'none';
+
+/**
  * Options for the run command.
  */
 export interface RunOptions {
   /** The port for the dev server. */
   port: string;
+  /** The sandbox provider to use for agent tool execution. */
+  sandbox: SandboxType;
 }
 
 /**
  * Starts the local development environment for an AgentForge project.
  *
  * This command starts the Convex development server and watches for file changes.
+ * When `--sandbox docker` is specified, agent tool execution will use Docker
+ * containers for isolation instead of the default local sandbox.
  *
  * @param options - Options for the run command.
  */
@@ -40,11 +49,31 @@ export async function runProject(options: RunOptions): Promise<void> {
   console.log(`\n🚀 Starting AgentForge development server...\n`);
   console.log(`  Convex dev server starting on port ${options.port}...`);
 
+  // Log sandbox configuration
+  if (options.sandbox === 'docker') {
+    console.log(`  🐳 Docker sandbox enabled — agent tools will execute in isolated containers`);
+    console.log(`     Image: ${process.env['DOCKER_IMAGE'] ?? 'node:22-slim (default)'}`);
+    console.log(`     Host:  ${process.env['DOCKER_HOST'] ?? '/var/run/docker.sock (default)'}`);
+  } else if (options.sandbox === 'e2b') {
+    console.log(`  ☁️  E2B sandbox enabled — agent tools will execute in cloud sandboxes`);
+  } else if (options.sandbox === 'none') {
+    console.log(`  ⚠️  No sandbox — agent tools will execute directly on the host (unsafe)`);
+  } else {
+    console.log(`  📦 Local sandbox enabled (default)`);
+  }
+
+  // Set sandbox environment variable for downstream consumers
+  const sandboxEnv = {
+    ...process.env,
+    AGENTFORGE_SANDBOX_PROVIDER: options.sandbox,
+  };
+
   // Start the Convex dev server
   const convexProcess = spawn('npx', ['convex', 'dev'], {
     cwd: projectDir,
     stdio: 'inherit',
     shell: true,
+    env: sandboxEnv,
   });
 
   convexProcess.on('error', (err) => {

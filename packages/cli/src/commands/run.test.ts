@@ -42,7 +42,7 @@ describe('runProject', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
-      runProject({ port: '3000' })
+      runProject({ port: '3000', sandbox: 'local' })
     ).rejects.toThrow('process.exit(1)');
 
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -56,7 +56,7 @@ describe('runProject', () => {
     const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     await expect(
-      runProject({ port: '3000' })
+      runProject({ port: '3000', sandbox: 'local' })
     ).rejects.toThrow('process.exit(1)');
 
     expect(consoleSpy).toHaveBeenCalledWith(
@@ -72,7 +72,7 @@ describe('runProject', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
 
-    await runProject({ port: '4000' });
+    await runProject({ port: '4000', sandbox: 'local' });
 
     expect(mockSpawn).toHaveBeenCalledWith('npx', ['convex', 'dev'], expect.objectContaining({
       cwd: tmpDir,
@@ -95,6 +95,38 @@ describe('runProject', () => {
     processOnSpy.mockRestore();
   });
 
+  it('should log Docker sandbox info when sandbox is docker', async () => {
+    await fs.writeJson(path.join(tmpDir, 'package.json'), { name: 'test' });
+    await fs.ensureDir(path.join(tmpDir, 'convex'));
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
+
+    await runProject({ port: '3000', sandbox: 'docker' });
+
+    expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Docker sandbox enabled'));
+
+    logSpy.mockRestore();
+    processOnSpy.mockRestore();
+  });
+
+  it('should set AGENTFORGE_SANDBOX_PROVIDER env variable', async () => {
+    await fs.writeJson(path.join(tmpDir, 'package.json'), { name: 'test' });
+    await fs.ensureDir(path.join(tmpDir, 'convex'));
+
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
+
+    await runProject({ port: '3000', sandbox: 'docker' });
+
+    const spawnCall = mockSpawn.mock.calls[0];
+    const spawnOptions = spawnCall[2] as { env: Record<string, string> };
+    expect(spawnOptions.env.AGENTFORGE_SANDBOX_PROVIDER).toBe('docker');
+
+    logSpy.mockRestore();
+    processOnSpy.mockRestore();
+  });
+
   it('should handle convex process error event', async () => {
     await fs.writeJson(path.join(tmpDir, 'package.json'), { name: 'test' });
     await fs.ensureDir(path.join(tmpDir, 'convex'));
@@ -103,7 +135,7 @@ describe('runProject', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
 
-    await runProject({ port: '3000' });
+    await runProject({ port: '3000', sandbox: 'local' });
 
     // Find the error handler and invoke it
     const errorCall = mockOn.mock.calls.find((call: unknown[]) => call[0] === 'error');
@@ -126,7 +158,7 @@ describe('runProject', () => {
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
 
-    await runProject({ port: '3000' });
+    await runProject({ port: '3000', sandbox: 'local' });
 
     // Find the close handler and invoke it
     const closeCall = mockOn.mock.calls.find((call: unknown[]) => call[0] === 'close');
@@ -153,7 +185,7 @@ describe('runProject', () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
 
-    await runProject({ port: '3000' });
+    await runProject({ port: '3000', sandbox: 'local' });
 
     // Find the SIGINT handler
     const sigintCall = processOnSpy.mock.calls.find((call: unknown[]) => call[0] === 'SIGINT');

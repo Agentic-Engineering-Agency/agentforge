@@ -70,6 +70,24 @@ Explain your reasoning and provide examples when helpful.`,
     },
   ],
   
+  // Sandbox configuration for agent tool execution isolation
+  sandbox: {
+    // Provider: 'local' (default), 'docker', 'e2b', or 'none'
+    provider: 'local',
+    // Docker-specific options (only used when provider is 'docker')
+    docker: {
+      image: 'node:22-slim',
+      resourceLimits: {
+        memoryMb: 512,
+        cpuShares: 512,
+        networkDisabled: false,
+        pidsLimit: 256,
+      },
+      // Timeout in seconds before auto-killing the container
+      timeout: 300,
+    },
+  },
+
   // Optional: Environment variables available to all agents
   env: {
     SUPPORT_EMAIL: 'support@example.com',
