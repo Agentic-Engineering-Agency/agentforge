@@ -18,6 +18,7 @@ export default defineConfig({
     'commander',
     'fs-extra',
     'chalk',
+    'gray-matter',
     // Node builtins
     'node:path',
     'node:fs',

@@ -1,3 +1,13 @@
+---
+name: skill-creator
+description: Built-in skill for creating, managing, and discovering AgentForge skills. Allows agents to generate new skills from natural language descriptions.
+version: 1.0.0
+tags:
+  - utility
+  - meta
+  - creation
+---
+
 # Skill Creator
 
 **Built-in AgentForge Skill** — Create, manage, and discover skills for your agents.
@@ -7,264 +17,93 @@
 The Skill Creator is a default skill that ships with every AgentForge project. It allows you to:
 
 1. **Create new skills** from natural language descriptions
-2. **Browse example skills** to understand the skill format
-3. **Validate skills** before installing them
-4. **Generate skill code** using your connected LLM
+2. **Browse available skills** in the AgentForge registry
+3. **Validate skills** to ensure they follow the Agent Skills Specification
 
-## Usage
+## How to Create a Skill
 
-### Via CLI
+When a user asks you to create a skill:
+
+1. Ask for the skill name (kebab-case), description, and tags
+2. Generate the SKILL.md with proper frontmatter and instructions
+3. Create supporting files in references/ and scripts/ directories
+4. Save to the workspace/skills/ directory
+
+### Skill Structure
+
+Every AgentForge skill follows the Agent Skills Specification:
+
+```
+skills/
+  my-skill/
+    SKILL.md          # Instructions and metadata (frontmatter)
+    references/       # Supporting documentation (optional)
+    scripts/          # Executable scripts (optional)
+    assets/           # Images and other files (optional)
+```
+
+### SKILL.md Format
+
+```markdown
+---
+name: my-skill
+description: What this skill does
+version: 1.0.0
+tags:
+  - category1
+  - category2
+---
+
+# My Skill
+
+Instructions for the agent on how to use this skill.
+
+## Steps
+1. Step one
+2. Step two
+```
+
+## CLI Commands
 
 ```bash
 # Create a new skill interactively
 agentforge skills create
 
-# Ask the agent to create a skill
-agentforge chat my-agent
-> Create a skill that can fetch weather data for any city
+# Install a skill from the registry
+agentforge skills install <name>
 
-# List available example skills
-agentforge skills search examples
+# List installed skills
+agentforge skills list
+
+# Browse the registry
+agentforge skills list --registry
+
+# Search for skills
+agentforge skills search <query>
+
+# Get skill details
+agentforge skills info <name>
+
+# Remove a skill
+agentforge skills remove <name>
 ```
-
-### Via Dashboard
-
-Navigate to **Skills** in the sidebar, then click **"Create Skill"** to use the visual skill builder.
-
-### Via Agent Chat
-
-When chatting with an agent that has the Skill Creator tool enabled, simply ask:
-
-> "Create a skill that can [description of what you want]"
-
-The agent will generate the skill definition, validate it, and offer to install it.
-
-## Skill Format
-
-Every AgentForge skill is a directory with the following structure:
-
-```
-skills/
-  my-skill/
-    SKILL.md          # Documentation and instructions
-    index.ts          # Main skill entry point
-    config.json       # Skill metadata and configuration
-```
-
-### config.json
-
-```json
-{
-  "name": "my-skill",
-  "version": "1.0.0",
-  "description": "What this skill does",
-  "category": "utility",
-  "author": "Your Name",
-  "tools": ["tool-name-1", "tool-name-2"],
-  "dependencies": [],
-  "agentInstructions": "Additional instructions for agents using this skill"
-}
-```
-
-### index.ts
-
-```typescript
-import { z } from 'zod';
-
-export const tools = [
-  {
-    name: 'my-tool',
-    description: 'What this tool does',
-    inputSchema: z.object({
-      param1: z.string().describe('Description of param1'),
-    }),
-    outputSchema: z.object({
-      result: z.string(),
-    }),
-    handler: async (input: { param1: string }) => {
-      // Your tool logic here
-      return { result: `Processed: ${input.param1}` };
-    },
-  },
-];
-
-export default { tools };
-```
-
-## Example Skills
-
-### 1. Web Search Skill
-
-```typescript
-// skills/web-search/index.ts
-import { z } from 'zod';
-
-export const tools = [
-  {
-    name: 'web-search',
-    description: 'Search the web for information',
-    inputSchema: z.object({
-      query: z.string().describe('Search query'),
-      maxResults: z.number().optional().default(5),
-    }),
-    outputSchema: z.object({
-      results: z.array(z.object({
-        title: z.string(),
-        url: z.string(),
-        snippet: z.string(),
-      })),
-    }),
-    handler: async (input) => {
-      // Implement with your preferred search API
-      const response = await fetch(
-        `https://api.search.example/search?q=${encodeURIComponent(input.query)}&limit=${input.maxResults}`
-      );
-      const data = await response.json();
-      return { results: data.results };
-    },
-  },
-];
-```
-
-### 2. Calculator Skill
-
-```typescript
-// skills/calculator/index.ts
-import { z } from 'zod';
-
-export const tools = [
-  {
-    name: 'calculate',
-    description: 'Evaluate a mathematical expression',
-    inputSchema: z.object({
-      expression: z.string().describe('Math expression to evaluate (e.g., "2 + 2 * 3")'),
-    }),
-    outputSchema: z.object({
-      result: z.number(),
-      expression: z.string(),
-    }),
-    handler: async (input) => {
-      const result = Function('"use strict"; return (' + input.expression + ')')();
-      return { result: Number(result), expression: input.expression };
-    },
-  },
-];
-```
-
-### 3. File Reader Skill
-
-```typescript
-// skills/file-reader/index.ts
-import { z } from 'zod';
-import { readFile } from 'fs/promises';
-
-export const tools = [
-  {
-    name: 'read-file',
-    description: 'Read the contents of a file',
-    inputSchema: z.object({
-      path: z.string().describe('Path to the file'),
-      encoding: z.string().optional().default('utf-8'),
-    }),
-    outputSchema: z.object({
-      content: z.string(),
-      size: z.number(),
-    }),
-    handler: async (input) => {
-      const content = await readFile(input.path, input.encoding as BufferEncoding);
-      return { content, size: content.length };
-    },
-  },
-];
-```
-
-### 4. JSON Transformer Skill
-
-```typescript
-// skills/json-transformer/index.ts
-import { z } from 'zod';
-
-export const tools = [
-  {
-    name: 'transform-json',
-    description: 'Transform JSON data using a jq-like expression',
-    inputSchema: z.object({
-      data: z.string().describe('JSON string to transform'),
-      path: z.string().describe('Dot-notation path to extract (e.g., "users.0.name")'),
-    }),
-    outputSchema: z.object({
-      result: z.any(),
-    }),
-    handler: async (input) => {
-      const obj = JSON.parse(input.data);
-      const parts = input.path.split('.');
-      let current: any = obj;
-      for (const part of parts) {
-        current = current?.[part] ?? current?.[Number(part)];
-      }
-      return { result: current };
-    },
-  },
-];
-```
-
-### 5. HTTP Request Skill
-
-```typescript
-// skills/http-request/index.ts
-import { z } from 'zod';
-
-export const tools = [
-  {
-    name: 'http-request',
-    description: 'Make an HTTP request to any URL',
-    inputSchema: z.object({
-      url: z.string().url().describe('URL to request'),
-      method: z.enum(['GET', 'POST', 'PUT', 'DELETE']).default('GET'),
-      headers: z.record(z.string()).optional(),
-      body: z.string().optional(),
-    }),
-    outputSchema: z.object({
-      status: z.number(),
-      body: z.string(),
-      headers: z.record(z.string()),
-    }),
-    handler: async (input) => {
-      const response = await fetch(input.url, {
-        method: input.method,
-        headers: input.headers,
-        body: input.body,
-      });
-      const body = await response.text();
-      const headers: Record<string, string> = {};
-      response.headers.forEach((v, k) => { headers[k] = v; });
-      return { status: response.status, body, headers };
-    },
-  },
-];
-```
-
-## Creating Skills with AI
-
-When you ask an agent to create a skill, the Skill Creator tool will:
-
-1. **Parse your request** — Understand what the skill should do
-2. **Generate the code** — Create `index.ts` with proper Zod schemas
-3. **Create metadata** — Generate `config.json` with name, description, category
-4. **Write documentation** — Generate `SKILL.md` with usage instructions
-5. **Validate** — Ensure the skill compiles and schemas are correct
-6. **Install** — Save to your `skills/` directory and register with Convex
 
 ## Categories
 
-Skills are organized by category:
+Skills are organized by tags:
 
-| Category | Description | Examples |
-|----------|-------------|---------|
-| `utility` | General-purpose tools | Calculator, JSON transformer |
+| Tag | Description | Examples |
+|-----|-------------|---------|
 | `web` | Web interaction | HTTP requests, web search, scraping |
-| `file` | File operations | Read, write, transform files |
+| `files` | File operations | Read, write, organize files |
 | `data` | Data processing | CSV parsing, data analysis |
-| `integration` | External services | Slack, GitHub, email |
-| `ai` | AI-powered tools | Summarization, translation |
-| `custom` | User-defined | Anything else |
+| `development` | Dev tools | Code review, git workflow, linting |
+| `api` | API interaction | REST testing, API integration |
+| `utility` | General-purpose | Calculator, text processing |
+
+## Guidelines
+
+- Skills are instruction-based — they teach agents HOW to do things
+- The Mastra Workspace provides the tools (filesystem, sandbox, search)
+- Skills provide the knowledge and procedures
+- Follow the Agent Skills Specification for compatibility
