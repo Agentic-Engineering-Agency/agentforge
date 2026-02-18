@@ -102,10 +102,13 @@ export function createMastraInstance(config?: {
   apiKeys?: Record<string, string>;
   observability?: boolean;
 }): Mastra {
-  return new Mastra({
-    ...(config?.apiKeys && { apiKeys: config.apiKeys }),
-    ...(config?.observability && { observability: config.observability }),
-  });
+  const mastraConfig: any = {};
+  if (config?.apiKeys) {
+    mastraConfig.apiKeys = config.apiKeys;
+  }
+  // Note: observability expects an ObservabilityEntrypoint object, not a boolean
+  // If you need observability, pass an actual ObservabilityEntrypoint instance
+  return new Mastra(mastraConfig);
 }
 
 /**

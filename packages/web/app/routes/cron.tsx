@@ -11,8 +11,6 @@ import { Switch } from '../components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Clock, Play, Pause, Plus, History, AlertCircle, Trash2, Edit } from 'lucide-react';
-// import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../convex/_generated/api';
 
 export const Route = createFileRoute('/cron')({ component: CronPageComponent });
 
@@ -61,11 +59,6 @@ const initialCronJobs: CronJob[] = [
 ];
 
 function CronPageComponent() {
-  // const cronJobs = useQuery(api.cronJobs.list) ?? [];
-  // const createCronJob = useMutation(api.cronJobs.create);
-  // const updateCronJob = useMutation(api.cronJobs.update);
-  // const deleteCronJob = useMutation(api.cronJobs.delete);
-
   const [cronJobs, setCronJobs] = useState<CronJob[]>(initialCronJobs);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<CronJob | null>(null);
@@ -73,29 +66,25 @@ function CronPageComponent() {
 
   const handleSaveJob = (jobData: Omit<CronJob, 'id'>) => {
     if (editingJob) {
-      const updatedJob = { ...editingJob, ...jobData };
+      const updatedJob: CronJob = { ...editingJob, ...jobData };
       setCronJobs(cronJobs.map(j => j.id === editingJob.id ? updatedJob : j));
-      // updateCronJob({ id: updatedJob.id, ...jobData });
     } else {
-      const newJob = { ...jobData, id: `cron_${Date.now()}` };
+      const newJob: CronJob = { ...jobData, id: `cron_${Date.now()}` };
       setCronJobs([...cronJobs, newJob]);
-      // createCronJob(jobData);
     }
     setIsModalOpen(false);
     setEditingJob(null);
   };
 
   const handleToggleStatus = (job: CronJob) => {
-    const newStatus = job.status === 'enabled' ? 'disabled' : 'enabled';
-    const updatedJob = { ...job, status: newStatus };
+    const newStatus: 'enabled' | 'disabled' = job.status === 'enabled' ? 'disabled' : 'enabled';
+    const updatedJob: CronJob = { ...job, status: newStatus };
     setCronJobs(cronJobs.map(j => j.id === job.id ? updatedJob : j));
-    // updateCronJob({ id: job.id, status: newStatus });
   };
 
   const handleDeleteJob = (id: string) => {
     if (window.confirm('Are you sure you want to delete this cron job?')) {
       setCronJobs(cronJobs.filter(j => j.id !== id));
-      // deleteCronJob({ id });
     }
   };
 
