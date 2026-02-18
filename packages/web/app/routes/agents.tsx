@@ -1,11 +1,22 @@
-
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState, useMemo } from 'react';
-import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X, ChevronDown, Star } from 'lucide-react';
+import { useState, useMemo, ChangeEvent, FormEvent } from 'react';
+import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X } from 'lucide-react';
+
+interface Agent {
+  id: string;
+  name: string;
+  description: string;
+  instructions: string;
+  model: string;
+  provider: string;
+  temperature: number;
+  maxTokens: number;
+  status: string;
+}
 
 // MOCK DATA (to be replaced by Convex)
-const initialAgents = [
+const initialAgents: Agent[] = [
   {
     id: 'agent-1',
     name: 'Research Assistant',
@@ -41,22 +52,13 @@ const initialAgents = [
   },
 ];
 
-// CONVEX PLACEHOLDERS
-// import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../convex/_generated/api';
-
 export const Route = createFileRoute('/agents')({ component: AgentsPage });
 
 function AgentsPage() {
-  // const agents = useQuery(api.agents.list) || [];
-  // const createAgent = useMutation(api.agents.create);
-  // const updateAgent = useMutation(api.agents.update);
-  // const deleteAgent = useMutation(api.agents.delete);
-
-  const [agents, setAgents] = useState(initialAgents);
+  const [agents, setAgents] = useState<Agent[]>(initialAgents);
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingAgent, setEditingAgent] = useState(null);
+  const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
 
   const filteredAgents = useMemo(() =>
     agents.filter(agent =>
@@ -66,7 +68,7 @@ function AgentsPage() {
     [agents, searchQuery]
   );
 
-  const openModal = (agent = null) => {
+  const openModal = (agent: Agent | null = null) => {
     setEditingAgent(agent);
     setIsModalOpen(true);
   };
@@ -76,20 +78,17 @@ function AgentsPage() {
     setIsModalOpen(false);
   };
 
-  const handleSaveAgent = (agentData) => {
+  const handleSaveAgent = (agentData: Omit<Agent, 'id' | 'status'>) => {
     if (editingAgent) {
-      // updateAgent({ id: editingAgent.id, ...agentData });
       setAgents(agents.map(a => a.id === editingAgent.id ? { ...a, ...agentData } : a));
     } else {
-      // createAgent(agentData);
       setAgents([...agents, { id: `agent-${Date.now()}`, status: 'active', ...agentData }]);
     }
     closeModal();
   };
 
-  const handleDeleteAgent = (agentId) => {
+  const handleDeleteAgent = (agentId: string) => {
     if (window.confirm('Are you sure you want to delete this agent?')) {
-      // deleteAgent({ id: agentId });
       setAgents(agents.filter(a => a.id !== agentId));
     }
   };
@@ -136,7 +135,13 @@ function AgentsPage() {
   );
 }
 
-function AgentCard({ agent, onEdit, onDelete }) {
+interface AgentCardProps {
+  agent: Agent;
+  onEdit: (agent: Agent) => void;
+  onDelete: (id: string) => void;
+}
+
+function AgentCard({ agent, onEdit, onDelete }: AgentCardProps) {
   return (
     <div className="bg-card border border-border rounded-lg p-4 flex flex-col justify-between hover:shadow-lg transition-shadow">
       <div>
@@ -166,7 +171,13 @@ function AgentCard({ agent, onEdit, onDelete }) {
   );
 }
 
-function AgentModal({ agent, onSave, onClose }) {
+interface AgentModalProps {
+  agent: Agent | null;
+  onSave: (data: Omit<Agent, 'id' | 'status'>) => void;
+  onClose: () => void;
+}
+
+function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
   const [formData, setFormData] = useState({
     name: agent?.name || '',
     description: agent?.description || '',
@@ -177,22 +188,24 @@ function AgentModal({ agent, onSave, onClose }) {
     maxTokens: agent?.maxTokens || 4096,
   });
 
-  const handleChange = (e) => {
+  const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSliderChange = (e) => {
+  const handleSliderChange = (e: ChangeEvent<HTMLInputElement>) => {
     setFormData(prev => ({ ...prev, temperature: parseFloat(e.target.value) }));
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     onSave(formData);
   };
 
-  const providers = ['OpenAI', 'Anthropic', 'OpenRouter', 'Google', 'xAI'];
-  const models = {
+  const providers = ['OpenAI', 'Anthropic', 'OpenRouter', 'Google', 'xAI'] as const;
+  type Provider = typeof providers[number];
+
+  const models: Record<Provider, string[]> = {
     OpenAI: ['gpt-4.1-mini', 'gpt-4o', 'gpt-3.5-turbo'],
     Google: ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'],
     Anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
@@ -218,7 +231,7 @@ function AgentModal({ agent, onSave, onClose }) {
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Instructions</label>
-            <textarea name="instructions" value={formData.instructions} onChange={handleChange} rows="6" className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary" required />
+            <textarea name="instructions" value={formData.instructions} onChange={handleChange} rows={6} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary" required />
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -230,7 +243,7 @@ function AgentModal({ agent, onSave, onClose }) {
             <div>
               <label className="block text-sm font-medium mb-1">Model</label>
               <select name="model" value={formData.model} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
-                {(models[formData.provider] || []).map(m => <option key={m} value={m}>{m}</option>)}
+                {(models[formData.provider as Provider] || []).map(m => <option key={m} value={m}>{m}</option>)}
               </select>
             </div>
           </div>
