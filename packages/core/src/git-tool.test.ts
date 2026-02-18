@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { GitTool, GitToolError } from './git-tool';
 import { execSync } from 'child_process';
-import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, realpathSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-const TEST_DIR = join(tmpdir(), 'agentforge-git-test-' + Date.now());
+const RAW_TEST_DIR = join(tmpdir(), 'agentforge-git-test-' + Date.now());
+mkdirSync(RAW_TEST_DIR, { recursive: true });
+const TEST_DIR = realpathSync(RAW_TEST_DIR);
 const REPO_DIR = join(TEST_DIR, 'test-repo');
 const NESTED_REPO_DIR = join(TEST_DIR, 'projects', 'nested-repo');
 
