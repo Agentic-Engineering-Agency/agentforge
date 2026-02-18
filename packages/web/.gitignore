@@ -33,4 +33,3 @@ wrangler.toml.local
 
 # TanStack Router
 .tanstack/
-routeTree.gen.ts
