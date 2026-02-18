@@ -2,16 +2,15 @@
  * Mastra Integration Actions for Convex
  *
  * These actions run in the Convex Node.js runtime and execute LLM calls
- * using the Vercel AI SDK with OpenRouter as the default provider.
+ * using the Vercel AI SDK with multi-provider failover support.
  *
  * Architecture:
  * - For chat: use `chat.sendMessage` (preferred entry point)
  * - For programmatic agent execution: use `mastraIntegration.executeAgent`
- * - Model resolution: uses AI SDK providers directly (OpenRouter, OpenAI, etc.)
+ * - Model resolution: uses AI SDK providers directly with automatic failover
+ * - Failover chain: primary provider → fallback1 → fallback2 → ...
  *
- * This replaces the previous broken approach of dynamically importing
- * @mastra/core inside Convex actions. The AI SDK is the correct way to
- * call LLMs from Convex Node.js actions.
+ * Supported providers: OpenRouter, OpenAI, Anthropic, Google Gemini, Venice, Custom
  */
 import { action } from "./_generated/server";
 import { v } from "convex/values";
@@ -28,7 +27,21 @@ type ExecuteAgentResult = {
     completionTokens: number;
     totalTokens: number;
   };
+  provider: string;
+  model: string;
+  didFailover: boolean;
+  latencyMs: number;
 };
+
+/**
+ * Default failover chain for programmatic agent execution.
+ */
+const DEFAULT_FAILOVER_CHAIN = [
+  { provider: "openrouter", model: "openai/gpt-4o-mini" },
+  { provider: "openai", model: "gpt-4o-mini" },
+  { provider: "anthropic", model: "claude-3-5-haiku-20241022" },
+  { provider: "google", model: "gemini-2.0-flash" },
+];
 
 /**
  * Resolve a model instance from provider + modelId using the AI SDK.
@@ -63,9 +76,16 @@ async function resolveModel(provider: string, modelId: string) {
       return google(modelId);
     }
 
+    case "venice": {
+      const openaiCompat = createOpenAI({
+        baseURL: "https://api.venice.ai/api/v1",
+        apiKey: process.env.VENICE_API_KEY,
+      });
+      return openaiCompat(modelId);
+    }
+
     case "openrouter":
     default: {
-      // OpenRouter is OpenAI-compatible and routes to all providers
       const openrouter = createOpenAI({
         baseURL: "https://openrouter.ai/api/v1",
         apiKey: process.env.OPENROUTER_API_KEY,
@@ -79,10 +99,145 @@ async function resolveModel(provider: string, modelId: string) {
 }
 
 /**
+ * Classify an error for failover decision-making.
+ */
+function classifyError(error: unknown): string {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    const name = error.name.toLowerCase();
+
+    if (msg.includes("429") || msg.includes("rate limit") || msg.includes("too many requests") || msg.includes("quota exceeded")) return "rate_limit";
+    if (msg.includes("500") || msg.includes("502") || msg.includes("503") || msg.includes("504") || msg.includes("internal server error") || msg.includes("bad gateway") || msg.includes("service unavailable")) return "server_error";
+    if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("econnreset") || name.includes("timeout") || name === "aborterror") return "timeout";
+    if (msg.includes("enotfound") || msg.includes("econnrefused") || msg.includes("network") || msg.includes("dns") || msg.includes("fetch failed")) return "network_error";
+    if (msg.includes("401") || msg.includes("403") || msg.includes("unauthorized") || msg.includes("forbidden") || msg.includes("invalid api key")) return "auth_error";
+  }
+  return "unknown";
+}
+
+/**
+ * Build a failover chain from an agent record.
+ */
+function buildFailoverChain(agent: {
+  provider?: string;
+  model?: string;
+  failoverModels?: Array<{ provider: string; model: string }>;
+}): Array<{ provider: string; model: string }> {
+  const chain: Array<{ provider: string; model: string }> = [];
+
+  // Primary model
+  chain.push({
+    provider: agent.provider || "openrouter",
+    model: agent.model || "openai/gpt-4o-mini",
+  });
+
+  // Agent-specific failover models
+  if (agent.failoverModels && agent.failoverModels.length > 0) {
+    for (const fm of agent.failoverModels) {
+      if (fm.provider === chain[0].provider && fm.model === chain[0].model) continue;
+      chain.push(fm);
+    }
+  } else {
+    for (const dfm of DEFAULT_FAILOVER_CHAIN) {
+      if (dfm.provider === chain[0].provider && dfm.model === chain[0].model) continue;
+      chain.push(dfm);
+    }
+  }
+
+  return chain;
+}
+
+/**
+ * Execute an LLM call with failover across multiple providers.
+ */
+async function executeWithFailover(
+  chain: Array<{ provider: string; model: string }>,
+  systemPrompt: string,
+  messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
+  options: { temperature?: number; maxTokens?: number }
+): Promise<{
+  text: string;
+  usage: { promptTokens: number; completionTokens: number; totalTokens: number } | null;
+  provider: string;
+  model: string;
+  didFailover: boolean;
+  latencyMs: number;
+}> {
+  const startTime = Date.now();
+  const maxRetries = 2;
+  const baseBackoff = 1000;
+  let totalAttempts = 0;
+
+  for (let chainPos = 0; chainPos < chain.length; chainPos++) {
+    const { provider, model: modelId } = chain[chainPos];
+    const modelKey = `${provider}/${modelId}`;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      totalAttempts++;
+
+      try {
+        const { generateText } = await import("ai");
+        const resolvedModel = await resolveModel(provider, modelId);
+
+        const result = await generateText({
+          model: resolvedModel,
+          system: systemPrompt,
+          messages,
+          ...(options.temperature != null && { temperature: options.temperature }),
+          ...(options.maxTokens != null && { maxTokens: options.maxTokens }),
+        });
+
+        const usage = result.usage
+          ? {
+              promptTokens: result.usage.promptTokens || 0,
+              completionTokens: result.usage.completionTokens || 0,
+              totalTokens: (result.usage.promptTokens || 0) + (result.usage.completionTokens || 0),
+            }
+          : null;
+
+        return {
+          text: result.text,
+          usage,
+          provider,
+          model: modelId,
+          didFailover: chainPos > 0,
+          latencyMs: Date.now() - startTime,
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorCategory = classifyError(error);
+
+        console.error(`[mastra.failover] ${modelKey} attempt ${attempt + 1} failed (${errorCategory}): ${errorMessage}`);
+
+        if (!["rate_limit", "server_error", "timeout", "network_error", "auth_error", "unknown"].includes(errorCategory)) {
+          throw error;
+        }
+
+        if (attempt === maxRetries) {
+          if (chainPos < chain.length - 1) {
+            const next = chain[chainPos + 1];
+            console.warn(`[mastra.failover] Failing over from ${modelKey} → ${next.provider}/${next.model}`);
+          }
+          break;
+        }
+
+        const backoff = Math.min(baseBackoff * Math.pow(2, attempt), 30_000);
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+      }
+    }
+  }
+
+  throw new Error(
+    `All models in failover chain exhausted after ${totalAttempts} attempts. ` +
+    `Chain: ${chain.map((m) => `${m.provider}/${m.model}`).join(" → ")}`
+  );
+}
+
+/**
  * Execute an agent with a prompt and return the response.
  *
- * This is the programmatic API for agent execution. For chat UI,
- * prefer `chat.sendMessage` which handles thread management automatically.
+ * This is the programmatic API for agent execution with automatic failover.
+ * For chat UI, prefer `chat.sendMessage` which handles thread management automatically.
  */
 export const executeAgent = action({
   args: {
@@ -127,12 +282,12 @@ export const executeAgent = action({
     });
 
     try {
-      const { generateText } = await import("ai");
-
-      // Resolve the model
-      const provider = agent.provider || "openrouter";
-      const modelId = agent.model || "openai/gpt-4o-mini";
-      const model = await resolveModel(provider, modelId);
+      // Build failover chain from agent config
+      const failoverChain = buildFailoverChain(agent as {
+        provider?: string;
+        model?: string;
+        failoverModels?: Array<{ provider: string; model: string }>;
+      });
 
       // Get conversation history for context
       const messages = await ctx.runQuery(api.messages.list, { threadId });
@@ -143,22 +298,22 @@ export const executeAgent = action({
           content: m.content,
         }));
 
-      // Execute the LLM call
-      const result = await generateText({
-        model,
-        system: agent.instructions || "You are a helpful AI assistant.",
-        messages: conversationMessages,
-        ...(agent.temperature != null && { temperature: agent.temperature }),
-        ...(agent.maxTokens != null && { maxTokens: agent.maxTokens }),
-      });
-
-      const responseContent = result.text;
+      // Execute with failover
+      const result = await executeWithFailover(
+        failoverChain,
+        agent.instructions || "You are a helpful AI assistant.",
+        conversationMessages,
+        {
+          temperature: agent.temperature ?? undefined,
+          maxTokens: agent.maxTokens ?? undefined,
+        }
+      );
 
       // Add assistant message to thread
       await ctx.runMutation(api.messages.add, {
         threadId,
         role: "assistant",
-        content: responseContent,
+        content: result.text,
       });
 
       // Update session status
@@ -167,27 +322,16 @@ export const executeAgent = action({
         status: "completed",
       });
 
-      // Build usage data
-      const usage = result.usage
-        ? {
-            promptTokens: result.usage.promptTokens || 0,
-            completionTokens: result.usage.completionTokens || 0,
-            totalTokens:
-              (result.usage.promptTokens || 0) +
-              (result.usage.completionTokens || 0),
-          }
-        : undefined;
-
       // Record usage
-      if (usage) {
+      if (result.usage) {
         await ctx.runMutation(api.usage.record, {
           agentId: args.agentId,
           sessionId,
-          provider: agent.provider || "openrouter",
-          model: agent.model || "unknown",
-          promptTokens: usage.promptTokens,
-          completionTokens: usage.completionTokens,
-          totalTokens: usage.totalTokens,
+          provider: result.provider,
+          model: result.model,
+          promptTokens: result.usage.promptTokens,
+          completionTokens: result.usage.completionTokens,
+          totalTokens: result.usage.totalTokens,
           userId: args.userId,
         });
       }
@@ -196,8 +340,12 @@ export const executeAgent = action({
         success: true,
         threadId: threadId as string,
         sessionId,
-        response: responseContent,
-        usage,
+        response: result.text,
+        usage: result.usage ?? undefined,
+        provider: result.provider,
+        model: result.model,
+        didFailover: result.didFailover,
+        latencyMs: result.latencyMs,
       };
     } catch (error: unknown) {
       const errorMessage =
@@ -237,7 +385,7 @@ export const executeAgent = action({
 /**
  * Stream agent response (placeholder — streaming requires SSE/WebSocket).
  *
- * For now, this falls back to non-streaming execution.
+ * For now, this falls back to non-streaming execution with failover.
  * Full streaming support will be added via Convex HTTP actions + SSE.
  */
 export const streamAgent = action({

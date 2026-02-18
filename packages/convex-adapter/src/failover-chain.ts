@@ -6,7 +6,8 @@
  * - Automatic failover on: API errors (5xx), rate limits (429), timeout, provider downtime
  * - Configurable retry policy (max retries, exponential backoff)
  * - Circuit breaker pattern for unhealthy providers
- * - Usage tracking per failover event for observability
+ * - Per-request cost tracking and latency monitoring
+ * - Integration with ProviderRegistry for intelligent routing
  *
  * @packageDocumentation
  */
@@ -14,6 +15,8 @@
 import type { LanguageModelV1 } from 'ai';
 import { getModel, parseModelString } from './model-resolver.js';
 import type { LLMProvider, ModelResolverConfig } from './types.js';
+import { ProviderRegistry, getProviderRegistry } from './provider-registry.js';
+import type { CostEstimate, ProviderMetrics } from './provider-registry.js';
 
 // =====================================================
 // Types
@@ -77,6 +80,10 @@ export interface FailoverChainConfig {
   onFailover?: (event: FailoverEvent) => void | Promise<void>;
   /** Callback for circuit breaker state changes */
   onCircuitStateChange?: (event: CircuitStateChangeEvent) => void | Promise<void>;
+  /** Optional ProviderRegistry instance for cost/latency tracking */
+  registry?: ProviderRegistry;
+  /** Whether to track cost and latency metrics. Default: true */
+  trackMetrics?: boolean;
 }
 
 /**
@@ -155,6 +162,8 @@ export interface FailoverResult<T> {
   didFailover: boolean;
   /** List of failover events that occurred */
   failoverEvents: FailoverEvent[];
+  /** Cost estimate for the successful request (if token data available) */
+  costEstimate?: CostEstimate;
 }
 
 // =====================================================
@@ -418,13 +427,16 @@ function shouldFailover(category: FailoverErrorCategory): boolean {
 /**
  * Model Failover Chain — executes operations with automatic fallback.
  *
+ * Integrates with ProviderRegistry for cost tracking and latency monitoring.
+ * Supports per-request cost estimation and aggregated provider metrics.
+ *
  * @example
  * ```typescript
  * const chain = new ModelFailoverChain({
  *   chain: [
- *     { provider: 'anthropic', model: 'claude-3-opus-20240229' },
- *     { provider: 'openai', model: 'gpt-4o' },
- *     { provider: 'google', model: 'gemini-1.5-pro' },
+ *     { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+ *     { provider: 'openai', model: 'gpt-4.1' },
+ *     { provider: 'google', model: 'gemini-2.5-flash' },
  *   ],
  *   retryPolicy: { maxRetries: 2, backoffMs: 1000 },
  *   onFailover: (event) => console.log('Failover:', event),
@@ -433,6 +445,10 @@ function shouldFailover(category: FailoverErrorCategory): boolean {
  * const result = await chain.execute(async (model, provider) => {
  *   return agent.generate(prompt, { model });
  * });
+ *
+ * // Access cost and latency data
+ * console.log(`Cost: $${result.costEstimate?.totalCostUsd}`);
+ * console.log(`Latency: ${result.latencyMs}ms`);
  * ```
  */
 export class ModelFailoverChain {
@@ -440,6 +456,8 @@ export class ModelFailoverChain {
   private retryPolicy: Required<RetryPolicy>;
   private circuitBreaker: CircuitBreaker;
   private resolvedModels: Map<string, LanguageModelV1> = new Map();
+  private registry: ProviderRegistry;
+  private trackMetrics: boolean;
 
   constructor(config: FailoverChainConfig) {
     if (!config.chain || config.chain.length === 0) {
@@ -454,6 +472,8 @@ export class ModelFailoverChain {
       maxBackoffMs: config.retryPolicy?.maxBackoffMs ?? 30_000,
     };
     this.circuitBreaker = new CircuitBreaker(config.circuitBreaker);
+    this.registry = config.registry ?? getProviderRegistry();
+    this.trackMetrics = config.trackMetrics ?? true;
   }
 
   /**
@@ -463,11 +483,13 @@ export class ModelFailoverChain {
    * If the primary model fails, it automatically tries the next model in the chain.
    *
    * @param fn - The operation to execute with the model
+   * @param tokenData - Optional token counts for cost tracking
    * @returns A FailoverResult with the operation result and metadata
    * @throws Error if all models in the chain fail
    */
   async execute<T>(
-    fn: (model: LanguageModelV1, provider: LLMProvider, modelId: string) => Promise<T>
+    fn: (model: LanguageModelV1, provider: LLMProvider, modelId: string) => Promise<T>,
+    tokenData?: { inputTokens?: number; outputTokens?: number }
   ): Promise<FailoverResult<T>> {
     const startTime = Date.now();
     const failoverEvents: FailoverEvent[] = [];
@@ -507,6 +529,7 @@ export class ModelFailoverChain {
       // Retry loop for this model
       for (let attempt = 0; attempt <= this.retryPolicy.maxRetries; attempt++) {
         totalAttempts++;
+        const attemptStart = Date.now();
 
         try {
           // Execute with timeout
@@ -515,6 +538,8 @@ export class ModelFailoverChain {
             fn(resolvedModel, modelConfig.provider, modelConfig.model),
             timeoutMs
           );
+
+          const latencyMs = Date.now() - attemptStart;
 
           // Success — record it and return
           const prevState = this.circuitBreaker.recordSuccess(
@@ -536,6 +561,27 @@ export class ModelFailoverChain {
             });
           }
 
+          // Track metrics in registry
+          if (this.trackMetrics) {
+            this.registry.recordRequest(modelConfig.provider, modelConfig.model, {
+              success: true,
+              latencyMs,
+              inputTokens: tokenData?.inputTokens,
+              outputTokens: tokenData?.outputTokens,
+            });
+          }
+
+          // Calculate cost estimate
+          let costEstimate: CostEstimate | undefined;
+          if (tokenData?.inputTokens != null && tokenData?.outputTokens != null) {
+            costEstimate = this.registry.estimateCost(
+              modelConfig.provider,
+              modelConfig.model,
+              tokenData.inputTokens,
+              tokenData.outputTokens
+            );
+          }
+
           return {
             result,
             model: modelConfig.model,
@@ -545,11 +591,13 @@ export class ModelFailoverChain {
             latencyMs: Date.now() - startTime,
             didFailover: chainPos > 0,
             failoverEvents,
+            costEstimate,
           };
         } catch (error) {
           const errorCategory = classifyError(error);
           const errorMessage =
             error instanceof Error ? error.message : String(error);
+          const latencyMs = Date.now() - attemptStart;
 
           // Record failure in circuit breaker
           const prevState = this.circuitBreaker.getState(
@@ -564,6 +612,15 @@ export class ModelFailoverChain {
             modelConfig.provider,
             modelConfig.model
           );
+
+          // Track failure metrics
+          if (this.trackMetrics) {
+            this.registry.recordRequest(modelConfig.provider, modelConfig.model, {
+              success: false,
+              latencyMs,
+              error: errorMessage,
+            });
+          }
 
           if (prevState !== newState && this.config.onCircuitStateChange) {
             await this.config.onCircuitStateChange({
@@ -704,6 +761,30 @@ export class ModelFailoverChain {
   getChainConfig(): FailoverModelConfig[] {
     return [...this.config.chain];
   }
+
+  /**
+   * Get the provider registry used by this chain.
+   */
+  getRegistry(): ProviderRegistry {
+    return this.registry;
+  }
+
+  /**
+   * Get metrics for all models in the chain.
+   */
+  getChainMetrics(): Array<{
+    provider: LLMProvider;
+    model: string;
+    metrics: ProviderMetrics | undefined;
+    healthScore: number;
+  }> {
+    return this.config.chain.map((m) => ({
+      provider: m.provider,
+      model: m.model,
+      metrics: this.registry.getMetrics(m.provider, m.model),
+      healthScore: this.registry.getHealthScore(m.provider, m.model),
+    }));
+  }
 }
 
 // =====================================================
@@ -716,9 +797,9 @@ export class ModelFailoverChain {
  * @example
  * ```typescript
  * const chain = createFailoverChain([
- *   'anthropic/claude-3-opus-20240229',
- *   'openai/gpt-4o',
- *   'google/gemini-1.5-pro',
+ *   'anthropic/claude-sonnet-4-20250514',
+ *   'openai/gpt-4.1',
+ *   'google/gemini-2.5-flash',
  * ]);
  * ```
  */
@@ -750,8 +831,8 @@ export function createFailoverChain(
  * ```typescript
  * const chain = createFailoverChainFromConfig({
  *   failoverChain: [
- *     { provider: 'anthropic', model: 'claude-3-opus-20240229' },
- *     { provider: 'openai', model: 'gpt-4o' },
+ *     { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
+ *     { provider: 'openai', model: 'gpt-4.1' },
  *   ],
  *   retryPolicy: { maxRetries: 2, backoffMs: 1000 },
  * });
@@ -770,6 +851,8 @@ export function createFailoverChainFromConfig(config: {
   timeoutMs?: number;
   onFailover?: (event: FailoverEvent) => void | Promise<void>;
   onCircuitStateChange?: (event: CircuitStateChangeEvent) => void | Promise<void>;
+  registry?: ProviderRegistry;
+  trackMetrics?: boolean;
 }): ModelFailoverChain {
   return new ModelFailoverChain({
     chain: config.failoverChain.map((m) => ({
@@ -784,5 +867,52 @@ export function createFailoverChainFromConfig(config: {
     timeoutMs: config.timeoutMs,
     onFailover: config.onFailover,
     onCircuitStateChange: config.onCircuitStateChange,
+    registry: config.registry,
+    trackMetrics: config.trackMetrics,
+  });
+}
+
+/**
+ * Create a ModelFailoverChain from an agent record stored in Convex.
+ *
+ * Reads the agent's `failoverChain` field (if present) or falls back
+ * to a single-model chain using the agent's primary provider/model.
+ *
+ * @example
+ * ```typescript
+ * const chain = createFailoverChainFromAgent(agentRecord);
+ * const result = await chain.execute(async (model) => {
+ *   return generateText({ model, messages });
+ * });
+ * ```
+ */
+export function createFailoverChainFromAgent(agent: {
+  provider?: string;
+  model?: string;
+  failoverModels?: Array<{ provider: string; model: string }>;
+  retryPolicy?: RetryPolicy;
+  timeoutMs?: number;
+}): ModelFailoverChain {
+  const chain: FailoverModelConfig[] = [];
+
+  // Primary model
+  const primaryProvider = (agent.provider || 'openrouter') as LLMProvider;
+  const primaryModel = agent.model || 'openai/gpt-4o-mini';
+  chain.push({ provider: primaryProvider, model: primaryModel });
+
+  // Failover models from agent config
+  if (agent.failoverModels && agent.failoverModels.length > 0) {
+    for (const fm of agent.failoverModels) {
+      chain.push({
+        provider: fm.provider as LLMProvider,
+        model: fm.model,
+      });
+    }
+  }
+
+  return new ModelFailoverChain({
+    chain,
+    retryPolicy: agent.retryPolicy,
+    timeoutMs: agent.timeoutMs,
   });
 }
