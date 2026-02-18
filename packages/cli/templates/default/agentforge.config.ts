@@ -1,14 +1,34 @@
 /**
- * Example AgentForge Configuration File
- * 
- * This file defines your agents and their configurations.
- * The CLI uses this to deploy to AgentForge Cloud.
+ * AgentForge Configuration File
+ *
+ * This file defines your agents, workspace, and skills configuration.
+ * The CLI uses this to manage your AgentForge project.
  */
 
 export default {
   name: 'my-agent-project',
   version: '1.0.0',
-  
+
+  /**
+   * Workspace configuration — Mastra Workspace integration.
+   *
+   * Skills are auto-discovered from the directories listed in `skills`.
+   * Each skill directory should contain a SKILL.md file following the
+   * Agent Skills Specification.
+   *
+   * @see https://mastra.ai/docs/workspace/skills
+   */
+  workspace: {
+    /** Base path for the workspace filesystem. */
+    basePath: './workspace',
+    /** Directories containing agent skills (relative to basePath). */
+    skills: ['/skills'],
+    /** Enable BM25 keyword search for skill discovery. */
+    search: true,
+    /** Paths to auto-index for search. */
+    autoIndexPaths: ['/skills'],
+  },
+
   agents: [
     {
       id: 'support-agent',

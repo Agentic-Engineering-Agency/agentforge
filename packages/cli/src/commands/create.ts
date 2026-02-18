@@ -142,6 +142,10 @@ Next steps:
   # Or chat with your agent from the CLI
   agentforge chat
 
+  # Install skills to extend agent capabilities
+  agentforge skills list --registry
+  agentforge skills install web-search
+
   # Check system status
   agentforge status
 
