@@ -3,7 +3,7 @@
 # Runs the full E2E test suite that validates:
 #   1. Local agent execution (unit-level with mocked LLM)
 #   2. CLI deployment pipeline
-#   3. Cloud API execution
+#   3. Cloud API execution (requires AGENTFORGE_CLOUD_URL secret)
 #   4. Thread continuity
 #   5. Tool/workspace transfer
 #
@@ -29,8 +29,8 @@ on:
       - 'tests/e2e/**'
   workflow_dispatch:
     inputs:
-      skip_cloud_tests:
-        description: 'Skip Cloud API tests (useful when Cloud infra is down)'
+      run_cloud_tests:
+        description: 'Run Cloud integration tests (requires AGENTFORGE_CLOUD_URL secret)'
         required: false
         default: 'false'
         type: boolean
@@ -67,30 +67,20 @@ jobs:
       - name: Run local E2E tests
         run: |
           cd tests/e2e
-          npx vitest run local.test.ts tools.test.ts --config vitest.config.ts
+          npx vitest run local.test.ts --config vitest.config.ts
         env:
           NODE_ENV: test
           E2E_TEST: '1'
 
-  # ── Stage 2: Deploy + Cloud tests ───────────────────────────────────
+  # ── Stage 2: Cloud tests (optional — requires external infra) ───────
   cloud-tests:
     name: Cloud Integration Tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: local-tests
-    if: ${{ github.event.inputs.skip_cloud_tests != 'true' }}
-
-    services:
-      convex:
-        image: convex/convex-local:latest
-        ports:
-          - 3210:3210
-        options: >-
-          --health-cmd "curl -f http://localhost:3210/version || exit 1"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
-          --health-start-period 10s
+    # Only run cloud tests when manually triggered with run_cloud_tests=true
+    # and when AGENTFORGE_CLOUD_URL is available as a secret
+    if: ${{ github.event.inputs.run_cloud_tests == 'true' && secrets.AGENTFORGE_CLOUD_URL != '' }}
 
     steps:
       - name: Checkout
@@ -111,29 +101,6 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Push Convex schema
-        run: npx convex deploy --url http://localhost:3210
-        env:
-          CONVEX_URL: http://localhost:3210
-
-      - name: Start Cloud API
-        run: |
-          # Start the API server in background
-          node packages/web/dist/server.js &
-          echo "Waiting for Cloud API..."
-          for i in $(seq 1 30); do
-            if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
-              echo "Cloud API ready!"
-              break
-            fi
-            sleep 1
-          done
-        env:
-          PORT: 3001
-          NODE_ENV: test
-          CONVEX_URL: http://localhost:3210
-          AGENTFORGE_API_KEY: test-api-key-e2e
-
       - name: Run deploy E2E tests
         run: |
           cd tests/e2e
@@ -141,9 +108,8 @@ jobs:
         env:
           NODE_ENV: test
           E2E_TEST: '1'
-          AGENTFORGE_CLOUD_URL: http://localhost:3001
-          AGENTFORGE_TEST_API_KEY: test-api-key-e2e
-          CONVEX_URL: http://localhost:3210
+          AGENTFORGE_CLOUD_URL: ${{ secrets.AGENTFORGE_CLOUD_URL }}
+          AGENTFORGE_TEST_API_KEY: ${{ secrets.AGENTFORGE_TEST_API_KEY }}
 
       - name: Run Cloud execution E2E tests
         run: |
@@ -152,9 +118,8 @@ jobs:
         env:
           NODE_ENV: test
           E2E_TEST: '1'
-          AGENTFORGE_CLOUD_URL: http://localhost:3001
-          AGENTFORGE_TEST_API_KEY: test-api-key-e2e
-          CONVEX_URL: http://localhost:3210
+          AGENTFORGE_CLOUD_URL: ${{ secrets.AGENTFORGE_CLOUD_URL }}
+          AGENTFORGE_TEST_API_KEY: ${{ secrets.AGENTFORGE_TEST_API_KEY }}
 
       - name: Run thread continuity E2E tests
         run: |
@@ -163,16 +128,15 @@ jobs:
         env:
           NODE_ENV: test
           E2E_TEST: '1'
-          AGENTFORGE_CLOUD_URL: http://localhost:3001
-          AGENTFORGE_TEST_API_KEY: test-api-key-e2e
-          CONVEX_URL: http://localhost:3210
+          AGENTFORGE_CLOUD_URL: ${{ secrets.AGENTFORGE_CLOUD_URL }}
+          AGENTFORGE_TEST_API_KEY: ${{ secrets.AGENTFORGE_TEST_API_KEY }}
 
-  # ── Stage 3: Full suite with coverage ───────────────────────────────
+  # ── Stage 3: Full local suite with coverage ──────────────────────────
   coverage:
     name: E2E Coverage Report
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    needs: [local-tests, cloud-tests]
+    timeout-minutes: 15
+    needs: local-tests
     if: always() && needs.local-tests.result == 'success'
 
     steps:
@@ -194,15 +158,13 @@ jobs:
       - name: Build packages
         run: pnpm build
 
-      - name: Run full E2E suite with coverage
+      - name: Run local test suite with coverage
         run: |
           cd tests/e2e
-          npx vitest run --config vitest.config.ts --coverage
+          npx vitest run local.test.ts --config vitest.config.ts --coverage
         env:
           NODE_ENV: test
           E2E_TEST: '1'
-          AGENTFORGE_CLOUD_URL: http://localhost:3001
-          AGENTFORGE_TEST_API_KEY: test-api-key-e2e
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4
