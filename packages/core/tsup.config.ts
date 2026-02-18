@@ -9,6 +9,7 @@ export default defineConfig({
     'src/browser-tool.ts',
     'src/workspace.ts',
     'src/channels/telegram.ts',
+    'src/channels/whatsapp.ts',
   ],
   format: ['esm'],
   dts: true,
