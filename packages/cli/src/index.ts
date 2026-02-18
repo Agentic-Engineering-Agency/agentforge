@@ -45,8 +45,9 @@ program
   .command('run')
   .description('Start the local development environment')
   .option('-p, --port <port>', 'Port for the dev server', '3000')
-  .action(async (options: { port: string }) => {
-    await runProject(options);
+  .option('-s, --sandbox <type>', 'Sandbox provider for agent execution (local, docker, e2b, none)', 'local')
+  .action(async (options: { port: string; sandbox: string }) => {
+    await runProject(options as import('./commands/run.js').RunOptions);
   });
 
 program
