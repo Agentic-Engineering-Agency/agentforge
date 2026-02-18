@@ -29,7 +29,7 @@ export function registerChatCommand(program: Command) {
         agentId = idx >= 0 && idx < (agents as any[]).length ? (agents as any[])[idx].id : choice;
       }
 
-      const agent = await safeCall(() => client.query('agents:getByAgentId' as any, { id: agentId }), 'Failed to fetch agent');
+      const agent = await safeCall(() => client.query('agents:get' as any, { id: agentId }), 'Failed to fetch agent');
       if (!agent) { error(`Agent "${agentId}" not found.`); process.exit(1); }
 
       const a = agent as any;
@@ -39,7 +39,7 @@ export function registerChatCommand(program: Command) {
       console.log();
 
       let threadId = await safeCall(
-        () => client.mutation('threads:create' as any, { agentId: a.id, status: 'active' }),
+        () => client.mutation('threads:create' as any, { agentId: a.id }),
         'Failed to create thread'
       );
 
@@ -52,7 +52,7 @@ export function registerChatCommand(program: Command) {
         if (!input) { rl.prompt(); return; }
         if (input === 'exit' || input === 'quit') { success('Session ended. Goodbye!'); process.exit(0); }
         if (input === '/new') {
-          threadId = await safeCall(() => client.mutation('threads:create' as any, { agentId: a.id, status: 'active' }), 'Failed');
+          threadId = await safeCall(() => client.mutation('threads:create' as any, { agentId: a.id }), 'Failed');
           history.length = 0;
           info('New thread started.');
           rl.prompt();
@@ -70,15 +70,15 @@ export function registerChatCommand(program: Command) {
         }
 
         history.push({ role: 'user', content: input });
-        await safeCall(() => client.mutation('messages:send' as any, { threadId, role: 'user', content: input }), 'Failed to send');
+        await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'user', content: input }), 'Failed to send');
 
         process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
         try {
           const response = await safeCall(
-            () => client.action('mastraIntegration:generateResponse' as any, { agentId: a.id, threadId, message: input }),
+            () => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }),
             'Failed to get response'
           );
-          const text = (response as any)?.text || (response as any)?.content || String(response);
+          const text = (response as any)?.response || (response as any)?.text || (response as any)?.content || String(response);
           console.log(text);
           history.push({ role: 'assistant', content: text });
         } catch {

@@ -188,7 +188,7 @@ export function registerStatusCommand(program: Command) {
       if (opts.agent) args.agentId = opts.agent;
 
       const result = await safeCall(
-        () => client.query('heartbeat:listPending' as any, args),
+        () => client.query('heartbeat:listActive' as any, args),
         'Failed to check heartbeat'
       );
 
@@ -198,24 +198,24 @@ export function registerStatusCommand(program: Command) {
         return;
       }
 
-      info(`Found ${items.length} pending task(s):`);
+      info(`Found ${items.length} active heartbeat(s):`);
       items.forEach((task: any, i: number) => {
-        console.log(`  ${colors.yellow}${i + 1}.${colors.reset} [${task.agentId}] ${task.taskDescription || 'Unnamed task'}`);
-        console.log(`     ${colors.dim}Status: ${task.status} | Thread: ${task.threadId || 'N/A'}${colors.reset}`);
+        console.log(`  ${colors.yellow}${i + 1}.${colors.reset} [${task.agentId}] ${task.currentTask || 'No current task'}`);
+        console.log(`     ${colors.dim}Status: ${task.status} | Pending: ${(task.pendingTasks || []).length} task(s)${colors.reset}`);
       });
       console.log();
 
       const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-      const answer = await new Promise<string>((r) => rl.question('Resume pending tasks? (y/N): ', (a) => { rl.close(); r(a.trim()); }));
+      const answer = await new Promise<string>((r) => rl.question('Reset stalled heartbeats? (y/N): ', (a) => { rl.close(); r(a.trim()); }));
       if (answer.toLowerCase() === 'y') {
         for (const task of items) {
-          info(`Resuming task for agent "${task.agentId}"...`);
+          info(`Resetting heartbeat for agent "${task.agentId}"...`);
           await safeCall(
-            () => client.mutation('heartbeat:resume' as any, { _id: task._id }),
-            'Failed to resume task'
+            () => client.mutation('heartbeat:updateStatus' as any, { agentId: task.agentId, status: 'active', currentTask: undefined }),
+            'Failed to reset heartbeat'
           );
         }
-        success('All pending tasks resumed.');
+        success('All heartbeats reset.');
       }
     });
 }

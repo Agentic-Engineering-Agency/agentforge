@@ -25,8 +25,8 @@ export function registerMcpCommand(program: Command) {
       table(items.map((c: any) => ({
         ID: c._id?.slice(-8) || 'N/A',
         Name: c.name,
-        Type: c.type,
-        Endpoint: c.endpoint,
+        Type: c.protocol,
+        Endpoint: c.serverUrl,
         Connected: c.isConnected ? '✔' : '✖',
         Enabled: c.isEnabled ? '✔' : '✖',
       })));
@@ -48,7 +48,7 @@ export function registerMcpCommand(program: Command) {
       const client = await createClient();
       await safeCall(
         () => client.mutation('mcpConnections:create' as any, {
-          name, type, endpoint, isConnected: false, isEnabled: true,
+          name, serverUrl: endpoint, protocol: type,
         }),
         'Failed to add connection'
       );
@@ -61,7 +61,7 @@ export function registerMcpCommand(program: Command) {
     .description('Remove an MCP connection')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('mcpConnections:remove' as any, { _id: id }), 'Failed');
+      await safeCall(() => client.mutation('mcpConnections:remove' as any, { id }), 'Failed');
       success(`Connection "${id}" removed.`);
     });
 
@@ -77,12 +77,12 @@ export function registerMcpCommand(program: Command) {
       if (!conn) { error(`Connection "${id}" not found.`); process.exit(1); }
 
       // Simple connectivity test
-      if (conn.type === 'http' || conn.type === 'sse') {
+      if (conn.protocol === 'http' || conn.protocol === 'sse') {
         try {
-          const res = await fetch(conn.endpoint, { method: 'HEAD', signal: AbortSignal.timeout(5000) });
+          const res = await fetch(conn.serverUrl, { method: 'HEAD', signal: AbortSignal.timeout(5000) });
           if (res.ok) {
             success(`Connection "${conn.name}" is reachable (HTTP ${res.status}).`);
-            await client.mutation('mcpConnections:update' as any, { _id: conn._id, isConnected: true });
+            await client.mutation('mcpConnections:updateStatus' as any, { id: conn._id, isConnected: true });
           } else {
             error(`Connection "${conn.name}" returned HTTP ${res.status}.`);
           }
@@ -90,8 +90,8 @@ export function registerMcpCommand(program: Command) {
           error(`Connection "${conn.name}" failed: ${e.message}`);
         }
       } else {
-        info(`Connection type "${conn.type}" — manual verification required.`);
-        info(`Endpoint: ${conn.endpoint}`);
+        info(`Connection type "${conn.protocol}" — manual verification required.`);
+        info(`Endpoint: ${conn.serverUrl}`);
       }
     });
 
@@ -101,7 +101,7 @@ export function registerMcpCommand(program: Command) {
     .description('Enable a connection')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('mcpConnections:update' as any, { _id: id, isEnabled: true }), 'Failed');
+      await safeCall(() => client.mutation('mcpConnections:update' as any, { id, isEnabled: true }), 'Failed');
       success(`Connection "${id}" enabled.`);
     });
 
@@ -111,7 +111,7 @@ export function registerMcpCommand(program: Command) {
     .description('Disable a connection')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('mcpConnections:update' as any, { _id: id, isEnabled: false }), 'Failed');
+      await safeCall(() => client.mutation('mcpConnections:update' as any, { id, isEnabled: false }), 'Failed');
       success(`Connection "${id}" disabled.`);
     });
 }
