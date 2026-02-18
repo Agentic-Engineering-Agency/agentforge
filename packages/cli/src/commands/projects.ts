@@ -25,7 +25,6 @@ export function registerProjectsCommand(program: Command) {
       table(items.map((p: any) => ({
         ID: p._id?.slice(-8) || 'N/A',
         Name: p.name,
-        Status: p.status,
         Description: (p.description || '').slice(0, 40),
         Created: formatDate(p.createdAt),
       })));
@@ -40,7 +39,7 @@ export function registerProjectsCommand(program: Command) {
       const description = opts.description || await prompt('Description (optional): ');
       const client = await createClient();
       await safeCall(
-        () => client.mutation('projects:create' as any, { name, description, status: 'active' }),
+        () => client.mutation('projects:create' as any, { name, description: description || undefined }),
         'Failed to create project'
       );
       success(`Project "${name}" created.`);
@@ -59,7 +58,6 @@ export function registerProjectsCommand(program: Command) {
       details({
         ID: project._id,
         Name: project.name,
-        Status: project.status,
         Description: project.description || 'N/A',
         Created: formatDate(project.createdAt),
         Updated: formatDate(project.updatedAt),
@@ -77,7 +75,7 @@ export function registerProjectsCommand(program: Command) {
         if (confirm.toLowerCase() !== 'y') { info('Cancelled.'); return; }
       }
       const client = await createClient();
-      await safeCall(() => client.mutation('projects:remove' as any, { _id: id }), 'Failed');
+      await safeCall(() => client.mutation('projects:remove' as any, { id }), 'Failed');
       success(`Project "${id}" deleted.`);
     });
 

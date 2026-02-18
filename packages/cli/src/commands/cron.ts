@@ -28,8 +28,8 @@ export function registerCronCommand(program: Command) {
         Schedule: c.schedule,
         Agent: c.agentId,
         Enabled: c.isEnabled ? '✔' : '✖',
-        'Last Run': c.lastRunAt ? formatDate(c.lastRunAt) : 'Never',
-        'Next Run': c.nextRunAt ? formatDate(c.nextRunAt) : 'N/A',
+        'Last Run': c.lastRun ? formatDate(c.lastRun) : 'Never',
+        'Next Run': c.nextRun ? formatDate(c.nextRun) : 'N/A',
       })));
     });
 
@@ -52,7 +52,7 @@ export function registerCronCommand(program: Command) {
 
       const client = await createClient();
       await safeCall(
-        () => client.mutation('cronJobs:create' as any, { name, schedule, agentId, action, isEnabled: true }),
+        () => client.mutation('cronJobs:create' as any, { name, schedule, agentId, prompt: action }),
         'Failed to create cron job'
       );
       success(`Cron job "${name}" created.`);
@@ -64,7 +64,7 @@ export function registerCronCommand(program: Command) {
     .description('Delete a cron job')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('cronJobs:remove' as any, { _id: id }), 'Failed to delete');
+      await safeCall(() => client.mutation('cronJobs:remove' as any, { id }), 'Failed to delete');
       success(`Cron job "${id}" deleted.`);
     });
 
@@ -74,7 +74,7 @@ export function registerCronCommand(program: Command) {
     .description('Enable a cron job')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('cronJobs:update' as any, { _id: id, isEnabled: true }), 'Failed');
+      await safeCall(() => client.mutation('cronJobs:update' as any, { id, isEnabled: true }), 'Failed');
       success(`Cron job "${id}" enabled.`);
     });
 
@@ -84,7 +84,7 @@ export function registerCronCommand(program: Command) {
     .description('Disable a cron job')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('cronJobs:update' as any, { _id: id, isEnabled: false }), 'Failed');
+      await safeCall(() => client.mutation('cronJobs:update' as any, { id, isEnabled: false }), 'Failed');
       success(`Cron job "${id}" disabled.`);
     });
 }

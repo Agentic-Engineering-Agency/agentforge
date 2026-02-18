@@ -67,7 +67,7 @@ export function registerVaultCommand(program: Command) {
         Name: s.name,
         Category: s.category || 'general',
         Provider: s.provider || 'N/A',
-        'Last Rotated': s.lastRotatedAt ? formatDate(s.lastRotatedAt) : 'Never',
+        'Last Updated': s.updatedAt ? formatDate(s.updatedAt) : 'Never',
         Created: formatDate(s.createdAt),
       })));
     });
@@ -89,7 +89,7 @@ export function registerVaultCommand(program: Command) {
       await safeCall(
         () => client.mutation('vault:store' as any, {
           name,
-          encryptedValue: value,
+          value,
           category: opts.category,
           provider: opts.provider,
         }),
@@ -110,17 +110,12 @@ export function registerVaultCommand(program: Command) {
       if (!secret) { error(`Secret "${name}" not found.`); process.exit(1); }
 
       if (opts.reveal) {
-        const value = await safeCall(
-          () => client.query('vault:getDecrypted' as any, { _id: secret._id }),
-          'Failed to retrieve secret'
-        );
-        console.log(value);
+        // Decrypted values are not accessible from the client (internal mutation only)
+        info(`${name} = ${secret.maskedValue || '****'}`);
+        dim('  Note: Full decryption is only available server-side for security.');
       } else {
-        const masked = secret.encryptedValue
-          ? secret.encryptedValue.slice(0, 4) + '****' + secret.encryptedValue.slice(-4)
-          : '****';
-        info(`${name} = ${masked}`);
-        dim('  Use --reveal to show the full value.');
+        info(`${name} = ${secret.maskedValue || '****'}`);
+        dim('  Use --reveal to attempt to show more details.');
       }
     });
 
@@ -138,7 +133,7 @@ export function registerVaultCommand(program: Command) {
       const result = await safeCall(() => client.query('vault:list' as any, {}), 'Failed');
       const secret = ((result as any[]) || []).find((s: any) => s.name === name);
       if (!secret) { error(`Secret "${name}" not found.`); process.exit(1); }
-      await safeCall(() => client.mutation('vault:remove' as any, { _id: secret._id }), 'Failed');
+      await safeCall(() => client.mutation('vault:remove' as any, { id: secret._id }), 'Failed');
       success(`Secret "${name}" deleted.`);
     });
 
@@ -156,7 +151,7 @@ export function registerVaultCommand(program: Command) {
       if (!newValue) { error('Value is required.'); process.exit(1); }
 
       await safeCall(
-        () => client.mutation('vault:rotate' as any, { _id: secret._id, newValue }),
+        () => client.mutation('vault:update' as any, { id: secret._id, value: newValue }),
         'Failed to rotate secret'
       );
       success(`Secret "${name}" rotated.`);

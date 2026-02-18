@@ -20,7 +20,7 @@ export function registerSessionsCommand(program: Command) {
       const filtered = opts.status ? items.filter((s: any) => s.status === opts.status) : items;
       table(filtered.map((s: any) => ({
         ID: s._id?.slice(-8) || 'N/A',
-        Name: s.name || 'Unnamed',
+        Session: s.sessionId,
         Agent: s.agentId,
         Status: s.status,
         Started: formatDate(s.startedAt),
@@ -34,11 +34,11 @@ export function registerSessionsCommand(program: Command) {
     .description('Show session details')
     .action(async (id) => {
       const client = await createClient();
-      const session = await safeCall(() => client.query('sessions:getById' as any, { id }), 'Failed to fetch session');
+      const session = await safeCall(() => client.query('sessions:get' as any, { sessionId: id }), 'Failed to fetch session');
       if (!session) { error(`Session "${id}" not found.`); process.exit(1); }
       const s = session as any;
-      header(`Session: ${s.name || 'Unnamed'}`);
-      details({ ID: s._id, Name: s.name, Agent: s.agentId, Status: s.status, Started: formatDate(s.startedAt), 'Last Activity': formatDate(s.lastActivityAt) });
+      header(`Session: ${s.sessionId}`);
+      details({ ID: s._id, 'Session ID': s.sessionId, Agent: s.agentId, Status: s.status, Started: formatDate(s.startedAt), 'Last Activity': formatDate(s.lastActivityAt) });
     });
 
   sessions
@@ -47,7 +47,7 @@ export function registerSessionsCommand(program: Command) {
     .description('End an active session')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('sessions:update' as any, { _id: id, status: 'ended' }), 'Failed to end session');
+      await safeCall(() => client.mutation('sessions:updateStatus' as any, { sessionId: id, status: 'completed' }), 'Failed to end session');
       success(`Session "${id}" ended.`);
     });
 }
@@ -72,7 +72,7 @@ export function registerThreadsCommand(program: Command) {
         ID: t._id?.slice(-8) || 'N/A',
         Name: t.name || 'Unnamed',
         Agent: t.agentId,
-        Status: t.status,
+        Messages: t.metadata?.messageCount || '-',
         Created: formatDate(t.createdAt),
       })));
     });
@@ -83,7 +83,7 @@ export function registerThreadsCommand(program: Command) {
     .description('Show thread messages')
     .action(async (id) => {
       const client = await createClient();
-      const messages = await safeCall(() => client.query('messages:listByThread' as any, { threadId: id }), 'Failed to fetch messages');
+      const messages = await safeCall(() => client.query('messages:list' as any, { threadId: id }), 'Failed to fetch messages');
       header(`Thread: ${id}`);
       const items = (messages as any[]) || [];
       if (items.length === 0) { info('No messages in this thread.'); return; }
@@ -100,7 +100,7 @@ export function registerThreadsCommand(program: Command) {
     .description('Delete a thread and its messages')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('threads:remove' as any, { _id: id }), 'Failed to delete thread');
+      await safeCall(() => client.mutation('threads:remove' as any, { id }), 'Failed to delete thread');
       success(`Thread "${id}" deleted.`);
     });
 }

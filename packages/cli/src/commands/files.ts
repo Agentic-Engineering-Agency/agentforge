@@ -26,7 +26,7 @@ export function registerFilesCommand(program: Command) {
         Type: f.mimeType,
         Size: formatSize(f.size),
         Folder: f.folderId || 'root',
-        Created: formatDate(f.createdAt),
+        Uploaded: formatDate(f.uploadedAt),
       })));
     });
 
@@ -54,7 +54,8 @@ export function registerFilesCommand(program: Command) {
       const client = await createClient();
       await safeCall(
         () => client.mutation('files:create' as any, {
-          name, mimeType, size: stat.size,
+          name, originalName: name, mimeType, size: stat.size,
+          url: 'pending-upload',
           folderId: opts.folder, projectId: opts.project,
         }),
         'Failed to upload file metadata'
@@ -69,7 +70,7 @@ export function registerFilesCommand(program: Command) {
     .description('Delete a file')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('files:remove' as any, { _id: id }), 'Failed to delete file');
+      await safeCall(() => client.mutation('files:remove' as any, { id }), 'Failed to delete file');
       success(`File "${id}" deleted.`);
     });
 
@@ -115,7 +116,7 @@ export function registerFilesCommand(program: Command) {
     .description('Delete a folder')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('folders:remove' as any, { _id: id }), 'Failed to delete folder');
+      await safeCall(() => client.mutation('folders:remove' as any, { id }), 'Failed to delete folder');
       success(`Folder "${id}" deleted.`);
     });
 }
