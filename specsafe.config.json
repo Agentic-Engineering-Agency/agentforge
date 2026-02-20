@@ -1,0 +1,6 @@
+{
+  "name": "agentforge",
+  "version": "0.5.4",
+  "testRunner": "vitest",
+  "testCommand": "pnpm test"
+}
