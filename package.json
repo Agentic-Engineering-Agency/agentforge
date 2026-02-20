@@ -25,6 +25,8 @@
   },
   "packageManager": "pnpm@9.15.4",
   "devDependencies": {
+    "@specsafe/core": "^0.8.0",
+    "@specsafe/test-gen": "^0.8.0",
     "@types/fs-extra": "^11.0.4",
     "@types/node": "^22.10.5",
     "@vitest/coverage-v8": "^2.0.0",
