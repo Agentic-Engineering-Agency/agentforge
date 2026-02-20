@@ -1,92 +1,172 @@
-# AgentForge AI Agent Team
+# AGENTS.md — AgentForge AI Development Team
 
-## Overview
-
-AgentForge uses **Claude Code Agent Teams** for concurrent development with parallel work tracks.
-
-**Environment Variable:** `CLAUDE_EXPERIMENTAL_AGENT_TEAMS=1`
-
-## Team Configuration
-
-### Models
-- **Lead Model:** `claude-opus-4-6` (Team coordination, architecture decisions)
-- **Teammate Model:** `claude-sonnet-4-6` (Feature implementation, development tasks)
-
-### Team Structure
-
-#### Track A: Architecture Team
-**Teammates:** Luci + Seshat
-
-**Role:** Architect
-
-**Responsibilities:**
-- `convex/schema.ts` - Database schema design and migrations
-- Core framework logic and architecture
-- Deep backend systems and Mastra integration
-- Workflow engine implementation
-- Memory and vector database systems
-
-**Key Files:**
-- `packages/convex/schema.ts`
-- `packages/mastra/`
-- `convex/workflows/`
-
-#### Track B: Product Engineering Team
-**Teammates:** Lalo + Puck
-
-**Role:** Product Engineer
-
-**Responsibilities:**
-- `apps/dashboard` - UI/UX implementation
-- Integrations and adapters (WhatsApp, Telegram, etc.)
-- DevOps, CI/CD pipelines
-- Feature development and user-facing functionality
-- Mobile apps (React Native / Expo)
-
-**Key Files:**
-- `apps/dashboard/`
-- `packages/adapters/`
-- `.github/workflows/`
-
-## Workflow
-
-### SpecSafe Protocol
-
-**All code changes follow SpecSafe TDD:**
-
-1. **Spec:** Create or update spec in `specs/active/SPEC-AGE-{number}.md`
-2. **Test:** Generate tests from the spec
-3. **Code:** Implement feature with passing tests
-4. **QA:** Validate before merge
-
-### Branching Strategy
-
-```
-feature/AGE-{number}-{description}  →  main
-fix/AGE-{number}-{description}       →  main
-```
-
-### Sync Points
-
-- **Sprint 1.1 → 1.2:** AGE-106 (Schema) must merge before AGE-107 (Files) starts
-- Regular pull-before-push to maintain compatibility
-- One spec per branch principle
-
-## Communication
-
-- Teammates coordinate via agent messaging system
-- Status updates in `PROJECT_STATE.md`
-- Roadmap maintained in `CONCURRENT_PLAN.md`
-
-## Current Assignments
-
-**Phase 1 - Sprint 1.1:**
-
-| Track | Task | Spec ID | Status |
-|-------|------|---------|--------|
-| A (Luci/Seshat) | Schema Refactor | AGE-106 | Ready to start |
-| B (Lalo/Puck) | LLM Models Update | AGE-105 | Ready to start |
+> **For AI coding assistants:** Read `CLAUDE.md` for the full project context and SpecSafe workflow.  
+> This file documents the human+AI team structure and agent configuration.
 
 ---
 
-*Configuration initialized: 2026-02-20*
+## 👥 Team Structure
+
+### Track A: Architecture (Luci + Seshat)
+
+| | |
+|---|---|
+| **Humans** | Luci (Fernando Ramos) |
+| **AI Agent** | Seshat (Claude Code, claude-opus-4-6 lead / claude-sonnet-4-6 teammates) |
+| **Role** | Lead Architect |
+| **Focus** | Core framework, database schema, Mastra backend, workflow engine |
+
+**Owned files/directories:**
+- `convex/schema.ts` — Convex database schema (source of truth for all tables)
+- `convex/mastraIntegration.ts` — Mastra AI framework bridge
+- `convex/workflows/` — Workflow engine (Mastra Workflows)
+- `packages/core/` — `@agentforge-ai/core` (Agent, SandboxManager, MCPServer, browser tools)
+- `specs/active/SPEC-AGE-10*.md` — Architecture specs
+
+**Active task:** AGE-106 — Project-scoped schema refactor (multi-tenancy)
+
+---
+
+### Track B: Product Engineering (Lalo + Puck)
+
+| | |
+|---|---|
+| **Humans** | Lalo |
+| **AI Agent** | Puck (Claude Code, claude-opus-4-6 lead / claude-sonnet-4-6 teammates) |
+| **Role** | Product Engineer |
+| **Focus** | Dashboard UI, channel integrations, DevOps, user-facing features |
+
+**Owned files/directories:**
+- `packages/web/` — Dashboard frontend (React + Vite + TanStack Router)
+- `packages/cli/` — `@agentforge-ai/cli` — `agentforge` CLI tool
+- `packages/channels/` — `@agentforge-ai/channels` — Base channel abstractions
+- `packages/channels-telegram/` — `@agentforge-ai/channels-telegram`
+- `.github/workflows/` — GitHub Actions CI/CD
+- `specs/active/SPEC-AGE-10[5,7,8].md` — Product specs
+
+**Active task:** AGE-105 — Update LLM models list
+
+---
+
+## 🤖 Claude Code Agent Teams Configuration
+
+```bash
+# Required environment variable
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+
+# Launch team lead
+claude --model claude-opus-4-6
+```
+
+### Spawning a team
+
+```
+Create an agent team for [task].
+Use claude-opus-4-6 as the team lead and claude-sonnet-4-6 for each teammate.
+
+Teammates should own separate files — never have two teammates editing the same file.
+All work must follow SpecSafe TDD: spec → test → code → qa → complete.
+```
+
+### Agent roles by task type
+
+| Task type | Lead | Teammates |
+|-----------|------|-----------|
+| Schema refactor | Track A lead (Opus) | schema-teammate, migration-teammate, test-teammate |
+| UI feature | Track B lead (Opus) | frontend-teammate, api-teammate, test-teammate |
+| Bug fix | Either lead | investigator-teammate × 2–3 (competing hypotheses) |
+| Code review | Either lead | security-reviewer, perf-reviewer, test-reviewer |
+
+---
+
+## 🏗️ Tech Stack Reference
+
+### Runtime & Build
+| Tool | Version / Notes |
+|------|----------------|
+| Node.js | >=18.0.0 (tested on v25.6.1) |
+| pnpm | 9.15.4 (workspaces) |
+| TypeScript | Strict, ESM modules |
+| Vitest | Test runner (`pnpm test`) |
+| Vite | Frontend bundler |
+
+### Backend
+| Tool | Role |
+|------|------|
+| **Convex** | Serverless DB + realtime subscriptions + actions |
+| **Mastra** (`@mastra/core ^1.4.0`) | AI agent orchestration, workflows, tools |
+| **Docker** | Sandbox container execution (E2B-compatible) |
+| **Playwright** | Browser automation inside agents |
+
+### Convex Schema (current tables)
+| Table | Description | Multi-tenant? |
+|-------|-------------|---------------|
+| `agents` | Agent definitions (model, instructions, tools) | ⚠️ Needs `projectId` (AGE-106) |
+| `projects` | Project workspace container | ✅ Root entity |
+| `threads` | Conversation threads | ✅ Has `projectId` |
+| `messages` | Messages in threads | via thread |
+| `sessions` | Agent sessions | ⚠️ Needs `projectId` (AGE-106) |
+| `skills` | Installed skills per workspace | ⚠️ Needs `projectId` (AGE-106) |
+| `files` | Uploaded files | ⚠️ Needs `projectId` (AGE-106) |
+| `mcpConnections` | MCP server connections | ⚠️ Needs `projectId` (AGE-106) |
+| `llmProviders` | Provider + model config | needs update (AGE-105) |
+
+### LLM Providers (convex/llmProviders.ts)
+`openai`, `openrouter`, `anthropic`, `google`, `venice`, `custom`
+
+Models to add (AGE-105): Mistral (large/small), DeepSeek (chat/coder), Claude 4.6 (opus/sonnet/haiku), Gemini 3 (Pro/Flash)
+
+### Frontend (packages/web)
+- React + Vite + TanStack Router 1.x
+- Dashboard: agent management, thread viewer, file explorer, skill marketplace
+- Note: `@tanstack/router-plugin` has peer dep warning (1.161 expects router 1.160+)
+
+### Published npm Packages
+| Package | Status |
+|---------|--------|
+| `@agentforge-ai/core` | ✅ Active — v0.5.4 |
+| `@agentforge-ai/cli` | ✅ Active — v0.5.4 |
+| `@agentforge-ai/convex-adapter` | ⚠️ Archived — optional Convex plugin |
+| `@agentforge-ai/cloud-client` | ❌ Deprecated — zero dependents |
+
+---
+
+## 📋 SpecSafe Workflow
+
+```
+specsafe new "description"   →  Create spec (get SPEC-ID)
+specsafe spec <id>           →  Define requirements → SPEC stage
+specsafe test <id>           →  Generate tests → TEST stage
+[write code to pass tests]
+specsafe qa <id>             →  Validate → QA stage
+specsafe complete <id>       →  Done → COMPLETE
+```
+
+**Claude Code slash commands available:**
+- `/specsafe` — Show project status
+- `/spec <id>` — Show spec details
+- `/validate` — Validate implementation against active spec
+
+---
+
+## 🌿 Branching Strategy
+
+```
+feat/AGE-{number}-{short-description}   →  main
+fix/AGE-{number}-{short-description}    →  main
+```
+
+- **No develop branch** — feature branches push directly to main
+- **One spec per branch**
+- **Commit format:** `feat(AGE-106): add projectId to agents table`
+- **Sync points:** Track A schema changes (AGE-106) must merge before Track B file/session features start
+
+---
+
+## 🔗 Resources
+
+- **Linear:** https://linear.app/agentic-engineering/project/feature-parity-roadmap-1c3d0bf871f8/overview
+- **Feature Parity Comparison:** https://www.notion.so/Feature-Parity-Manus-vs-OpenClaw-vs-AgentForge-30a20287fd618160b054d463cd8911a3
+- **Concurrent Dev Plan:** `CONCURRENT_PLAN.md` (this repo)
+- **Project State:** `PROJECT_STATE.md` (this repo)
+- **GitHub:** https://github.com/Agentic-Engineering-Agency/agentforge

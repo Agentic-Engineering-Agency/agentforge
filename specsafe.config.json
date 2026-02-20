@@ -1,6 +1,11 @@
 {
-  "name": "agentforge",
+  "projectName": "agentforge",
   "version": "0.5.4",
-  "testRunner": "vitest",
-  "testCommand": "pnpm test"
+  "testFramework": "vitest",
+  "language": "typescript",
+  "tools": {
+    "claude-code": {
+      "files": ["CLAUDE.md"]
+    }
+  }
 }

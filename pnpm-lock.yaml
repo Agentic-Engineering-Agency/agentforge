@@ -8,6 +8,12 @@ importers:
 
   .:
     devDependencies:
+      '@specsafe/core':
+        specifier: ^0.8.0
+        version: 0.8.0
+      '@specsafe/test-gen':
+        specifier: ^0.8.0
+        version: 0.8.0
       '@types/fs-extra':
         specifier: ^11.0.4
         version: 11.0.4
@@ -1767,6 +1773,14 @@ packages:
   '@sindresorhus/transliterate@1.6.0':
     resolution: {integrity: sha512-doH1gimEu3A46VX6aVxpHTeHrytJAG6HgdxntYnCFiIFHEM/ZGpG8KiZGBChchjQmG0XFIBL552kBTjVcMZXwQ==}
     engines: {node: '>=12'}
+
+  '@specsafe/core@0.8.0':
+    resolution: {integrity: sha512-hift70r+IlI1wyCKGDwjg0TwLIU6uhgXVRYZZi9GAp8/++/zNS8BW08bt1N1dRa6Oubgr1Bo00i7rvEGbXDvOg==}
+    engines: {node: '>=18'}
+
+  '@specsafe/test-gen@0.8.0':
+    resolution: {integrity: sha512-AUqk9cJwbSKaMSCZNzHBtHzzeMWgBgpioS3zj/xgjEguMpak7jcBSIQcOQbP+Nf0nMB8srpcUhll4jVzeQlG0Q==}
+    engines: {node: '>=18'}
 
   '@standard-community/standard-json@0.3.5':
     resolution: {integrity: sha512-4+ZPorwDRt47i+O7RjyuaxHRK/37QY/LmgxlGrRrSTLYoFatEOzvqIc85GTlM18SFZ5E91C+v0o/M37wZPpUHA==}
@@ -5099,6 +5113,12 @@ snapshots:
     dependencies:
       escape-string-regexp: 5.0.0
 
+  '@specsafe/core@0.8.0': {}
+
+  '@specsafe/test-gen@0.8.0':
+    dependencies:
+      '@specsafe/core': 0.8.0
+
   '@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76)':
     dependencies:
       '@standard-schema/spec': 1.1.0
@@ -5402,14 +5422,6 @@ snapshots:
       magic-string: 0.30.21
     optionalDependencies:
       vite: 5.4.21(@types/node@22.19.11)(terser@5.46.0)
-
-  '@vitest/mocker@2.1.9(vite@5.4.21(@types/node@25.2.3)(terser@5.46.0))':
-    dependencies:
-      '@vitest/spy': 2.1.9
-      estree-walker: 3.0.3
-      magic-string: 0.30.21
-    optionalDependencies:
-      vite: 5.4.21(@types/node@25.2.3)(terser@5.46.0)
 
   '@vitest/pretty-format@2.1.9':
     dependencies:
@@ -7339,7 +7351,7 @@ snapshots:
   vitest@2.1.9(@types/node@25.2.3)(terser@5.46.0):
     dependencies:
       '@vitest/expect': 2.1.9
-      '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@25.2.3)(terser@5.46.0))
+      '@vitest/mocker': 2.1.9(vite@5.4.21(@types/node@22.19.11)(terser@5.46.0))
       '@vitest/pretty-format': 2.1.9
       '@vitest/runner': 2.1.9
       '@vitest/snapshot': 2.1.9
