@@ -26,7 +26,7 @@ agentforge/
 │   ├── sandbox/       # Sandbox execution environment
 │   └── web/           # Dashboard UI (React/Vite)
 ├── convex/            # Convex serverless backend (database + actions + mutations)
-│   ├── schema.ts      # ⚠️ Database schema — Track A owns this
+│   ├── schema.ts      # ⚠️ Database schema — Track B owns this (AGE-106)
 │   ├── agents.ts      # Agent CRUD operations
 │   ├── projects.ts    # Project management
 │   ├── threads.ts     # Conversation threads
@@ -114,8 +114,8 @@ specsafe complete <id>    →  Archive spec, move to COMPLETE
 
 | Track | Task | Spec | Branch |
 |-------|------|------|--------|
-| **A (Luci/Seshat)** | Project-scoped Convex schema | AGE-106 | `feat/AGE-106-project-scoped-schema` |
-| **B (Lalo/Puck)** | Update LLM models list | AGE-105 | `feat/AGE-105-update-llm-models` |
+| **A (Luci/Seshat)** | Update LLM models list | AGE-105 | `feat/AGE-105-update-llm-models` |
+| **B (Lalo/Puck)** | Project-scoped Convex schema | AGE-106 | `feat/AGE-106-project-scoped-schema` |
 
 **Context for AGE-105 (Track A — Luci/Seshat):** The model list in `convex/llmProviders.ts` is outdated. Add: Mistral (mistral-large-latest, mistral-small-latest), DeepSeek (deepseek-chat, deepseek-coder), Claude 4.6 models (claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5), Gemini 3 Pro/Flash. Branch: `feat/AGE-105-update-llm-models`.
 
