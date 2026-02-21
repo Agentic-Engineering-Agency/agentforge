@@ -42,7 +42,23 @@
 **Title:** Project-scoped Convex schema refactor (multi-tenancy)
 **Owner:** Lalo/Puck
 **Branch:** `feat/AGE-106-project-scoped-schema`
-**Priority:** High (blocks Sprint 1.2 features — AGE-107, AGE-108)
+**Priority:** High (SYNC POINT — blocks AGE-107; AGE-108 and AGE-41 can start independently)
+
+## Sprint 1.2 (Starts after AGE-106 merges)
+
+### Track A: AGE-104
+**Title:** Implement Mastra Workflows Engine in Convex
+**Owner:** Luci/Seshat
+**Branch:** `feat/AGE-104-mastra-workflows`
+
+### Track B: 3 parallel tasks via agent team
+| Issue | Title | Dependency |
+|-------|-------|-----------|
+| AGE-107 | File Uploads + R2 Backend | Needs AGE-106 schema |
+| AGE-108 | CI: Automate CLI Build | Independent |
+| AGE-41  | Discord Channel Adapter | Independent |
+
+**Execution:** Lalo/Puck spawns a 3-teammate Claude Code agent team (one per task).
 
 ## Development Protocol
 

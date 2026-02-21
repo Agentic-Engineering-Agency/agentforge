@@ -59,6 +59,16 @@
 
 **Conflict Risk:** Medium (Both touching Convex actions).
 
+**⚡ Parallel Execution Order:**
+```
+After SYNC POINT 1 (AGE-106 merged):
+
+Track A (Luci/Seshat) ─────────────────────── AGE-104 (Mastra Workflows)
+Track B (Lalo/Puck)   ─┬──── AGE-108 (CI)          ← independent, start immediately
+                        ├──── AGE-41  (Discord)      ← independent, start immediately
+                        └──── AGE-107 (Files UI)     ← wait for AGE-106 schema
+```
+
 #### Track A: Luci (Core Engine) — AGE-104
 **Focus:** Implementing the Mastra Workflows engine.
 - **Spec:** `specs/active/SPEC-AGE-104-workflows.md`
@@ -68,18 +78,23 @@
   3.  **Code (Claude Opus):** Implement the engine, register in `mastra.ts`, replace the stub action.
   4.  **QA:** Create a "Hello World" workflow and execute it via API.
 
-#### Track B: Lalo (Product UI) — AGE-107 & AGE-108
-**Focus:** User-facing Files feature and DevOps health.
-- **Task 1: AGE-108 (CI)**
-  - **Spec:** `specs/active/SPEC-AGE-108-ci.md`
-  - **Code:** Update `package.json` scripts and GitHub Actions to run `pnpm build` on CLI templates.
-- **Task 2: AGE-107 (Files UI & Backend)**
+#### Track B: Lalo (Architecture + Product) — AGE-107, AGE-108 & AGE-41
+**Focus:** Files UI, CI health, and Discord channel adapter — run in parallel via 3-teammate agent team.
+
+> **⚠️ AGE-107 depends on AGE-106 schema merge. AGE-108 and AGE-41 are independent and can start immediately.**
+
+- **Teammate 1 — AGE-107 (Files UI & Backend)**
   - **Spec:** `specs/active/SPEC-AGE-107-files.md`
   - **Test:** Component tests for `FileExplorer.tsx`.
-  - **Code (Claude Sonnet):**
-    - Port `packages/web/routes/files.tsx` to Cloud Dashboard.
-    - Implement `convex/files.ts` (using new `projectId` from Sprint 1.1).
-    - Wire up R2 upload action.
+  - **Code:** Port `packages/web/routes/files.tsx`, implement `convex/files.ts` (requires `projectId` from AGE-106), wire R2 upload action.
+
+- **Teammate 2 — AGE-108 (CI)**
+  - **Spec:** `specs/active/SPEC-AGE-108-ci.md`
+  - **Code:** Update `package.json` scripts and `.github/workflows/` to run `pnpm build` on CLI templates.
+
+- **Teammate 3 — AGE-41 (Discord Channel Adapter)**
+  - **Spec:** `specs/active/SPEC-AGE-41-discord.md`
+  - **Code:** Create `packages/channels-discord/` mirroring the Telegram adapter structure (Discord.js v14).
 
 ---
 

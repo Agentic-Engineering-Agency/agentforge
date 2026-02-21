@@ -110,16 +110,35 @@ specsafe complete <id>    →  Archive spec, move to COMPLETE
 
 ---
 
-## 🚀 Current Sprint: Phase 1 — Sprint 1.1
+## 🚀 Current Sprint: Phase 1
 
-| Track | Task | Spec | Branch |
-|-------|------|------|--------|
-| **A (Luci/Seshat)** | Update LLM models list | AGE-105 | `feat/AGE-105-update-llm-models` |
-| **B (Lalo/Puck)** | Project-scoped Convex schema | AGE-106 | `feat/AGE-106-project-scoped-schema` |
+### Sprint 1.1 (Active — parallel start)
+| Track | Task | Branch |
+|-------|------|--------|
+| **A (Luci/Seshat)** | AGE-105 — Update LLM models list | `feat/AGE-105-update-llm-models` |
+| **B (Lalo/Puck)** | AGE-106 — Project-scoped Convex schema | `feat/AGE-106-project-scoped-schema` |
 
-**Context for AGE-105 (Track A — Luci/Seshat):** The model list in `convex/llmProviders.ts` is outdated. Add: Mistral (mistral-large-latest, mistral-small-latest), DeepSeek (deepseek-chat, deepseek-coder), Claude 4.6 models (claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5), Gemini 3 Pro/Flash. Branch: `feat/AGE-105-update-llm-models`.
+**AGE-105:** `convex/llmProviders.ts` — add Mistral (large/small), DeepSeek (chat/coder), Claude 4.6 (opus/sonnet/haiku), Gemini 3 (Pro/Flash).
+**AGE-106:** `convex/schema.ts` — add `projectId` to agents, sessions, skills, files, mcpConnections. `projects` table exists. Migration script needed.
 
-**Context for AGE-106 (Track B — Lalo/Puck):** Resources in `convex/schema.ts` are currently user-global. They must become project-scoped (add `projectId` to agents, threads, sessions, skills, files, mcpConnections). The `projects` table already exists. Migration script needed. Branch: `feat/AGE-106-project-scoped-schema`.
+### Sprint 1.2 (Starts after AGE-106 merges — SYNC POINT)
+```
+Track A ─────────────────────── AGE-104 (Mastra Workflows Engine)
+Track B ─┬─ AGE-108 (CI)          ← independent, start immediately
+          ├─ AGE-41  (Discord)     ← independent, start immediately
+          └─ AGE-107 (Files UI)   ← requires AGE-106 schema first
+```
+| Track | Task | Branch |
+|-------|------|--------|
+| **A (Luci/Seshat)** | AGE-104 — Mastra Workflows Engine | `feat/AGE-104-mastra-workflows` |
+| **B (Lalo/Puck)** | AGE-107 — File Uploads (R2) | `feat/AGE-107-file-uploads` |
+| **B (Lalo/Puck)** | AGE-108 — CI: Automate CLI Build | `feat/AGE-108-ci-build` |
+| **B (Lalo/Puck)** | AGE-41 — Discord Channel Adapter | `feat/AGE-41-discord-adapter` |
+
+**AGE-104:** `convex/workflows/` — implement Mastra Workflows engine, replace stub, register in `mastra.ts`.
+**AGE-107:** `packages/web` + `convex/files.ts` — file explorer UI, R2 upload action, requires `projectId`.
+**AGE-108:** `.github/workflows/` — pnpm build on CLI templates in CI.
+**AGE-41:** `packages/channels-discord/` — Discord.js v14 adapter mirroring Telegram structure.
 
 ---
 
