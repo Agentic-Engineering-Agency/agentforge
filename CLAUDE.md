@@ -70,15 +70,15 @@ agentforge/
 
 ## 👥 Concurrent Development Tracks
 
-### Track A: Luci + Seshat (Architecture)
-**Owns:** `convex/schema.ts`, `convex/mastraIntegration.ts`, `convex/workflows/`, `packages/core/`
-**Focus:** Database schema, core framework, Mastra backend, workflow engine
+### Track A: Luci + Seshat (Core Engine)
+**Owns:** `convex/llmProviders.ts`, `convex/mastraIntegration.ts`, `convex/workflows/`, `packages/core/`
+**Focus:** LLM provider registry, core framework, Mastra backend, workflow engine
 
-### Track B: Lalo + Puck (Product Engineering)
-**Owns:** `packages/web/`, `packages/channels*`, `packages/cli/`, `.github/workflows/`
-**Focus:** Dashboard UI, channel integrations, DevOps, user-facing features
+### Track B: Lalo + Puck (Architecture + Product)
+**Owns:** `convex/schema.ts`, `packages/web/`, `packages/channels*`, `packages/cli/`, `.github/workflows/`
+**Focus:** Database schema, Dashboard UI, channel integrations, DevOps
 
-**⚠️ Sync Point:** AGE-106 (schema) must merge before AGE-107 (files) or any feature using `projectId` can start.
+**⚠️ Sync Point:** AGE-106 (schema, owned by Lalo/Puck) must merge before AGE-107 (files) or any feature using `projectId` can start.
 
 ---
 
@@ -117,9 +117,9 @@ specsafe complete <id>    →  Archive spec, move to COMPLETE
 | **A (Luci/Seshat)** | Project-scoped Convex schema | AGE-106 | `feat/AGE-106-project-scoped-schema` |
 | **B (Lalo/Puck)** | Update LLM models list | AGE-105 | `feat/AGE-105-update-llm-models` |
 
-**Context for AGE-106:** Resources in `convex/schema.ts` are currently user-global. They must become project-scoped (add `projectId` to agents, threads, sessions, skills, files, mcpConnections). The `projects` table already exists. Migration script needed.
+**Context for AGE-105 (Track A — Luci/Seshat):** The model list in `convex/llmProviders.ts` is outdated. Add: Mistral (mistral-large-latest, mistral-small-latest), DeepSeek (deepseek-chat, deepseek-coder), Claude 4.6 models (claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5), Gemini 3 Pro/Flash. Branch: `feat/AGE-105-update-llm-models`.
 
-**Context for AGE-105:** The model list in `convex/` is outdated. Add: Mistral (mistral-large-latest, mistral-small-latest), DeepSeek (deepseek-chat, deepseek-coder), Claude 4.6 models (claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5), Gemini 3 Pro/Flash.
+**Context for AGE-106 (Track B — Lalo/Puck):** Resources in `convex/schema.ts` are currently user-global. They must become project-scoped (add `projectId` to agents, threads, sessions, skills, files, mcpConnections). The `projects` table already exists. Migration script needed. Branch: `feat/AGE-106-project-scoped-schema`.
 
 ---
 
