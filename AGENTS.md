@@ -43,9 +43,10 @@
 - `packages/channels/` — `@agentforge-ai/channels` — Base channel abstractions
 - `packages/channels-telegram/` — `@agentforge-ai/channels-telegram`
 - `.github/workflows/` — GitHub Actions CI/CD
-- `specs/active/SPEC-AGE-106*.md`, `SPEC-AGE-107*.md`, `SPEC-AGE-108*.md`
+- `specs/active/SPEC-AGE-106*.md`, `SPEC-AGE-107*.md`, `SPEC-AGE-108*.md`, `SPEC-AGE-41*.md`
 
 **Active task:** AGE-106 — Project-scoped Convex schema refactor (multi-tenancy)
+**Next tasks (Sprint 1.2):** AGE-107 (Files UI), AGE-108 (CI), AGE-41 (Discord Adapter)
 
 ---
 
@@ -161,7 +162,31 @@ fix/AGE-{number}-{short-description}    →  main
 - **No develop branch** — feature branches push directly to main
 - **One spec per branch**
 - **Commit format:** `feat(AGE-106): add projectId to agents table`
-- **Sync points:** Track B schema changes (AGE-106, owned by Lalo/Puck) must merge before Sprint 1.2 starts — AGE-107, AGE-108, and AGE-104 all depend on `projectId`
+- **Sync points:** AGE-106 (Track B) must merge before AGE-107 starts (needs `projectId`). AGE-108 and AGE-41 are independent and can start Sprint 1.2 immediately.
+
+---
+
+## 🚀 Phase 1 Sprint Overview
+
+### Sprint 1.1 — Active (parallel)
+| Track | Issue | Task | Branch |
+|-------|-------|------|--------|
+| **A (Luci/Seshat)** | AGE-105 | LLM Models Update | `feat/AGE-105-update-llm-models` |
+| **B (Lalo/Puck)** | AGE-106 | Schema Refactor (multi-tenancy) | `feat/AGE-106-project-scoped-schema` |
+
+### Sprint 1.2 — After AGE-106 merges
+```
+Track A ──── AGE-104  Mastra Workflows Engine
+Track B ──┬─ AGE-108  CI: Automate CLI Build    ← independent, start immediately
+           ├─ AGE-41   Discord Channel Adapter   ← independent, start immediately
+           └─ AGE-107  File Uploads (R2)         ← wait for AGE-106 schema
+```
+| Track | Issue | Task | Branch |
+|-------|-------|------|--------|
+| **A (Luci/Seshat)** | AGE-104 | Mastra Workflows Engine | `feat/AGE-104-mastra-workflows` |
+| **B (Lalo/Puck)** | AGE-107 | File Uploads + R2 Backend | `feat/AGE-107-file-uploads` |
+| **B (Lalo/Puck)** | AGE-108 | CI: Automate CLI Build | `feat/AGE-108-ci-build` |
+| **B (Lalo/Puck)** | AGE-41 | Discord Channel Adapter | `feat/AGE-41-discord-adapter` |
 
 ---
 
