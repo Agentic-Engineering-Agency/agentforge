@@ -7,14 +7,14 @@
 
 ## 👥 Team Structure
 
-### Track A: Architecture (Luci + Seshat)
+### Track A: Core Engine (Luci + Seshat)
 
 | | |
 |---|---|
 | **Humans** | Luci (Fernando Ramos) |
 | **AI Agent** | Seshat (Claude Code, claude-opus-4-6 lead / claude-sonnet-4-6 teammates) |
-| **Role** | Lead Architect |
-| **Focus** | Core framework, database schema, Mastra backend, workflow engine |
+| **Role** | Core Engine |
+| **Focus** | LLM provider registry, core framework, Mastra backend, workflow engine |
 
 **Owned files/directories:**
 - `convex/llmProviders.ts` — LLM provider + model registry
@@ -27,14 +27,14 @@
 
 ---
 
-### Track B: Product Engineering (Lalo + Puck)
+### Track B: Architecture + Product (Lalo + Puck)
 
 | | |
 |---|---|
 | **Humans** | Lalo |
 | **AI Agent** | Puck (Claude Code, claude-opus-4-6 lead / claude-sonnet-4-6 teammates) |
-| **Role** | Product Engineer |
-| **Focus** | Dashboard UI, channel integrations, DevOps, user-facing features |
+| **Role** | Architecture + Product |
+| **Focus** | Database schema, Dashboard UI, channel integrations, DevOps |
 
 **Owned files/directories:**
 - `convex/schema.ts` — Convex database schema (source of truth for all tables)
@@ -73,7 +73,8 @@ All work must follow SpecSafe TDD: spec → test → code → qa → complete.
 
 | Task type | Lead | Teammates |
 |-----------|------|-----------|
-| Schema refactor | Track A lead (Opus) | schema-teammate, migration-teammate, test-teammate |
+| LLM models / core engine | Track A lead (Opus) | providers-teammate, test-teammate |
+| Schema refactor | Track B lead (Opus) | schema-teammate, migration-teammate, test-teammate |
 | UI feature | Track B lead (Opus) | frontend-teammate, api-teammate, test-teammate |
 | Bug fix | Either lead | investigator-teammate × 2–3 (competing hypotheses) |
 | Code review | Either lead | security-reviewer, perf-reviewer, test-reviewer |
