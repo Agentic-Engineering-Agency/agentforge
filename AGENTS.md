@@ -17,13 +17,13 @@
 | **Focus** | Core framework, database schema, Mastra backend, workflow engine |
 
 **Owned files/directories:**
-- `convex/schema.ts` — Convex database schema (source of truth for all tables)
+- `convex/llmProviders.ts` — LLM provider + model registry
 - `convex/mastraIntegration.ts` — Mastra AI framework bridge
 - `convex/workflows/` — Workflow engine (Mastra Workflows)
 - `packages/core/` — `@agentforge-ai/core` (Agent, SandboxManager, MCPServer, browser tools)
-- `specs/active/SPEC-AGE-10*.md` — Architecture specs
+- `specs/active/SPEC-AGE-105*.md`
 
-**Active task:** AGE-106 — Project-scoped schema refactor (multi-tenancy)
+**Active task:** AGE-105 — Update LLM models list (Mistral, DeepSeek, Claude 4.6, Gemini 3)
 
 ---
 
@@ -37,14 +37,15 @@
 | **Focus** | Dashboard UI, channel integrations, DevOps, user-facing features |
 
 **Owned files/directories:**
+- `convex/schema.ts` — Convex database schema (source of truth for all tables)
 - `packages/web/` — Dashboard frontend (React + Vite + TanStack Router)
 - `packages/cli/` — `@agentforge-ai/cli` — `agentforge` CLI tool
 - `packages/channels/` — `@agentforge-ai/channels` — Base channel abstractions
 - `packages/channels-telegram/` — `@agentforge-ai/channels-telegram`
 - `.github/workflows/` — GitHub Actions CI/CD
-- `specs/active/SPEC-AGE-10[5,7,8].md` — Product specs
+- `specs/active/SPEC-AGE-106*.md`, `SPEC-AGE-107*.md`, `SPEC-AGE-108*.md`
 
-**Active task:** AGE-105 — Update LLM models list
+**Active task:** AGE-106 — Project-scoped Convex schema refactor (multi-tenancy)
 
 ---
 
@@ -159,7 +160,7 @@ fix/AGE-{number}-{short-description}    →  main
 - **No develop branch** — feature branches push directly to main
 - **One spec per branch**
 - **Commit format:** `feat(AGE-106): add projectId to agents table`
-- **Sync points:** Track A schema changes (AGE-106) must merge before Track B file/session features start
+- **Sync points:** Track B schema changes (AGE-106, owned by Lalo/Puck) must merge before Sprint 1.2 starts — AGE-107, AGE-108, and AGE-104 all depend on `projectId`
 
 ---
 

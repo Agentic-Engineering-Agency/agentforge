@@ -32,15 +32,17 @@
 
 ### Sprint 1.1: Schema & Models (Parallel Start)
 
-#### Track A: AGE-106
-**Title:** Project-scoped Convex schema refactor
+#### Track A: AGE-105
+**Title:** Update LLM models list (Mistral, DeepSeek, Claude 4.6, Gemini 3)
 **Owner:** Luci/Seshat
-**Priority:** High (blocks multiple dependent features)
-
-#### Track B: AGE-105
-**Title:** Update LLM models list
-**Owner:** Lalo/Puck
+**Branch:** `feat/AGE-105-update-llm-models`
 **Priority:** High (feature parity)
+
+#### Track B: AGE-106
+**Title:** Project-scoped Convex schema refactor (multi-tenancy)
+**Owner:** Lalo/Puck
+**Branch:** `feat/AGE-106-project-scoped-schema`
+**Priority:** High (blocks Sprint 1.2 features — AGE-107, AGE-108)
 
 ## Development Protocol
 

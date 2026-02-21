@@ -29,29 +29,29 @@
 **Conflict Risk:** Low (Touching different files).
 **Sync Point:** Merge AGE-106 (Schema) before starting Sprint 1.2.
 
-#### Track A: Luci (Architecture) — AGE-106
+#### Track A: Luci (Core Engine) — AGE-105
+**Focus:** Updating the model list with the latest providers and models.
+- **Spec:** `specs/active/SPEC-AGE-105-models.md`
+- **Steps:**
+  1.  **Spec:** List all new models (Mistral, DeepSeek, Claude 4.6, Gemini 3).
+  2.  **Test:** Create `tests/model-resolver.test.ts` ensuring all IDs resolve to correct API params.
+  3.  **Code (Claude Opus):** Update `convex/llmProviders.ts` and model resolver logic.
+  4.  **QA:** Verify Dashboard "Create Agent" dropdown shows new models.
+
+#### Track B: Lalo (Architecture) — AGE-106
 **Focus:** Refactoring the database schema to support true multi-tenancy.
 - **Spec:** `specs/active/SPEC-AGE-106-schema.md`
 - **Steps:**
   1.  **Spec:** Define `ProjectConfig` type and `projectId` relations.
   2.  **Test:** Generate tests for `convex/schema.ts` validation logic.
-  3.  **Code (Claude Opus):** Update schema, create migration script `convex/migrations/addProjectIds.ts`.
+  3.  **Code (Claude Sonnet):** Update schema, create migration script `convex/migrations/addProjectIds.ts`.
   4.  **QA:** Verify `agentforge init` still works with new schema.
-
-#### Track B: Lalo (Features) — AGE-105
-**Focus:** updating the "brains" of the operation (Models).
-- **Spec:** `specs/active/SPEC-AGE-105-models.md`
-- **Steps:**
-  1.  **Spec:** List all new models (Mistral, DeepSeek, Claude 3.7/4.6).
-  2.  **Test:** Create `tests/model-resolver.test.ts` ensuring all IDs resolve to correct API params.
-  3.  **Code (Claude Sonnet):** Update `llmProviders.ts` and `model-resolver.ts`.
-  4.  **QA:** Verify Dashboard "Create Agent" dropdown shows new models.
 
 ---
 
 ### 🛑 SYNC POINT 1: The Schema Merge
-**Action:** Luci merges AGE-106 into `develop`.
-**Why:** AGE-107 (Files) and AGE-104 (Workflows) depend on the new `projectId` schema. Lalo must pull changes before starting Sprint 1.2 backend work.
+**Action:** Lalo merges AGE-106 into `main`.
+**Why:** AGE-107 (Files) and AGE-104 (Workflows) depend on the new `projectId` schema. Luci must pull changes before starting Sprint 1.2 backend work.
 
 ---
 
@@ -131,8 +131,8 @@
 2.  **Pull Before Push:** Always pull `develop` before starting a new Spec to ensure schema compatibility.
 3.  **One Spec per Branch:** `feat/AGE-104-workflows` is for one spec only.
 4.  **Agent Roles:**
-    -   **Seshat (Luci):** Architect. Handles `convex/schema.ts`, core logic, deep backend.
-    -   **Puck (Lalo):** Product. Handles `apps/dashboard`, integrations, specialized adapters.
+    -   **Seshat (Luci):** Core Engine. Handles `convex/llmProviders.ts`, `packages/core/`, backend integrations.
+    -   **Puck (Lalo):** Architect. Handles `convex/schema.ts`, schema migrations, multi-tenancy.
 
 ---
 
@@ -152,7 +152,7 @@ Run: `cd /Users/agent/Projects/Agentic-Engineering-Agency/agentforge && specsafe
 - Team structure established
 
 ### Phase 1 Sprint 1.1: 🔄 READY TO START
-- **AGE-106 (Schema Refactor)** → Track A: Luci/Seshat
-- **AGE-105 (LLM Models Update)** → Track B: Lalo/Puck
+- **AGE-105 (LLM Models Update)** → Track A: Luci/Seshat
+- **AGE-106 (Schema Refactor)** → Track B: Lalo/Puck
 
 Both tracks can proceed in parallel with low conflict risk.
