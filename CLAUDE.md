@@ -48,7 +48,7 @@ agentforge/
 | Language | TypeScript (ESM, strict) |
 | Package Manager | pnpm 9.15.4 (workspaces) |
 | Backend | Convex (serverless DB + realtime) |
-| AI Framework | Mastra (`@mastra/core ^1.4.0`) |
+| AI Framework | Mastra (`@mastra/core ^1.5.0`) |
 | Test Runner | Vitest |
 | Frontend | React + Vite (packages/web) |
 | Sandbox | Docker (E2B-compatible) |
@@ -63,20 +63,25 @@ agentforge/
 - `MCPServer` — MCP server for tool exposure
 - `BrowserSessionManager` / `BrowserActionExecutor` — Browser automation
 
-### LLM Providers Supported
-`openai`, `openrouter`, `anthropic`, `google`, `venice`, `custom`
+### LLM Providers Supported (Mastra model router)
+All providers use `"provider/model-name"` format. No Vercel AI SDK.
+`openai`, `anthropic`, `google`, `mistral`, `deepseek`, `xai`, `openrouter`, `cohere`, `meta`, `custom`
+
+> ⚡ **Architecture Decision (Feb 22, 2026):** Vercel AI SDK removed. Mastra handles all model routing.
 
 ---
 
 ## 👥 Concurrent Development Tracks
 
-### Track A: Luci + Seshat (Core Engine)
-**Owns:** `convex/llmProviders.ts`, `convex/mastraIntegration.ts`, `convex/workflows/`, `packages/core/`
-**Focus:** LLM provider registry, core framework, Mastra backend, workflow engine
+### Track A: Lalo + Puck (Architecture & Infrastructure)
+**Owns:** `convex/schema.ts`, `convex/workflows/`, `convex/migrations/`, `docs/DESIGN-*.md`
+**Focus:** Database schema, infrastructure, Mastra backend, workflow engine
 
-### Track B: Lalo + Puck (Architecture + Product)
-**Owns:** `convex/schema.ts`, `packages/web/`, `packages/channels*`, `packages/cli/`, `.github/workflows/`
-**Focus:** Database schema, Dashboard UI, channel integrations, DevOps
+### Track B: Luci + Seshat (Core Engine + Product)
+**Owns:** `convex/llmProviders.ts`, `convex/mastraIntegration.ts`, `convex/chat.ts`, `packages/core/`, `packages/web/`, `packages/cli/`, `packages/channels*`, `.github/workflows/`
+**Focus:** LLM providers, Mastra migration, Dashboard UI, integrations, DevOps
+
+> **Note:** Luci may work on tasks from both tracks. Coordinate via Linear.
 
 **⚠️ Sync Point:** AGE-106 (schema, owned by Lalo/Puck) must merge before AGE-107 (files) or any feature using `projectId` can start.
 
@@ -85,13 +90,17 @@ agentforge/
 ## 🛡️ SpecSafe Workflow (MANDATORY)
 
 ```
-specsafe new "<name>"     →  Create spec  (gets SPEC-ID)
-specsafe spec <id>        →  Define requirements, move to SPEC stage
-specsafe test <id>        →  Generate tests, move to TEST stage
-[implement code]          →  Make tests pass (RED → GREEN → REFACTOR)
-specsafe qa <id>          →  Validate, move to QA stage
-specsafe complete <id>    →  Archive spec, move to COMPLETE
+specsafe new "<name>"          →  Create spec (gets SPEC-ID)
+specsafe spec <id>             →  Validate & enhance with AI → SPEC stage
+specsafe test-create <id>      →  Generate tests → TEST stage
+specsafe test-apply <id>       →  Implementation guidance → CODE stage
+[implement code]               →  Make tests pass (RED → GREEN → REFACTOR)
+specsafe verify <id>           →  Run tests, loop on failure
+specsafe qa <id>               →  QA validation → QA stage
+specsafe done <id>             →  Complete & archive → DONE
 ```
+
+**⚠️ DO NOT USE:** `specsafe test` (ambiguous), `specsafe complete` (deprecated), `specsafe code` (doesn't exist).
 
 ### Rules
 
@@ -110,35 +119,34 @@ specsafe complete <id>    →  Archive spec, move to COMPLETE
 
 ---
 
-## 🚀 Current Sprint: Phase 1
+## 🚀 Current Sprint: Phase 0 → Phase 1
 
-### Sprint 1.1 (Active — parallel start)
-| Track | Task | Branch |
-|-------|------|--------|
-| **A (Luci/Seshat)** | AGE-105 — Update LLM models list | `feat/AGE-105-update-llm-models` |
-| **B (Lalo/Puck)** | AGE-106 — Project-scoped Convex schema | `feat/AGE-106-project-scoped-schema` |
+### Phase 0 — Synchronization (Immediate, sequential)
+| Session | Track | Task | Branch |
+|---------|-------|------|--------|
+| **0.1** | B (Luci/Seshat) | Mastra-Native Migration (remove Vercel AI SDK) | `feat/session-0.1-mastra-migration` |
+| **0.2** | A (Lalo/Puck) | Global vs Project Config Design Doc | `docs/session-0.2-project-config-design` |
 
-**AGE-105:** `convex/llmProviders.ts` — add Mistral (large/small), DeepSeek (chat/coder), Claude 4.6 (opus/sonnet/haiku), Gemini 3 (Pro/Flash).
-**AGE-106:** `convex/schema.ts` — add `projectId` to agents, sessions, skills, files, mcpConnections. `projects` table exists. Migration script needed.
+**Session 0.1:** Remove `ai`, `@ai-sdk/*` deps. Refactor `convex/mastraIntegration.ts` + `convex/chat.ts` to use Mastra Agent.generate(). Upgrade `@mastra/core` to ^1.5.0. Rebuild CLI dist.
+**Session 0.2:** Write `docs/DESIGN-PROJECT-CONFIG.md` classifying all 20 tables as global/project-scoped/both.
 
-### Sprint 1.2 (Starts after AGE-106 merges — SYNC POINT)
-```
-Track A ─────────────────────── AGE-104 (Mastra Workflows Engine)
-Track B ─┬─ AGE-108 (CI)          ← independent, start immediately
-          ├─ AGE-41  (Discord)     ← independent, start immediately
-          └─ AGE-107 (Files UI)   ← requires AGE-106 schema first
-```
-| Track | Task | Branch |
-|-------|------|--------|
-| **A (Luci/Seshat)** | AGE-104 — Mastra Workflows Engine | `feat/AGE-104-mastra-workflows` |
-| **B (Lalo/Puck)** | AGE-107 — File Uploads (R2) | `feat/AGE-107-file-uploads` |
-| **B (Lalo/Puck)** | AGE-108 — CI: Automate CLI Build | `feat/AGE-108-ci-build` |
-| **B (Lalo/Puck)** | AGE-41 — Discord Channel Adapter | `feat/AGE-41-discord-adapter` |
+### Sprint 1.1 (After Phase 0 — parallel)
+| Session | Track | Issue | Task | Branch |
+|---------|-------|-------|------|--------|
+| **1.1A** | B (Luci/Seshat) | AGE-105 | LLM Models Update (Mastra format) | `feat/AGE-105-update-llm-models` |
+| **1.1B** | A (Lalo/Puck) | AGE-106 | Project-scoped Schema Refactor | `feat/AGE-106-project-scoped-schema` |
 
-**AGE-104:** `convex/workflows/` — implement Mastra Workflows engine, replace stub, register in `mastra.ts`.
-**AGE-107:** `packages/web` + `convex/files.ts` — file explorer UI, R2 upload action, requires `projectId`.
-**AGE-108:** `.github/workflows/` — pnpm build on CLI templates in CI.
-**AGE-41:** `packages/channels-discord/` — Discord.js v14 adapter mirroring Telegram structure.
+> 🔒 **SYNC POINT:** AGE-106 must merge to main before Sprint 1.2 begins.
+
+### Sprint 1.2 (After AGE-106 merges — parallel)
+| Session | Track | Issue | Task | Branch |
+|---------|-------|-------|------|--------|
+| **1.2A** | A (Lalo/Puck) | AGE-104 | Mastra Workflows Engine | `feat/AGE-104-mastra-workflows` |
+| **1.2B** | B (Luci/Seshat) | AGE-107 | File Uploads + R2 Backend | `feat/AGE-107-file-uploads` |
+| **1.2B** | B (Luci/Seshat) | AGE-108 | CI: Automate CLI Build | `feat/AGE-108-ci-build` |
+| **1.2B** | B (Luci/Seshat) | AGE-41 | Discord Channel Adapter | `feat/AGE-41-discord-adapter` |
+
+**Full execution order + Claude Code session prompts:** See Notion Concurrent Dev Plan.
 
 ---
 
