@@ -347,6 +347,12 @@ export class TelegramChannel {
   }
 
   private async handleInboundMessage(message: InboundMessage): Promise<void> {
+    // Handle voice notes: transcribe via STT and process as text
+    if (message.media?.some(m => m.type === 'voice_note') && !message.text?.trim()) {
+      await this.handleVoiceMessage(message);
+      return;
+    }
+
     // Skip empty messages
     if (!message.text?.trim()) {
       this.logger.debug('Skipping empty message');
@@ -404,6 +410,97 @@ export class TelegramChannel {
       setTimeout(() => {
         this.processingMessages.delete(dedupKey);
       }, 30000);
+    }
+  }
+
+  // ----- Internal: Voice Message Handling -----
+
+  /**
+   * Handle voice note messages by transcribing them via STT,
+   * then routing the transcribed text through the normal agent pipeline.
+   */
+  private async handleVoiceMessage(message: InboundMessage): Promise<void> {
+    const voiceMedia = message.media?.find(m => m.type === 'voice_note');
+    if (!voiceMedia?.url) {
+      this.logger.warn('Voice message has no audio URL');
+      return;
+    }
+
+    const dedupKey = `${message.chatId}:${message.platformMessageId}`;
+    if (this.processingMessages.has(dedupKey)) return;
+    this.processingMessages.add(dedupKey);
+
+    const senderName = message.sender.displayName || message.sender.username || 'Unknown';
+    this.logger.info(`Voice message from ${senderName} (chat ${message.chatId})`);
+
+    try {
+      await this.adapter.sendTypingIndicator(message.chatId);
+
+      // Download the voice note audio
+      const audioResponse = await fetch(voiceMedia.url);
+      if (!audioResponse.ok) {
+        throw new Error(`Failed to download voice note: ${audioResponse.status}`);
+      }
+
+      const audioBuffer = await audioResponse.arrayBuffer();
+
+      // Transcribe via OpenAI Whisper STT
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (!apiKey) {
+        await this.adapter.sendMessage({
+          chatId: message.chatId,
+          text: 'Voice transcription is not available (OPENAI_API_KEY not configured).',
+        });
+        return;
+      }
+
+      const formData = new FormData();
+      const blob = new Blob([audioBuffer], { type: 'audio/ogg' });
+      formData.append('file', blob, 'voice.ogg');
+      formData.append('model', 'whisper-1');
+
+      const sttResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}` },
+        body: formData,
+      });
+
+      if (!sttResponse.ok) {
+        const errText = await sttResponse.text().catch(() => 'Unknown error');
+        throw new Error(`Whisper STT error (${sttResponse.status}): ${errText}`);
+      }
+
+      const sttResult = await sttResponse.json() as { text: string };
+      const transcribedText = sttResult.text?.trim();
+
+      if (!transcribedText) {
+        await this.adapter.sendMessage({
+          chatId: message.chatId,
+          text: 'Could not transcribe your voice message. Please try again or send text.',
+        });
+        return;
+      }
+
+      this.logger.info(`Transcribed voice: "${transcribedText.substring(0, 100)}..."`);
+
+      // Route the transcribed text through the normal agent pipeline
+      const textMessage: InboundMessage = {
+        ...message,
+        text: transcribedText,
+      };
+      await this.routeToAgent(textMessage);
+    } catch (error) {
+      this.logger.error('Error handling voice message:', error);
+      try {
+        await this.adapter.sendMessage({
+          chatId: message.chatId,
+          text: 'Sorry, I could not process your voice message. Please try sending text instead.',
+        });
+      } catch {
+        this.logger.error('Failed to send voice error message');
+      }
+    } finally {
+      setTimeout(() => this.processingMessages.delete(dedupKey), 30000);
     }
   }
 

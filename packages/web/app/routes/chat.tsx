@@ -18,6 +18,7 @@ import {
   Loader2,
   MessageSquare,
   Trash2,
+  ExternalLink,
 } from "lucide-react";
 
 // ============================================================
@@ -386,18 +387,28 @@ function ChatPageComponent() {
                   >
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                   </div>
-                  <p
-                    className={`text-xs mt-1 px-1 ${
+                  <div
+                    className={`flex items-center gap-2 text-xs mt-1 px-1 ${
                       msg.role === "user"
-                        ? "text-right text-muted-foreground"
+                        ? "justify-end text-muted-foreground"
                         : "text-muted-foreground"
                     }`}
                   >
-                    {new Date(msg.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
+                    <span>
+                      {new Date(msg.createdAt).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    {msg.role === "assistant" && msg.traceId && (
+                      <a
+                        href={`/runs/${msg.traceId}`}
+                        className="inline-flex items-center gap-1 text-primary/70 hover:text-primary transition-colors"
+                      >
+                        View Run <ExternalLink className="w-3 h-3" />
+                      </a>
+                    )}
+                  </div>
                 </div>
                 {msg.role === "user" && (
                   <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
