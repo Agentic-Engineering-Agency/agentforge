@@ -5,16 +5,32 @@ import { mutation, query } from "./_generated/server";
 export const list = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
     category: v.optional(v.string()),
     isInstalled: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    if (args.projectId) {
+      const skills = await ctx.db
+        .query("skills")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
+
+      if (args.category) {
+        return skills.filter((s) => s.category === args.category);
+      }
+      if (args.isInstalled !== undefined) {
+        return skills.filter((s) => s.isInstalled === args.isInstalled);
+      }
+      return skills;
+    }
+
     if (args.category) {
       const skills = await ctx.db
         .query("skills")
         .withIndex("byCategory", (q) => q.eq("category", args.category!))
         .collect();
-      
+
       if (args.userId) {
         return skills.filter((s) => s.userId === args.userId);
       }
@@ -23,26 +39,26 @@ export const list = query({
       }
       return skills;
     }
-    
+
     if (args.isInstalled !== undefined) {
       const skills = await ctx.db
         .query("skills")
         .withIndex("byIsInstalled", (q) => q.eq("isInstalled", args.isInstalled!))
         .collect();
-      
+
       if (args.userId) {
         return skills.filter((s) => s.userId === args.userId);
       }
       return skills;
     }
-    
+
     if (args.userId) {
       return await ctx.db
         .query("skills")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
         .collect();
     }
-    
+
     return await ctx.db.query("skills").collect();
   },
 });
@@ -59,17 +75,26 @@ export const get = query({
 export const listInstalled = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
+    if (args.projectId) {
+      const skills = await ctx.db
+        .query("skills")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
+      return skills.filter((s) => s.isInstalled);
+    }
+
     const skills = await ctx.db
       .query("skills")
       .withIndex("byIsInstalled", (q) => q.eq("isInstalled", true))
       .collect();
-    
+
     if (args.userId) {
       return skills.filter((s) => s.userId === args.userId);
     }
-    
+
     return skills;
   },
 });
@@ -88,6 +113,7 @@ export const create = mutation({
     code: v.string(),
     schema: v.optional(v.any()),
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const now = Date.now();

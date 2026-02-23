@@ -6,12 +6,21 @@ export const list = query({
   args: {
     level: v.optional(v.string()),
     source: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
     limit: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    let q = ctx.db.query("logs").withIndex("byTimestamp").order("desc");
+    let results;
 
-    const results = await q.collect();
+    if (args.projectId) {
+      results = await ctx.db
+        .query("logs")
+        .withIndex("byProjectAndTimestamp", (q) => q.eq("projectId", args.projectId!))
+        .order("desc")
+        .collect();
+    } else {
+      results = await ctx.db.query("logs").withIndex("byTimestamp").order("desc").collect();
+    }
 
     let filtered = results;
     if (args.level) {
@@ -38,6 +47,7 @@ export const add = mutation({
     message: v.string(),
     metadata: v.optional(v.any()),
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("logs", {
