@@ -188,6 +188,32 @@ export function parseModelString(modelString: string): {
   };
 }
 
+// ─── Workflow Helpers ─────────────────────────────────────────────────────────
+
+/**
+ * Re-export Mastra workflow primitives for use in AgentForge workflow definitions.
+ */
+export { createWorkflow, createStep } from "@mastra/core/workflows";
+
+/**
+ * Create a Mastra instance pre-configured with one or more workflow definitions.
+ */
+export function createMastraInstanceWithWorkflows(config?: {
+  apiKeys?: Record<string, string>;
+  workflows?: Record<string, any>;
+}): Mastra {
+  const mastraConfig: any = {};
+  if (config?.apiKeys) {
+    mastraConfig.apiKeys = config.apiKeys;
+  }
+  if (config?.workflows) {
+    mastraConfig.workflows = config.workflows;
+  }
+  return new Mastra(mastraConfig);
+}
+
+// ─── Cost Estimation ──────────────────────────────────────────────────────────
+
 /**
  * Estimate token cost for a given model and token count
  */
