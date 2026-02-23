@@ -1,14 +1,12 @@
 import { Agent as MastraAgent } from '@mastra/core/agent';
-import type { LanguageModelV1 } from 'ai';
 import type { MCPServer } from './mcp-server.js';
 
 /**
  * Supported model types for AgentForge agents.
  *
- * - `LanguageModelV1`: Any AI SDK v4 model instance (e.g., `openai('gpt-4o')`)
- * - `string`: A Mastra model router ID (e.g., `'openai/gpt-4o'`)
+ * - `string`: A Mastra model router ID in `"provider/model-name"` format (e.g., `'openai/gpt-4o'`)
  */
-export type AgentModel = LanguageModelV1 | string;
+export type AgentModel = string;
 
 /**
  * Configuration for creating an AgentForge Agent.
@@ -21,20 +19,11 @@ export interface AgentConfig {
   /** The system prompt or instructions for the agent. */
   instructions: string;
   /**
-   * The language model to use. Accepts either:
-   * - A `LanguageModelV1` instance (e.g., from `@ai-sdk/openai`)
-   * - A string model ID (e.g., `'openai/gpt-4o'`)
+   * The language model to use. Accepts a Mastra model router string ID
+   * in `"provider/model-name"` format.
    *
    * @example
    * ```typescript
-   * import { openai } from '@ai-sdk/openai';
-   *
-   * // Using an AI SDK model instance (BYOK)
-   * const agent = new Agent({
-   *   model: openai('gpt-4o-mini'),
-   *   // ...
-   * });
-   *
    * // Using a Mastra model router string
    * const agent = new Agent({
    *   model: 'openai/gpt-4o-mini',
@@ -69,16 +58,14 @@ export interface StreamChunk {
  * The core Agent class for the AgentForge framework.
  *
  * Wraps the Mastra Agent to provide a simplified, curated API for
- * creating and interacting with AI agents. Supports any AI SDK-compatible
- * model provider (OpenAI, Anthropic, Google, etc.) via BYOK (Bring Your Own Key),
- * or Mastra model router string IDs.
+ * creating and interacting with AI agents. Uses Mastra model router
+ * string IDs (e.g., `'openai/gpt-4o'`) for all model configuration.
  *
  * Tools can be provided at construction time via the `tools` config option,
  * or added dynamically after construction using the `addTools()` method.
  *
  * @example
  * ```typescript
- * import { openai } from '@ai-sdk/openai';
  * import { Agent, MCPServer } from '@agentforge-ai/core';
  *
  * const tools = new MCPServer();
@@ -88,7 +75,7 @@ export interface StreamChunk {
  *   id: 'my-agent',
  *   name: 'My Agent',
  *   instructions: 'You are a helpful assistant.',
- *   model: openai('gpt-4o-mini'),
+ *   model: 'openai/gpt-4o-mini',
  *   tools: tools,
  * });
  *
@@ -241,7 +228,7 @@ export class Agent {
       id: this.id,
       name: this.name,
       instructions: this.instructions,
-      model: this.model as Parameters<typeof MastraAgent.prototype.generate>[0] extends { model?: infer M } ? M : never,
+      model: this.model,
       ...(Object.keys(toolsRecord).length > 0 ? { tools: toolsRecord as Record<string, never> } : {}),
     });
   }
