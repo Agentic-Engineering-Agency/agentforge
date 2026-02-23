@@ -4,6 +4,12 @@ import path from 'node:path';
 const e2eDir = path.dirname(new URL(import.meta.url).pathname);
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      '@agentforge-ai/core': path.resolve(e2eDir, '../../packages/core/src'),
+      '@agentforge-ai/cli/src': path.resolve(e2eDir, '../../packages/cli/src'),
+    },
+  },
   test: {
     globals: true,
     environment: 'node',
