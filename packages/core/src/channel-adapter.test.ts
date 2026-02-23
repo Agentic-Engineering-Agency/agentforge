@@ -541,3 +541,487 @@ describe('Zod Schemas', () => {
     expect(result.success).toBe(true);
   });
 });
+
+// =====================================================
+// New Integration Tests (AGE-118 / SPEC-20260223-001)
+// =====================================================
+
+// Second mock platform for multi-channel tests
+class AltAdapter extends ChannelAdapter {
+  readonly platform = 'alt';
+  public lastSentMessage: OutboundMessage | null = null;
+
+  async connect(_config: ChannelConfig): Promise<void> {}
+  async disconnect(): Promise<void> {}
+  async sendMessage(message: OutboundMessage): Promise<SendResult> {
+    this.lastSentMessage = message;
+    return { success: true, platformMessageId: `alt-${Date.now()}`, deliveredAt: new Date() };
+  }
+  getCapabilities(): ChannelCapabilities {
+    return {
+      supportedMedia: ['image', 'voice_note'],
+      maxTextLength: 2000,
+      supportsThreads: false,
+      supportsReactions: false,
+      supportsEditing: false,
+      supportsDeleting: false,
+      supportsTypingIndicator: false,
+      supportsReadReceipts: false,
+      supportsActions: false,
+      supportsGroupChat: true,
+      supportsMarkdown: false,
+    };
+  }
+  async healthCheck(): Promise<{ status: HealthStatus; details?: string }> {
+    return { status: 'healthy' };
+  }
+  public testEmitMessage(msg: InboundMessage): void {
+    this.emitMessage(msg);
+  }
+}
+
+describe('Multi-channel routing', () => {
+  let registry: ChannelRegistry;
+
+  beforeEach(() => {
+    registry = new ChannelRegistry();
+    registry.registerFactory('mock', () => new MockAdapter());
+    registry.registerFactory('alt', () => new AltAdapter());
+  });
+
+  afterEach(async () => {
+    await registry.shutdown();
+  });
+
+  it('should route messages from two adapters independently', async () => {
+    const mockEvents: ChannelEvent[] = [];
+    const altEvents: ChannelEvent[] = [];
+
+    const mockAdapter = await registry.createAdapter(
+      createMockConfig({ id: 'mock-1', platform: 'mock' })
+    );
+    const altAdapter = await registry.createAdapter(
+      createMockConfig({ id: 'alt-1', platform: 'alt' })
+    );
+
+    mockAdapter.on((e) => { if (e.type === 'message') mockEvents.push(e); });
+    altAdapter.on((e) => { if (e.type === 'message') altEvents.push(e); });
+
+    const mockMsg: InboundMessage = { ...createMockInboundMessage(), channelId: 'mock-1', platform: 'mock' };
+    const altMsg: InboundMessage = { ...createMockInboundMessage(), channelId: 'alt-1', platform: 'alt', platformMessageId: 'alt-msg-1' };
+
+    (mockAdapter as MockAdapter).testEmitMessage(mockMsg);
+    (altAdapter as AltAdapter).testEmitMessage(altMsg);
+
+    expect(mockEvents).toHaveLength(1);
+    expect((mockEvents[0].data as InboundMessage).platform).toBe('mock');
+    expect(altEvents).toHaveLength(1);
+    expect((altEvents[0].data as InboundMessage).platform).toBe('alt');
+  });
+
+  it('should not cross-contaminate messages between adapters', async () => {
+    const altEvents: ChannelEvent[] = [];
+
+    const mockAdapter = await registry.createAdapter(
+      createMockConfig({ id: 'mock-2', platform: 'mock' })
+    );
+    const altAdapter = await registry.createAdapter(
+      createMockConfig({ id: 'alt-2', platform: 'alt' })
+    );
+
+    altAdapter.on((e) => { if (e.type === 'message') altEvents.push(e); });
+
+    // Only emit on mockAdapter — altAdapter handler must NOT fire
+    (mockAdapter as MockAdapter).testEmitMessage(createMockInboundMessage());
+
+    expect(altEvents).toHaveLength(0);
+  });
+
+  it('should return all adapters from getAllAdapters', async () => {
+    await registry.createAdapter(createMockConfig({ id: 'mc-1', platform: 'mock' }));
+    await registry.createAdapter(createMockConfig({ id: 'ac-1', platform: 'alt' }));
+
+    const all = registry.getAllAdapters();
+    expect(all.size).toBe(2);
+    expect(all.has('mc-1')).toBe(true);
+    expect(all.has('ac-1')).toBe(true);
+  });
+});
+
+describe('Media type normalization', () => {
+  it('should normalize an image message', () => {
+    const msg = MessageNormalizer.normalize({
+      platformMessageId: 'img-1',
+      channelId: 'ch-1',
+      platform: 'telegram',
+      chatId: 'chat-1',
+      chatType: 'dm',
+      senderId: 'user-1',
+      media: [
+        {
+          type: 'image',
+          url: 'https://example.com/photo.jpg',
+          mimeType: 'image/jpeg',
+          width: 1280,
+          height: 720,
+          caption: 'A nice photo',
+        },
+      ],
+    });
+
+    expect(msg.media).toHaveLength(1);
+    expect(msg.media![0].type).toBe('image');
+    expect(msg.media![0].width).toBe(1280);
+    expect(msg.media![0].caption).toBe('A nice photo');
+  });
+
+  it('should normalize a voice_note message', () => {
+    const msg = MessageNormalizer.normalize({
+      platformMessageId: 'voice-1',
+      channelId: 'ch-1',
+      platform: 'telegram',
+      chatId: 'chat-1',
+      chatType: 'dm',
+      senderId: 'user-1',
+      media: [
+        {
+          type: 'voice_note',
+          url: 'https://example.com/voice.ogg',
+          mimeType: 'audio/ogg',
+          durationSeconds: 12,
+        },
+      ],
+    });
+
+    expect(msg.media).toHaveLength(1);
+    expect(msg.media![0].type).toBe('voice_note');
+    expect(msg.media![0].durationSeconds).toBe(12);
+  });
+
+  it('should emit a reaction event with correct payload', () => {
+    const adapter = new MockAdapter();
+    const events: ChannelEvent[] = [];
+    adapter.on((e) => events.push(e));
+
+    // Access emit through the public testSetConnectionState pathway to simulate an emit
+    // We use a direct cast to access the protected emit for the reaction event
+    (adapter as any).emit({
+      type: 'reaction',
+      data: { messageId: 'msg-1', emoji: '👍', userId: 'user-1', added: true },
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('reaction');
+    const data = (events[0] as Extract<ChannelEvent, { type: 'reaction' }>).data;
+    expect(data.emoji).toBe('👍');
+    expect(data.added).toBe(true);
+  });
+
+  it('should normalize a message with no text or media (empty content)', () => {
+    const msg = MessageNormalizer.normalize({
+      platformMessageId: 'empty-1',
+      channelId: 'ch-1',
+      platform: 'discord',
+      chatId: 'chat-1',
+      chatType: 'group',
+      senderId: 'user-1',
+    });
+
+    expect(msg.text).toBeUndefined();
+    expect(msg.media).toBeUndefined();
+    expect(msg.platformMessageId).toBe('empty-1');
+  });
+});
+
+describe('Connection lifecycle sequence', () => {
+  it('should transition through connecting → connected → disconnected on start/stop', async () => {
+    const adapter = new MockAdapter();
+    const states: ConnectionState[] = [];
+    adapter.on((e) => {
+      if (e.type === 'connection_state') {
+        states.push((e.data as { state: ConnectionState }).state);
+      }
+    });
+
+    await adapter.start(createMockConfig());
+    await adapter.stop();
+
+    expect(states).toEqual(['connecting', 'connected', 'disconnected']);
+  });
+
+  it('should allow restarting after stop', async () => {
+    const adapter = new MockAdapter();
+    await adapter.start(createMockConfig());
+    await adapter.stop();
+
+    // Restart should succeed — not throw
+    await adapter.start(createMockConfig({ id: 'restart-test' }));
+    expect(adapter.getConnectionState()).toBe('connected');
+    await adapter.stop();
+  });
+
+  it('should emit error state when connect fails with autoReconnect disabled', async () => {
+    const adapter = new MockAdapter();
+    adapter.shouldFailConnect = true;
+    const states: ConnectionState[] = [];
+    adapter.on((e) => {
+      if (e.type === 'connection_state') {
+        states.push((e.data as { state: ConnectionState }).state);
+      }
+    });
+
+    await expect(adapter.start(createMockConfig({ autoReconnect: false }))).rejects.toThrow();
+    expect(states).toContain('error');
+  });
+});
+
+describe('Health check statuses', () => {
+  let registry: ChannelRegistry;
+
+  beforeEach(() => {
+    registry = new ChannelRegistry();
+    registry.registerFactory('mock', () => new MockAdapter());
+  });
+
+  afterEach(async () => {
+    await registry.shutdown();
+  });
+
+  it('should include platform name in healthCheckAll results', async () => {
+    await registry.createAdapter(createMockConfig({ id: 'hp-1' }));
+    const results = await registry.healthCheckAll();
+    expect(results.get('hp-1')?.platform).toBe('mock');
+  });
+
+  it('should report degraded status when adapter returns degraded', async () => {
+    // Override healthCheck at instance level after creation
+    const adapter = (await registry.createAdapter(createMockConfig({ id: 'deg-1' }))) as MockAdapter;
+    vi.spyOn(adapter, 'healthCheck').mockResolvedValueOnce({ status: 'degraded', details: 'high latency' });
+
+    const results = await registry.healthCheckAll();
+    expect(results.get('deg-1')?.status).toBe('degraded');
+    expect(results.get('deg-1')?.details).toBe('high latency');
+  });
+
+  it('should catch thrown errors from healthCheck and report unhealthy', async () => {
+    const adapter = (await registry.createAdapter(createMockConfig({ id: 'throw-1' }))) as MockAdapter;
+    vi.spyOn(adapter, 'healthCheck').mockRejectedValueOnce(new Error('network timeout'));
+
+    const results = await registry.healthCheckAll();
+    expect(results.get('throw-1')?.status).toBe('unhealthy');
+    expect(results.get('throw-1')?.details).toContain('network timeout');
+  });
+});
+
+describe('Connection state event emission', () => {
+  it('should emit connection_state event with correct state when setConnectionState is called', () => {
+    const adapter = new MockAdapter();
+    const states: Array<{ state: ConnectionState; error?: string }> = [];
+    adapter.on((e) => {
+      if (e.type === 'connection_state') {
+        states.push(e.data as { state: ConnectionState; error?: string });
+      }
+    });
+
+    adapter.testSetConnectionState('connecting');
+    adapter.testSetConnectionState('connected');
+    adapter.testSetConnectionState('error', 'something broke');
+
+    expect(states[0].state).toBe('connecting');
+    expect(states[1].state).toBe('connected');
+    expect(states[2].state).toBe('error');
+    expect(states[2].error).toBe('something broke');
+  });
+});
+
+describe('Registry edge cases', () => {
+  let registry: ChannelRegistry;
+
+  beforeEach(() => {
+    registry = new ChannelRegistry();
+    registry.registerFactory('mock', () => new MockAdapter());
+  });
+
+  afterEach(async () => {
+    await registry.shutdown();
+  });
+
+  it('should not throw when removing a non-existent adapter', async () => {
+    await expect(registry.removeAdapter('does-not-exist')).resolves.not.toThrow();
+  });
+
+  it('getAllAdapters should return a defensive copy (mutations do not affect registry)', async () => {
+    await registry.createAdapter(createMockConfig({ id: 'copy-test' }));
+    const snapshot = registry.getAllAdapters();
+    snapshot.delete('copy-test');
+
+    // Registry still has the adapter
+    expect(registry.getAdapter('copy-test')).toBeDefined();
+  });
+
+  it('should allow re-registering a factory after unregistering', () => {
+    registry.unregisterFactory('mock');
+    expect(() => registry.registerFactory('mock', () => new MockAdapter())).not.toThrow();
+    expect(registry.getRegisteredPlatforms()).toContain('mock');
+  });
+});
+
+describe('MessageNormalizer missing/optional fields', () => {
+  it('should inject a default timestamp when none is provided', () => {
+    const before = new Date();
+    const msg = MessageNormalizer.normalize({
+      platformMessageId: 'ts-1',
+      channelId: 'ch-1',
+      platform: 'slack',
+      chatId: 'chat-1',
+      chatType: 'channel',
+      senderId: 'user-1',
+    });
+    const after = new Date();
+
+    expect(msg.timestamp.getTime()).toBeGreaterThanOrEqual(before.getTime());
+    expect(msg.timestamp.getTime()).toBeLessThanOrEqual(after.getTime());
+  });
+
+  it('should preserve explicit timestamp when provided', () => {
+    const ts = new Date('2025-01-01T00:00:00Z');
+    const msg = MessageNormalizer.normalize({
+      platformMessageId: 'ts-2',
+      channelId: 'ch-1',
+      platform: 'slack',
+      chatId: 'chat-1',
+      chatType: 'channel',
+      senderId: 'user-1',
+      timestamp: ts,
+    });
+
+    expect(msg.timestamp).toEqual(ts);
+  });
+
+  it('should leave sender optional fields undefined when not provided', () => {
+    const msg = MessageNormalizer.normalize({
+      platformMessageId: 'sender-1',
+      channelId: 'ch-1',
+      platform: 'discord',
+      chatId: 'chat-1',
+      chatType: 'dm',
+      senderId: 'user-min',
+    });
+
+    expect(msg.sender.platformUserId).toBe('user-min');
+    expect(msg.sender.displayName).toBeUndefined();
+    expect(msg.sender.username).toBeUndefined();
+    expect(msg.sender.avatarUrl).toBeUndefined();
+  });
+
+  it('should handle isEdit flag correctly', () => {
+    const msg = MessageNormalizer.normalize({
+      platformMessageId: 'edit-1',
+      channelId: 'ch-1',
+      platform: 'telegram',
+      chatId: 'chat-1',
+      chatType: 'group',
+      senderId: 'user-1',
+      text: 'edited text',
+      isEdit: true,
+    });
+
+    expect(msg.isEdit).toBe(true);
+  });
+
+  it('should strip markdown headers and lists correctly', () => {
+    const md = '# Title\n## Subtitle\n- item one\n* item two';
+    const plain = MessageNormalizer.markdownToPlainText(md);
+    expect(plain).not.toContain('#');
+    expect(plain).toContain('• item one');
+    expect(plain).toContain('• item two');
+    expect(plain).toContain('Title');
+  });
+});
+
+describe('Concurrent message processing', () => {
+  it('should handle multiple simultaneous sendMessage calls independently', async () => {
+    const adapter = new MockAdapter();
+
+    const results = await Promise.all([
+      adapter.sendMessage({ chatId: 'chat-1', text: 'msg-a' }),
+      adapter.sendMessage({ chatId: 'chat-2', text: 'msg-b' }),
+      adapter.sendMessage({ chatId: 'chat-3', text: 'msg-c' }),
+    ]);
+
+    expect(results).toHaveLength(3);
+    expect(results.every((r) => r.success)).toBe(true);
+    expect(results.every((r) => r.platformMessageId !== undefined)).toBe(true);
+  });
+
+  it('should handle concurrent inbound events without dropping any', () => {
+    const adapter = new MockAdapter();
+    const received: string[] = [];
+    adapter.on((e) => {
+      if (e.type === 'message') {
+        received.push((e.data as InboundMessage).platformMessageId);
+      }
+    });
+
+    const ids = ['m1', 'm2', 'm3', 'm4', 'm5'];
+    ids.forEach((id) => {
+      adapter.testEmitMessage({ ...createMockInboundMessage(), platformMessageId: id });
+    });
+
+    expect(received).toHaveLength(ids.length);
+    expect(received).toEqual(ids);
+  });
+});
+
+describe('Adapter configuration validation (Zod)', () => {
+  it('should reject config with missing credentials field', () => {
+    const result = channelConfigSchema.safeParse({
+      id: 'bad-1',
+      platform: 'telegram',
+      orgId: 'org-1',
+      agentId: 'agent-1',
+      enabled: true,
+      // credentials omitted
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should reject config with invalid webhookUrl', () => {
+    const result = channelConfigSchema.safeParse({
+      id: 'bad-2',
+      platform: 'telegram',
+      orgId: 'org-1',
+      agentId: 'agent-1',
+      enabled: true,
+      credentials: {},
+      webhookUrl: 'not-a-url',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('should accept config with valid webhookUrl', () => {
+    const result = channelConfigSchema.safeParse({
+      id: 'good-1',
+      platform: 'telegram',
+      orgId: 'org-1',
+      agentId: 'agent-1',
+      enabled: true,
+      credentials: { botToken: 'abc' },
+      webhookUrl: 'https://example.com/webhook',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('should reject non-positive reconnectIntervalMs', () => {
+    const result = channelConfigSchema.safeParse({
+      id: 'bad-3',
+      platform: 'telegram',
+      orgId: 'org-1',
+      agentId: 'agent-1',
+      enabled: true,
+      credentials: {},
+      reconnectIntervalMs: -1000,
+    });
+    expect(result.success).toBe(false);
+  });
+});

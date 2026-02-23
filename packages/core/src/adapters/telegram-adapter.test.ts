@@ -431,6 +431,189 @@ describe('TelegramAdapter', () => {
       expect(url).toContain('file/bottest-bot-token/photos/file_1.jpg');
     });
   });
+
+  describe('voice message normalization', () => {
+    beforeEach(async () => {
+      mockApiResponse({ id: 123, is_bot: true, username: 'test_bot' });
+      mockApiResponse(true); // deleteWebhook
+      mockApiResponse([]); // getUpdates
+      await adapter.start(createConfig());
+    });
+
+    it('should normalize voice note as voice_note media attachment', () => {
+      const events: ChannelEvent[] = [];
+      adapter.on((event) => events.push(event));
+
+      const voiceMsg: TelegramMessage = {
+        message_id: 300,
+        from: { id: 456, is_bot: false, first_name: 'Test', username: 'testuser' },
+        chat: { id: 456, type: 'private' },
+        date: Math.floor(Date.now() / 1000),
+        voice: {
+          file_id: 'voice-file-id',
+          file_unique_id: 'vf1',
+          duration: 15,
+          mime_type: 'audio/ogg',
+          file_size: 12000,
+        },
+      };
+
+      adapter.handleWebhookUpdate({ update_id: 100, message: voiceMsg });
+
+      const msgEvents = events.filter((e) => e.type === 'message');
+      expect(msgEvents).toHaveLength(1);
+      const msg = msgEvents[0].data as InboundMessage;
+      expect(msg.media).toHaveLength(1);
+      expect(msg.media![0].type).toBe('voice_note');
+      expect(msg.media![0].url).toContain('voice-file-id');
+      expect(msg.media![0].durationSeconds).toBe(15);
+      expect(msg.media![0].mimeType).toBe('audio/ogg');
+    });
+  });
+
+  describe('thread reply handling', () => {
+    beforeEach(async () => {
+      mockApiResponse({ id: 123, is_bot: true, username: 'test_bot' });
+      mockApiResponse(true); // deleteWebhook
+      mockApiResponse([]); // getUpdates
+      await adapter.start(createConfig());
+    });
+
+    it('should capture reply_to_message as replyToId in normalized message', () => {
+      const events: ChannelEvent[] = [];
+      adapter.on((event) => events.push(event));
+
+      const replyMsg: TelegramMessage = {
+        message_id: 201,
+        from: { id: 456, is_bot: false, first_name: 'Test', username: 'testuser' },
+        chat: { id: 456, type: 'private' },
+        date: Math.floor(Date.now() / 1000),
+        text: 'This is a reply',
+        reply_to_message: {
+          message_id: 100,
+          from: { id: 789, is_bot: true, first_name: 'Bot' },
+          chat: { id: 456, type: 'private' },
+          date: Math.floor(Date.now() / 1000) - 60,
+          text: 'Original message',
+        },
+      };
+
+      adapter.handleWebhookUpdate({ update_id: 10, message: replyMsg });
+
+      const msgEvents = events.filter((e) => e.type === 'message');
+      expect(msgEvents).toHaveLength(1);
+      const msg = msgEvents[0].data as InboundMessage;
+      expect(msg.replyTo?.platformMessageId).toBe('100');
+      expect(msg.replyTo?.text).toBe('Original message');
+    });
+
+    it('should not set replyToId when message is not a reply', () => {
+      const events: ChannelEvent[] = [];
+      adapter.on((event) => events.push(event));
+
+      adapter.handleWebhookUpdate({ update_id: 11, message: createTextMessage('Not a reply') });
+
+      const msgEvents = events.filter((e) => e.type === 'message');
+      expect(msgEvents).toHaveLength(1);
+      const msg = msgEvents[0].data as InboundMessage;
+      expect(msg.replyTo).toBeUndefined();
+    });
+  });
+
+  describe('inline keyboard structure', () => {
+    beforeEach(async () => {
+      mockApiResponse({ id: 123, is_bot: true, username: 'test_bot' });
+      mockApiResponse(true); // deleteWebhook
+      mockApiResponse([]); // getUpdates
+      await adapter.start(createConfig());
+    });
+
+    it('should group buttons into rows of max 3', async () => {
+      mockApiResponse({ message_id: 800, date: Math.floor(Date.now() / 1000) });
+
+      await adapter.sendMessage({
+        chatId: '456',
+        text: 'Pick:',
+        actions: [
+          { type: 'button', label: 'A', actionId: 'a' },
+          { type: 'button', label: 'B', actionId: 'b' },
+          { type: 'button', label: 'C', actionId: 'c' },
+          { type: 'button', label: 'D', actionId: 'd' },
+        ],
+      });
+
+      const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+      const body = JSON.parse(lastCall[1].body);
+      const keyboard = JSON.parse(body.reply_markup);
+      // 4 buttons → first row has 3, second row has 1
+      expect(keyboard.inline_keyboard).toHaveLength(2);
+      expect(keyboard.inline_keyboard[0]).toHaveLength(3);
+      expect(keyboard.inline_keyboard[1]).toHaveLength(1);
+    });
+
+    it('should set url on url_button and callback_data on regular button', async () => {
+      mockApiResponse({ message_id: 801, date: Math.floor(Date.now() / 1000) });
+
+      await adapter.sendMessage({
+        chatId: '456',
+        text: 'Pick:',
+        actions: [
+          { type: 'button', label: 'Action', actionId: 'act_1' },
+          { type: 'url_button', label: 'Link', actionId: 'link_1', url: 'https://example.com' },
+        ],
+      });
+
+      const lastCall = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
+      const body = JSON.parse(lastCall[1].body);
+      const keyboard = JSON.parse(body.reply_markup);
+      const row = keyboard.inline_keyboard[0];
+      expect(row[0].callback_data).toBe('act_1');
+      expect(row[0].url).toBeUndefined();
+      expect(row[1].url).toBe('https://example.com');
+      expect(row[1].callback_data).toBeUndefined();
+    });
+  });
+
+  describe('webhook mode setup', () => {
+    it('should call setWebhook when useWebhook is true', async () => {
+      mockApiResponse({ id: 123, is_bot: true, username: 'test_bot' }); // getMe
+      mockApiResponse(true); // setWebhook
+
+      await adapter.start(
+        createConfig({
+          settings: {
+            useWebhook: true,
+            webhookUrl: 'https://example.com/webhook',
+            webhookSecret: 'secret-token',
+            botUsername: 'test_bot',
+            groupMentionOnly: true,
+          },
+        })
+      );
+
+      // Find the setWebhook call
+      const webhookCall = mockFetch.mock.calls.find((call) =>
+        (call[0] as string).includes('setWebhook')
+      );
+      expect(webhookCall).toBeDefined();
+      const body = JSON.parse(webhookCall![1].body);
+      expect(body.url).toBe('https://example.com/webhook');
+      expect(body.secret_token).toBe('secret-token');
+    });
+
+    it('should call deleteWebhook when useWebhook is false (polling mode)', async () => {
+      mockApiResponse({ id: 123, is_bot: true, username: 'test_bot' }); // getMe
+      mockApiResponse(true); // deleteWebhook
+      mockApiResponse([]); // first poll
+
+      await adapter.start(createConfig({ settings: { useWebhook: false } }));
+
+      const deleteWebhookCall = mockFetch.mock.calls.find((call) =>
+        (call[0] as string).includes('deleteWebhook')
+      );
+      expect(deleteWebhookCall).toBeDefined();
+    });
+  });
 });
 
 // Helper to create an update from a message

@@ -96,6 +96,119 @@ describe('TelegramChannel', () => {
   });
 });
 
+describe('TelegramChannel — lifecycle and routing', () => {
+  let mockFetch: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    mockFetch = vi.fn();
+    global.fetch = mockFetch as any;
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function mockTelegramApi(result: unknown, ok = true) {
+    mockFetch.mockResolvedValueOnce({
+      json: () => Promise.resolve({ ok, result }),
+    });
+  }
+
+  it('should set isRunning to true after start and false after stop', async () => {
+    // getMe, deleteWebhook, getUpdates (first poll)
+    mockTelegramApi({ id: 1, is_bot: true, username: 'bot' });
+    mockTelegramApi(true);
+    mockTelegramApi([]);
+    // agents:get query
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ value: { name: 'TestAgent', model: 'gpt-4o', provider: 'openai' } }),
+    });
+
+    const channel = new TelegramChannel(createTestConfig());
+    await channel.start();
+    expect(channel.running).toBe(true);
+
+    await channel.stop();
+    expect(channel.running).toBe(false);
+  });
+
+  it('should not start again if already running', async () => {
+    mockTelegramApi({ id: 1, is_bot: true, username: 'bot' });
+    mockTelegramApi(true);
+    mockTelegramApi([]);
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: () => Promise.resolve({ value: { name: 'A', model: 'm', provider: 'p' } }),
+    });
+
+    const channel = new TelegramChannel(createTestConfig());
+    await channel.start();
+
+    // Record how many fetch calls happened
+    const callCountAfterStart = mockFetch.mock.calls.length;
+
+    // Second start should be a no-op (logs a warning)
+    await channel.start();
+    expect(mockFetch.mock.calls.length).toBe(callCountAfterStart);
+
+    await channel.stop();
+  });
+
+  it('should route voice message type differently from text messages', () => {
+    const channel = new TelegramChannel(createTestConfig());
+    // Expose private method for testing
+    const handleInbound = (channel as any).handleInboundMessage.bind(channel);
+
+    // Spy on handleVoiceMessage
+    const voiceSpy = vi.spyOn(channel as any, 'handleVoiceMessage').mockResolvedValue(undefined);
+    const routeSpy = vi.spyOn(channel as any, 'routeToAgent').mockResolvedValue(undefined);
+
+    // Voice-only message (no text)
+    const voiceMsg = {
+      platformMessageId: 'v1',
+      channelId: 'ch1',
+      platform: 'telegram',
+      chatId: '123',
+      chatType: 'dm' as const,
+      sender: { platformUserId: '456', displayName: 'Alice' },
+      text: '',
+      media: [{ type: 'voice_note' as const, url: 'telegram:file:voice-id' }],
+      timestamp: new Date(),
+      isEdit: false,
+    };
+
+    handleInbound(voiceMsg);
+    expect(voiceSpy).toHaveBeenCalled();
+    expect(routeSpy).not.toHaveBeenCalled();
+  });
+
+  it('should skip empty text messages without media', () => {
+    const channel = new TelegramChannel(createTestConfig());
+    const handleInbound = (channel as any).handleInboundMessage.bind(channel);
+
+    const routeSpy = vi.spyOn(channel as any, 'routeToAgent').mockResolvedValue(undefined);
+    const voiceSpy = vi.spyOn(channel as any, 'handleVoiceMessage').mockResolvedValue(undefined);
+
+    const emptyMsg = {
+      platformMessageId: 'e1',
+      channelId: 'ch1',
+      platform: 'telegram',
+      chatId: '123',
+      chatType: 'dm' as const,
+      sender: { platformUserId: '456', displayName: 'Bob' },
+      text: '   ',
+      media: undefined,
+      timestamp: new Date(),
+      isEdit: false,
+    };
+
+    handleInbound(emptyMsg);
+    expect(routeSpy).not.toHaveBeenCalled();
+    expect(voiceSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe('startTelegramChannel', () => {
   const originalEnv = process.env;
 
