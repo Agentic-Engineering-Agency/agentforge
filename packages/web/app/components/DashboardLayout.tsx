@@ -19,6 +19,7 @@ const navItems = [
       { href: "/", label: "Overview", icon: LayoutDashboard },
       { href: "/sessions", label: "Sessions", icon: Activity },
       { href: "/usage", label: "Usage", icon: Clock },
+      { href: "/observability", label: "Observability", icon: Activity },
       { href: "/cron", label: "Cron Jobs", icon: Clock },
     ],
   },

@@ -14,6 +14,7 @@ import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
 import { Route as ProjectsRouteImport } from './routes/projects'
+import { Route as ObservabilityRouteImport } from './routes/observability'
 import { Route as FilesRouteImport } from './routes/files'
 import { Route as CronRouteImport } from './routes/cron'
 import { Route as ConnectionsRouteImport } from './routes/connections'
@@ -44,6 +45,11 @@ const SessionsRoute = SessionsRouteImport.update({
 const ProjectsRoute = ProjectsRouteImport.update({
   id: '/projects',
   path: '/projects',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ObservabilityRoute = ObservabilityRouteImport.update({
+  id: '/observability',
+  path: '/observability',
   getParentRoute: () => rootRouteImport,
 } as any)
 const FilesRoute = FilesRouteImport.update({
@@ -84,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/connections': typeof ConnectionsRoute
   '/cron': typeof CronRoute
   '/files': typeof FilesRoute
+  '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
@@ -97,6 +104,7 @@ export interface FileRoutesByTo {
   '/connections': typeof ConnectionsRoute
   '/cron': typeof CronRoute
   '/files': typeof FilesRoute
+  '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
@@ -111,6 +119,7 @@ export interface FileRoutesById {
   '/connections': typeof ConnectionsRoute
   '/cron': typeof CronRoute
   '/files': typeof FilesRoute
+  '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
@@ -126,6 +135,7 @@ export interface FileRouteTypes {
     | '/connections'
     | '/cron'
     | '/files'
+    | '/observability'
     | '/projects'
     | '/sessions'
     | '/settings'
@@ -139,6 +149,7 @@ export interface FileRouteTypes {
     | '/connections'
     | '/cron'
     | '/files'
+    | '/observability'
     | '/projects'
     | '/sessions'
     | '/settings'
@@ -152,6 +163,7 @@ export interface FileRouteTypes {
     | '/connections'
     | '/cron'
     | '/files'
+    | '/observability'
     | '/projects'
     | '/sessions'
     | '/settings'
@@ -166,6 +178,7 @@ export interface RootRouteChildren {
   ConnectionsRoute: typeof ConnectionsRoute
   CronRoute: typeof CronRoute
   FilesRoute: typeof FilesRoute
+  ObservabilityRoute: typeof ObservabilityRoute
   ProjectsRoute: typeof ProjectsRoute
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
@@ -208,6 +221,13 @@ declare module '@tanstack/react-router' {
       path: '/projects'
       fullPath: '/projects'
       preLoaderRoute: typeof ProjectsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/observability': {
+      id: '/observability'
+      path: '/observability'
+      fullPath: '/observability'
+      preLoaderRoute: typeof ObservabilityRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/files': {
@@ -262,6 +282,7 @@ const rootRouteChildren: RootRouteChildren = {
   ConnectionsRoute: ConnectionsRoute,
   CronRoute: CronRoute,
   FilesRoute: FilesRoute,
+  ObservabilityRoute: ObservabilityRoute,
   ProjectsRoute: ProjectsRoute,
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
