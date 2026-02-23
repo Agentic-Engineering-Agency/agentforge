@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - Unreleased
+
+### Added
+
+- **Skill Marketplace MVP** with search, publish, and featured skills
+- **MCP-Native Architecture** — MCPClient (stdio/HTTP/SSE), MCPDynamicToolLoader for runtime tool discovery
+- **WhatsApp Cloud API** channel adapter with webhook support and voice notes
+- **Slack Bolt.js** channel adapter (`@agentforge-ai/channels-slack`) with Socket Mode and slash commands
+- **Discord** channel adapter (`@agentforge-ai/channels-discord`) with embeds and slash commands
+- **Agent-to-Agent (A2A) protocol** — client, server, registry, streaming task delegation
+- **Channel Adapter Framework** unification — normalized InboundMessage/OutboundMessage across all channels
+- **Live Agent Run View** at `/runs/:runId` in the web dashboard
+- **Voice TTS** (ElevenLabs) + **STT** (Whisper) support via `@agentforge-ai/tools-voice`
+- **Git Tool** — built-in git operations (branch, commit, diff, log, stash)
+- **Browser Automation Tool** — Playwright-based navigate, click, type, screenshot, evaluate
+- **Swarm Orchestration** — parallel multi-agent execution with resource tiers
+- **Comprehensive documentation** — getting started, architecture, channels, skills, MCP, A2A, competitive positioning
+
 ## [0.3.0] - 2026-02-16
 
 ### Added
