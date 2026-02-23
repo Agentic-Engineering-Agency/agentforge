@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/channels-discord",
-  "version": "0.5.4",
+  "version": "0.6.0",
   "description": "Discord channel adapter for AgentForge",
   "type": "module",
   "main": "./dist/index.js",
