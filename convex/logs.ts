@@ -1,36 +1,31 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
 
-// Query: List recent logs
+// Query: List recent logs (paginated)
 export const list = query({
   args: {
     level: v.optional(v.string()),
     source: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
-    limit: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    let results;
+    let q = args.projectId
+      ? ctx.db
+          .query("logs")
+          .withIndex("byProjectAndTimestamp", (q) => q.eq("projectId", args.projectId!))
+          .order("desc")
+      : ctx.db.query("logs").withIndex("byTimestamp").order("desc");
 
-    if (args.projectId) {
-      results = await ctx.db
-        .query("logs")
-        .withIndex("byProjectAndTimestamp", (q) => q.eq("projectId", args.projectId!))
-        .order("desc")
-        .collect();
-    } else {
-      results = await ctx.db.query("logs").withIndex("byTimestamp").order("desc").collect();
-    }
-
-    let filtered = results;
     if (args.level) {
-      filtered = filtered.filter((l) => l.level === args.level);
+      q = q.filter((f) => f.eq(f.field("level"), args.level!)) as typeof q;
     }
     if (args.source) {
-      filtered = filtered.filter((l) => l.source === args.source);
+      q = q.filter((f) => f.eq(f.field("source"), args.source!)) as typeof q;
     }
 
-    return filtered.slice(0, args.limit || 100);
+    return await q.paginate(args.paginationOpts);
   },
 });
 
