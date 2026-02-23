@@ -1,64 +1,65 @@
 import { describe, it, expect } from "vitest";
-import schema from "./schema";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
-// These tests verify the schema structure without requiring a running Convex backend.
-// convex-test-utils is not available in this environment, so we test the schema object directly.
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const schemaSource = readFileSync(join(__dirname, "schema.ts"), "utf-8");
 
-describe("Convex Schema Structure", () => {
-  it("should export a valid schema object", () => {
-    expect(schema).toBeDefined();
-    expect(typeof schema).toBe("object");
+// These tests verify schema structure by parsing the source file.
+// Convex validates the schema at deploy time; these catch structural drift early.
+
+const REQUIRED_TABLES = [
+  "agents",
+  "threads",
+  "messages",
+  "projects",
+  "skills",
+  "usage",
+  "cronJobs",
+  "files",
+  "sessions",
+  "settings",
+  "vault",
+  "workflowDefinitions",
+  "workflowRuns",
+  "workflowSteps",
+];
+
+describe("Convex Schema Structure (source-level)", () => {
+  it("should use defineSchema from convex/server", () => {
+    expect(schemaSource).toContain('import { defineSchema, defineTable } from "convex/server"');
   });
 
-  it("should define the agents table", () => {
-    expect(schema.tables).toHaveProperty("agents");
+  for (const table of REQUIRED_TABLES) {
+    it(`should define the '${table}' table`, () => {
+      // Match table definition: `tableName: defineTable({`
+      const pattern = new RegExp(`${table}:\\s*defineTable\\(`);
+      expect(schemaSource).toMatch(pattern);
+    });
+  }
+
+  it("should reference projectId in the schema", () => {
+    // Project scoping was added in Phase 1 (AGE-106)
+    // Just verify projectId appears multiple times (once per scoped table)
+    const matches = schemaSource.match(/projectId/g) || [];
+    expect(matches.length).toBeGreaterThanOrEqual(8);
   });
 
-  it("should define the threads table", () => {
-    expect(schema.tables).toHaveProperty("threads");
+  it("should define compound indexes for performance", () => {
+    // Compound indexes added per audit findings
+    const expectedIndexes = [
+      "byActiveUser",
+      "byProjectAndInstalled",
+      "byUserAndDefault",
+      "byUserAndTimestamp",
+    ];
+    for (const idx of expectedIndexes) {
+      expect(schemaSource).toContain(idx);
+    }
   });
 
-  it("should define the messages table", () => {
-    expect(schema.tables).toHaveProperty("messages");
-  });
-
-  it("should define the projects table", () => {
-    expect(schema.tables).toHaveProperty("projects");
-  });
-
-  it("should define the skills table", () => {
-    expect(schema.tables).toHaveProperty("skills");
-  });
-
-  it("should define the usage table", () => {
-    expect(schema.tables).toHaveProperty("usage");
-  });
-
-  it("should define the cronJobs table", () => {
-    expect(schema.tables).toHaveProperty("cronJobs");
-  });
-
-  it("should define the files table", () => {
-    expect(schema.tables).toHaveProperty("files");
-  });
-
-  it("should define the sessions table", () => {
-    expect(schema.tables).toHaveProperty("sessions");
-  });
-
-  it("should define the settings table", () => {
-    expect(schema.tables).toHaveProperty("settings");
-  });
-
-  it("should define the vault table", () => {
-    expect(schema.tables).toHaveProperty("vault");
-  });
-
-  it("should define the workflowDefinitions table", () => {
-    expect(schema.tables).toHaveProperty("workflowDefinitions");
-  });
-
-  it("should define the workflowRuns table", () => {
-    expect(schema.tables).toHaveProperty("workflowRuns");
+  it("should export default schema", () => {
+    expect(schemaSource).toMatch(/export default defineSchema\(/);
   });
 });
