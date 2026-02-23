@@ -342,7 +342,7 @@ describe('R2WorkspaceProvider — mocked fetch', () => {
       return;
     }
     const { signRequest } = signerModule;
-    const signed = signRequest({
+    const signed = await signRequest({
       method: 'GET',
       url: 'https://r2.example.com/test-bucket/test.txt',
       headers: { host: 'r2.example.com' },

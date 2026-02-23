@@ -4,7 +4,10 @@
  * Cloudflare R2 WorkspaceProvider implementation.
  *
  * Uses native `fetch()` with AWS SigV4 signing via `./s3-signer.ts`.
- * No external SDK dependencies required.
+ * No external SDK dependencies required. Runtime-agnostic (Workers, Node, Deno, Bun).
+ *
+ * @deprecated The SigV4 signing layer will be replaced by native Cloudflare Workers
+ * R2 bindings (`env.BUCKET.get()`) in Phase 3 (Sprint 3.2, AGE-17).
  *
  * @example
  * ```typescript
@@ -21,6 +24,8 @@
 
 import { signRequest, createPresignedUrl } from './s3-signer.js';
 import type { WorkspaceProvider } from '../workspace.js';
+
+const encoder = new TextEncoder();
 
 export interface R2ProviderConfig {
   bucket: string;
@@ -46,19 +51,21 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
 
   /** Builds the full HTTPS URL for a given object key. */
   private objectUrl(key: string): string {
-    const endpoint = this.config.endpoint ?? `https://s3.${this.config.region ?? 'auto'}.amazonaws.com`;
-    // Ensure endpoint has no trailing slash
+    const endpoint =
+      this.config.endpoint ?? `https://s3.${this.config.region ?? 'auto'}.amazonaws.com`;
     const base = endpoint.replace(/\/$/, '');
-    // URL-encode each path segment of the key
-    const encodedKey = key.split('/').map(encodeURIComponent).join('/');
+    const encodedKey = key
+      .split('/')
+      .map(encodeURIComponent)
+      .join('/');
     return `${base}/${this.config.bucket}/${encodedKey}`;
   }
 
   /** Builds the bucket-level URL (for list, lifecycle, etc.) */
   private bucketUrl(): string {
-    const endpoint = this.config.endpoint ?? `https://s3.${this.config.region ?? 'auto'}.amazonaws.com`;
-    const base = endpoint.replace(/\/$/, '');
-    return `${base}/${this.config.bucket}`;
+    const endpoint =
+      this.config.endpoint ?? `https://s3.${this.config.region ?? 'auto'}.amazonaws.com`;
+    return endpoint.replace(/\/$/, '') + `/${this.config.bucket}`;
   }
 
   private get accessKeyId(): string {
@@ -75,15 +82,15 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
 
   /**
    * Builds signed fetch options for a request.
-   * Returns both the signed headers and any additional fetch init options.
+   * Uses Web Crypto API (async) for SigV4 signing.
    */
-  private buildSignedRequest(
+  private async buildSignedRequest(
     method: string,
     url: string,
-    body?: string | Buffer,
+    body?: string | Uint8Array,
     extraHeaders?: Record<string, string>,
-  ): { url: string; init: RequestInit } {
-    const signed = signRequest({
+  ): Promise<{ url: string; init: RequestInit }> {
+    const signed = await signRequest({
       method,
       url,
       body,
@@ -103,8 +110,7 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
 
     const init: RequestInit = { method, headers };
     if (body !== undefined) {
-      // fetch() accepts string or BufferSource — convert Buffer to Uint8Array
-      init.body = typeof body === 'string' ? body : new Uint8Array(body);
+      init.body = typeof body === 'string' ? body : body.buffer as ArrayBuffer;
     }
 
     return { url, init };
@@ -112,23 +118,28 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
 
   async read(path: string): Promise<string> {
     const url = this.objectUrl(path);
-    const { url: reqUrl, init } = this.buildSignedRequest('GET', url);
+    const { url: reqUrl, init } = await this.buildSignedRequest('GET', url);
 
     const response = await fetch(reqUrl, init);
     if (!response.ok) {
-      throw new Error(`[R2WorkspaceProvider] Failed to read "${path}": HTTP ${response.status} ${response.statusText}`);
+      throw new Error(
+        `[R2WorkspaceProvider] Failed to read "${path}": HTTP ${response.status} ${response.statusText}`,
+      );
     }
 
     return response.text();
   }
 
-  async write(path: string, content: string | Buffer): Promise<void> {
+  async write(path: string, content: string | Uint8Array): Promise<void> {
     const url = this.objectUrl(path);
-    const { url: reqUrl, init } = this.buildSignedRequest('PUT', url, content);
+    const body = typeof content === 'string' ? content : content;
+    const { url: reqUrl, init } = await this.buildSignedRequest('PUT', url, body);
 
     const response = await fetch(reqUrl, init);
     if (!response.ok) {
-      throw new Error(`[R2WorkspaceProvider] Failed to write "${path}": HTTP ${response.status} ${response.statusText}`);
+      throw new Error(
+        `[R2WorkspaceProvider] Failed to write "${path}": HTTP ${response.status} ${response.statusText}`,
+      );
     }
   }
 
@@ -143,11 +154,13 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
       if (continuationToken) params.set('continuation-token', continuationToken);
 
       const url = `${baseUrl}?${params.toString()}`;
-      const { url: reqUrl, init } = this.buildSignedRequest('GET', url);
+      const { url: reqUrl, init } = await this.buildSignedRequest('GET', url);
 
       const response = await fetch(reqUrl, init);
       if (!response.ok) {
-        throw new Error(`[R2WorkspaceProvider] Failed to list objects: HTTP ${response.status} ${response.statusText}`);
+        throw new Error(
+          `[R2WorkspaceProvider] Failed to list objects: HTTP ${response.status} ${response.statusText}`,
+        );
       }
 
       const xml = await response.text();
@@ -163,7 +176,9 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
       const isTruncated = isTruncatedMatch?.[1]?.toLowerCase() === 'true';
 
       if (isTruncated) {
-        const tokenMatch = xml.match(/<NextContinuationToken>([^<]*)<\/NextContinuationToken>/);
+        const tokenMatch = xml.match(
+          /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/,
+        );
         continuationToken = tokenMatch?.[1];
       } else {
         continuationToken = undefined;
@@ -175,12 +190,13 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
 
   async delete(path: string): Promise<void> {
     const url = this.objectUrl(path);
-    const { url: reqUrl, init } = this.buildSignedRequest('DELETE', url);
+    const { url: reqUrl, init } = await this.buildSignedRequest('DELETE', url);
 
     const response = await fetch(reqUrl, init);
-    // S3/R2 returns 204 on successful DELETE; 200 is also acceptable
     if (response.status !== 204 && response.status !== 200) {
-      throw new Error(`[R2WorkspaceProvider] Failed to delete "${path}": HTTP ${response.status} ${response.statusText}`);
+      throw new Error(
+        `[R2WorkspaceProvider] Failed to delete "${path}": HTTP ${response.status} ${response.statusText}`,
+      );
     }
   }
 
@@ -189,9 +205,11 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
     return result !== null;
   }
 
-  async stat(path: string): Promise<{ size: number; modified: Date; isDirectory: boolean } | null> {
+  async stat(
+    path: string,
+  ): Promise<{ size: number; modified: Date; isDirectory: boolean } | null> {
     const url = this.objectUrl(path);
-    const { url: reqUrl, init } = this.buildSignedRequest('HEAD', url);
+    const { url: reqUrl, init } = await this.buildSignedRequest('HEAD', url);
 
     const response = await fetch(reqUrl, init);
 
@@ -200,7 +218,9 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
     }
 
     if (!response.ok) {
-      throw new Error(`[R2WorkspaceProvider] Failed to stat "${path}": HTTP ${response.status} ${response.statusText}`);
+      throw new Error(
+        `[R2WorkspaceProvider] Failed to stat "${path}": HTTP ${response.status} ${response.statusText}`,
+      );
     }
 
     const contentLength = response.headers.get('content-length');
@@ -209,16 +229,15 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
     return {
       size: contentLength ? parseInt(contentLength, 10) : 0,
       modified: lastModified ? new Date(lastModified) : new Date(),
-      isDirectory: false, // R2 has no real directories
+      isDirectory: false,
     };
   }
 
   /**
    * Generates a pre-signed URL for direct upload or download from R2.
    *
-   * @param path - The object key in the bucket.
-   * @param expiresIn - Expiry time in seconds. Defaults to 3600 (1 hour).
-   * @returns A pre-signed URL string.
+   * @param path - Object key in the bucket.
+   * @param expiresIn - Expiry in seconds (default: 3600).
    */
   async getPresignedUrl(path: string, expiresIn = 3600): Promise<string> {
     const url = this.objectUrl(path);
@@ -234,23 +253,23 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
 
   /**
    * Sets lifecycle rules on the bucket for automatic object expiration.
-   *
-   * @param rules - Array of lifecycle rules to apply.
    */
   async setBucketLifecycle(rules: LifecycleRule[]): Promise<void> {
     const xmlBody = buildLifecycleXml(rules);
     const url = `${this.bucketUrl()}?lifecycle`;
 
-    const { url: reqUrl, init } = this.buildSignedRequest(
+    const { url: reqUrl, init } = await this.buildSignedRequest(
       'PUT',
       url,
-      Buffer.from(xmlBody, 'utf8'),
+      encoder.encode(xmlBody),
       { 'content-type': 'application/xml' },
     );
 
     const response = await fetch(reqUrl, init);
     if (!response.ok) {
-      throw new Error(`[R2WorkspaceProvider] Failed to set bucket lifecycle: HTTP ${response.status} ${response.statusText}`);
+      throw new Error(
+        `[R2WorkspaceProvider] Failed to set bucket lifecycle: HTTP ${response.status} ${response.statusText}`,
+      );
     }
   }
 }
@@ -258,13 +277,15 @@ export class R2WorkspaceProvider implements WorkspaceProvider {
 /** Builds the XML body for a PutBucketLifecycleConfiguration request. */
 function buildLifecycleXml(rules: LifecycleRule[]): string {
   const rulesXml = rules.map((rule) => {
-    const filter = rule.prefix !== undefined
-      ? `<Filter><Prefix>${escapeXml(rule.prefix)}</Prefix></Filter>`
-      : `<Filter><Prefix></Prefix></Filter>`;
+    const filter =
+      rule.prefix !== undefined
+        ? `<Filter><Prefix>${escapeXml(rule.prefix)}</Prefix></Filter>`
+        : `<Filter><Prefix></Prefix></Filter>`;
 
-    const expiration = rule.expirationDays !== undefined
-      ? `<Expiration><Days>${rule.expirationDays}</Days></Expiration>`
-      : '';
+    const expiration =
+      rule.expirationDays !== undefined
+        ? `<Expiration><Days>${rule.expirationDays}</Days></Expiration>`
+        : '';
 
     return [
       '<Rule>',
