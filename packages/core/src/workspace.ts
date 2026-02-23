@@ -62,7 +62,12 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
   }
 
   private resolve(filePath: string): string {
-    return path.join(this.basePath, filePath);
+    const resolved = path.resolve(this.basePath, filePath);
+    // Prevent path traversal outside the workspace root
+    if (!resolved.startsWith(path.resolve(this.basePath))) {
+      throw new Error(`[LocalWorkspaceProvider] Path traversal detected: "${filePath}" escapes workspace root`);
+    }
+    return resolved;
   }
 
   async read(filePath: string): Promise<string> {
