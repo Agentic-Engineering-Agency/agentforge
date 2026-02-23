@@ -27,10 +27,12 @@ export default defineSchema({
         })
       )
     ),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byAgentId", ["id"])
     .index("byUserId", ["userId"])
-    .index("byIsActive", ["isActive"]),
+    .index("byIsActive", ["isActive"])
+    .index("byProjectId", ["projectId"]),
 
   // Conversation threads
   threads: defineTable({
@@ -124,7 +126,25 @@ export default defineSchema({
     settings: v.optional(v.any()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    isDefault: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
   }).index("byUserId", ["userId"]),
+
+  // Project membership / access control
+  projectMembers: defineTable({
+    projectId: v.id("projects"),
+    userId: v.string(),
+    role: v.union(
+      v.literal("owner"),
+      v.literal("editor"),
+      v.literal("viewer")
+    ),
+    invitedAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+  })
+    .index("byProjectId", ["projectId"])
+    .index("byUserId", ["userId"])
+    .index("byProjectAndUser", ["projectId", "userId"]),
 
   // Skills/Tools marketplace
   skills: defineTable({
@@ -144,10 +164,12 @@ export default defineSchema({
     installedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byUserId", ["userId"])
     .index("byIsInstalled", ["isInstalled"])
-    .index("byCategory", ["category"]),
+    .index("byCategory", ["category"])
+    .index("byProjectId", ["projectId"]),
 
   // Cron jobs/scheduled tasks
   cronJobs: defineTable({
@@ -163,11 +185,13 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byAgentId", ["agentId"])
     .index("byUserId", ["userId"])
     .index("byIsEnabled", ["isEnabled"])
-    .index("byNextRun", ["nextRun"]),
+    .index("byNextRun", ["nextRun"])
+    .index("byProjectId", ["projectId"]),
 
   // Cron job execution history
   cronJobRuns: defineTable({
@@ -198,9 +222,11 @@ export default defineSchema({
     lastConnectedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byUserId", ["userId"])
-    .index("byIsEnabled", ["isEnabled"]),
+    .index("byIsEnabled", ["isEnabled"])
+    .index("byProjectId", ["projectId"]),
 
   // API keys and credentials (encrypted)
   apiKeys: defineTable({
@@ -228,11 +254,13 @@ export default defineSchema({
     cost: v.optional(v.number()), // Estimated cost in USD
     userId: v.optional(v.string()),
     timestamp: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byAgentId", ["agentId"])
     .index("byUserId", ["userId"])
     .index("byTimestamp", ["timestamp"])
-    .index("byProvider", ["provider"]),
+    .index("byProvider", ["provider"])
+    .index("byProjectId", ["projectId"]),
 
   // User settings and configuration
   settings: defineTable({
@@ -257,11 +285,13 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     userId: v.optional(v.string()),
     timestamp: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byLevel", ["level"])
     .index("bySource", ["source"])
     .index("byTimestamp", ["timestamp"])
-    .index("byUserId", ["userId"]),
+    .index("byUserId", ["userId"])
+    .index("byProjectId", ["projectId"]),
 
   // Channels for multi-platform support
   channels: defineTable({
@@ -272,10 +302,12 @@ export default defineSchema({
     userId: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byType", ["type"])
     .index("byUserId", ["userId"])
-    .index("byIsEnabled", ["isEnabled"]),
+    .index("byIsEnabled", ["isEnabled"])
+    .index("byProjectId", ["projectId"]),
 
   // Heartbeat system for ongoing task tracking
   heartbeats: defineTable({
@@ -340,9 +372,11 @@ export default defineSchema({
     userId: v.optional(v.string()),
     startedAt: v.number(),
     stoppedAt: v.optional(v.number()),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byAgentId", ["agentId"])
     .index("byInstanceId", ["instanceId"])
     .index("byStatus", ["status"])
-    .index("byUserId", ["userId"]),
+    .index("byUserId", ["userId"])
+    .index("byProjectId", ["projectId"]),
 });

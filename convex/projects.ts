@@ -63,6 +63,29 @@ export const update = mutation({
   },
 });
 
+// Mutation: Get or create the default project for a user
+export const getOrCreateDefault = mutation({
+  args: { userId: v.string() },
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("projects")
+      .withIndex("byUserId", (q) => q.eq("userId", args.userId))
+      .filter((q) => q.eq(q.field("isDefault"), true))
+      .first();
+    if (existing) return existing._id;
+    const now = Date.now();
+    return await ctx.db.insert("projects", {
+      name: "Default",
+      description: "Auto-created default project",
+      userId: args.userId,
+      isDefault: true,
+      settings: {},
+      createdAt: now,
+      updatedAt: now,
+    });
+  },
+});
+
 // Mutation: Delete project
 export const remove = mutation({
   args: { id: v.id("projects") },

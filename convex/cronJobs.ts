@@ -5,16 +5,32 @@ import { mutation, query, action } from "./_generated/server";
 export const list = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
     agentId: v.optional(v.string()),
     isEnabled: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    if (args.projectId) {
+      const jobs = await ctx.db
+        .query("cronJobs")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
+
+      if (args.isEnabled !== undefined) {
+        return jobs.filter((j) => j.isEnabled === args.isEnabled);
+      }
+      if (args.agentId) {
+        return jobs.filter((j) => j.agentId === args.agentId);
+      }
+      return jobs;
+    }
+
     if (args.isEnabled !== undefined) {
       const jobs = await ctx.db
         .query("cronJobs")
         .withIndex("byIsEnabled", (q) => q.eq("isEnabled", args.isEnabled!))
         .collect();
-      
+
       if (args.userId) {
         return jobs.filter((j) => j.userId === args.userId);
       }
@@ -23,21 +39,21 @@ export const list = query({
       }
       return jobs;
     }
-    
+
     if (args.agentId) {
       return await ctx.db
         .query("cronJobs")
         .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
         .collect();
     }
-    
+
     if (args.userId) {
       return await ctx.db
         .query("cronJobs")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
         .collect();
     }
-    
+
     return await ctx.db.query("cronJobs").collect();
   },
 });
@@ -73,6 +89,7 @@ export const create = mutation({
     agentId: v.string(),
     prompt: v.string(),
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
