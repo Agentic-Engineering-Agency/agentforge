@@ -3,17 +3,17 @@
  *
  * This module provides the core chat execution pipeline:
  * 1. User sends a message → stored via mutation
- * 2. Convex action triggers LLM generation via OpenRouter (AI SDK)
+ * 2. Convex action triggers LLM generation via Mastra Agent
  * 3. Assistant response stored back in Convex
  * 4. Real-time subscription updates the UI automatically
  *
- * Uses the Vercel AI SDK with OpenRouter as an OpenAI-compatible provider.
- * No dynamic imports of @mastra/core — we use the AI SDK directly in Convex
- * Node.js actions for maximum reliability.
+ * Uses Mastra-native model routing via Agent.generate() with "provider/model-name" format.
+ * Mastra auto-reads provider API keys from environment variables.
  */
 import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import { Agent } from "@mastra/core/agent";
 
 // ============================================================
 // Queries
@@ -140,7 +140,7 @@ export const addAssistantMessage = mutation({
  * 1. Looks up the agent config from the database
  * 2. Stores the user message
  * 3. Builds conversation history from the thread
- * 4. Calls OpenRouter (or other provider) via the AI SDK
+ * 4. Calls the provider via Mastra Agent.generate()
  * 5. Stores the assistant response
  * 6. Records usage metrics
  *
@@ -180,53 +180,24 @@ export const sendMessage = action({
         content: msg.content,
       }));
 
-    // 4. Call the LLM via AI SDK
+    // 4. Call the LLM via Mastra Agent
     let responseText: string;
     let usageData: { promptTokens: number; completionTokens: number; totalTokens: number } | null = null;
 
     try {
-      // Dynamically import the AI SDK (available in Convex Node.js actions)
-      const { generateText } = await import("ai");
-      const { createOpenAI } = await import("@ai-sdk/openai");
-
       // Resolve the model provider and ID
       const provider = agent.provider || "openrouter";
       const modelId = agent.model || "openai/gpt-4o-mini";
+      const modelKey = `${provider}/${modelId}`;
 
-      // Create the appropriate provider instance
-      let model;
-      if (provider === "openrouter") {
-        const openrouter = createOpenAI({
-          baseURL: "https://openrouter.ai/api/v1",
-          apiKey: process.env.OPENROUTER_API_KEY,
-        });
-        model = openrouter(modelId);
-      } else if (provider === "openai") {
-        const openai = createOpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
-        });
-        model = openai(modelId);
-      } else {
-        // Default to OpenRouter for any provider — it routes to all models
-        const openrouter = createOpenAI({
-          baseURL: "https://openrouter.ai/api/v1",
-          apiKey: process.env.OPENROUTER_API_KEY,
-        });
-        // Use provider/model format for OpenRouter routing
-        const routerModelId = modelId.includes("/")
-          ? modelId
-          : `${provider}/${modelId}`;
-        model = openrouter(routerModelId);
-      }
-
-      // Generate the response
-      const result = await generateText({
-        model,
-        system: agent.instructions || "You are a helpful AI assistant built with AgentForge.",
-        messages: conversationMessages,
-        ...(agent.temperature != null && { temperature: agent.temperature }),
-        ...(agent.maxTokens != null && { maxTokens: agent.maxTokens }),
+      // Generate via Mastra Agent
+      const mastraAgent = new Agent({
+        name: "agentforge-executor",
+        instructions: agent.instructions || "You are a helpful AI assistant built with AgentForge.",
+        model: modelKey,
       });
+
+      const result = await mastraAgent.generate(conversationMessages);
 
       responseText = result.text;
 
@@ -240,7 +211,7 @@ export const sendMessage = action({
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("[chat.sendMessage] LLM error:", errorMessage);
+      console.error("[chat.sendMessage] Mastra error:", errorMessage);
 
       // Store error as assistant message so user sees feedback
       responseText = `I encountered an error while processing your request: ${errorMessage}`;

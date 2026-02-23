@@ -13,7 +13,6 @@
  */
 
 import { Agent } from '@agentforge-ai/core';
-import type { LanguageModelV1 } from 'ai';
 import { createFinForgeMCPServer } from './tools.js';
 
 // ============================================================
@@ -61,12 +60,12 @@ Always end substantive analysis with: "This is AI-generated analysis for informa
  *
  * @example
  * ```typescript
- * import { openai } from '@ai-sdk/openai';
- * const agent = createFinForgeAgent(openai('gpt-4o'));
+ * // Mastra-native model routing
+ * const { agent } = createFinForgeAgent('openai/gpt-4o');
  * const response = await agent.generate('Analyze AAPL for me.');
  * ```
  */
-export function createFinForgeAgent(model: LanguageModelV1): {
+export function createFinForgeAgent(model: string): {
   agent: Agent;
   mcpServer: ReturnType<typeof createFinForgeMCPServer>;
 } {
