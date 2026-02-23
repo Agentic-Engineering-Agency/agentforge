@@ -6,6 +6,7 @@ import { registerAgentsCommand } from './commands/agents.js';
 import { registerChatCommand } from './commands/chat.js';
 import { registerSessionsCommand, registerThreadsCommand } from './commands/sessions.js';
 import { registerSkillsCommand } from './commands/skills.js';
+import { registerSkillCommand } from './commands/skill.js';
 import { registerCronCommand } from './commands/cron.js';
 import { registerMcpCommand } from './commands/mcp.js';
 import { registerFilesCommand } from './commands/files.js';
@@ -17,6 +18,7 @@ import { registerStatusCommand } from './commands/status.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerChannelTelegramCommand } from './commands/channel-telegram.js';
 import { registerChannelWhatsAppCommand } from './commands/channel-whatsapp.js';
+import { registerChannelSlackCommand } from './commands/channel-slack.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -88,6 +90,7 @@ registerThreadsCommand(program);
 
 // ─── Skills ──────────────────────────────────────────────────────
 registerSkillsCommand(program);
+registerSkillCommand(program);
 
 // ─── Cron Jobs ───────────────────────────────────────────────────
 registerCronCommand(program);
@@ -113,6 +116,7 @@ registerKeysCommand(program);
 // ─── Channels ───────────────────────────────────────────────────
 registerChannelTelegramCommand(program);
 registerChannelWhatsAppCommand(program);
+registerChannelSlackCommand(program);
 
 // ─── Status, Dashboard, Logs, Heartbeat ──────────────────────────
 registerStatusCommand(program);
