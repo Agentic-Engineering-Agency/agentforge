@@ -14,7 +14,7 @@
  */
 
 import { createFinForgeAgent } from './agent.js';
-import type { LanguageModelV1 } from 'ai';
+// Mastra-native model routing — no Vercel AI SDK needed
 
 // ============================================================
 // Demo Runner
@@ -24,7 +24,7 @@ import type { LanguageModelV1 } from 'ai';
  * Runs the FinForge demo with a series of example queries.
  * This function can work with any AI SDK-compatible model.
  */
-async function runDemo(model: LanguageModelV1) {
+async function runDemo(model: string) {
   console.log('╔══════════════════════════════════════════════════════════╗');
   console.log('║           🏦 FinForge — Financial Intelligence          ║');
   console.log('║           Built with AgentForge Framework               ║');
@@ -124,35 +124,18 @@ async function runDemo(model: LanguageModelV1) {
 // ============================================================
 
 async function main() {
-  // Dynamic import to handle the case where @ai-sdk/openai is not installed
-  try {
-    const { openai } = await import('@ai-sdk/openai');
-    await runDemo(openai('gpt-4o-mini'));
-  } catch {
-    console.log('Note: @ai-sdk/openai not available. Running tools-only demo.');
-    console.log('Install it with: npm install @ai-sdk/openai');
+  // Use Mastra-native model routing — just pass a model string
+  const modelName = process.env.OPENAI_API_KEY
+    ? 'openai/gpt-4o-mini'
+    : 'mock/demo';
+
+  if (modelName === 'mock/demo') {
+    console.log('Note: Set OPENAI_API_KEY for real LLM responses.');
+    console.log('Running tools-only demo with mock model.');
     console.log();
-
-    // Create a minimal mock model for demonstration
-    const mockModel = {
-      specificationVersion: 'v1',
-      provider: 'mock',
-      modelId: 'mock-model',
-      defaultObjectGenerationMode: 'json' as const,
-      doGenerate: async () => ({
-        text: 'This is a mock response. Install @ai-sdk/openai and set OPENAI_API_KEY for real LLM responses.',
-        finishReason: 'stop' as const,
-        usage: { promptTokens: 0, completionTokens: 0 },
-        rawCall: { rawPrompt: null, rawSettings: {} },
-      }),
-      doStream: async () => ({
-        stream: new ReadableStream(),
-        rawCall: { rawPrompt: null, rawSettings: {} },
-      }),
-    } as unknown as LanguageModelV1;
-
-    await runDemo(mockModel);
   }
+
+  await runDemo(modelName);
 }
 
 main().catch(console.error);

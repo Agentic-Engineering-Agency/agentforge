@@ -174,7 +174,8 @@ export class AgentForgeWorkspace {
       workspaceConfig.tools = buildToolConfig(tools);
     }
 
-    const workspace = new Workspace(workspaceConfig as ConstructorParameters<typeof Workspace>[0]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const workspace = new Workspace(workspaceConfig as any);
     return new AgentForgeWorkspace(workspace);
   }
 
@@ -259,7 +260,8 @@ export class AgentForgeWorkspace {
       workspaceConfig.tools = buildToolConfig(tools);
     }
 
-    const workspace = new Workspace(workspaceConfig as ConstructorParameters<typeof Workspace>[0]);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const workspace = new Workspace(workspaceConfig as any);
     return new AgentForgeWorkspace(workspace);
   }
 
@@ -272,9 +274,10 @@ export class AgentForgeWorkspace {
    * @returns A configured AgentForgeWorkspace instance.
    */
   static filesOnly(basePath = './workspace', readOnly = false): AgentForgeWorkspace {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const workspace = new Workspace({
       filesystem: new LocalFilesystem({ basePath, readOnly }),
-    } as ConstructorParameters<typeof Workspace>[0]);
+    } as any);
     return new AgentForgeWorkspace(workspace);
   }
 

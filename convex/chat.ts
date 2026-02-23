@@ -12,10 +12,13 @@
  * Supports: OpenRouter, OpenAI, Anthropic, Google Gemini, Venice, Custom.
  * Failover is configured per-agent via `failoverModels` field or falls back
  * to a global default chain.
+ *
+ * Uses Mastra-native model routing via Agent.generate() with "provider/model-name" format.
  */
 import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import { Agent } from "@mastra/core/agent";
 
 // ============================================================
 // Queries
@@ -188,59 +191,6 @@ function buildFailoverChain(agent: {
 // ============================================================
 
 /**
- * Resolve a model instance from provider + modelId using the AI SDK.
- * Supports: openrouter, openai, anthropic, google, venice, custom.
- */
-async function resolveModel(provider: string, modelId: string) {
-  const { createOpenAI } = await import("@ai-sdk/openai");
-
-  switch (provider) {
-    case "openai": {
-      const openai = createOpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
-      return openai(modelId);
-    }
-
-    case "anthropic": {
-      const { createAnthropic } = await import("@ai-sdk/anthropic");
-      const anthropic = createAnthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-      });
-      return anthropic(modelId);
-    }
-
-    case "google": {
-      const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
-      const google = createGoogleGenerativeAI({
-        apiKey: process.env.GEMINI_API_KEY,
-      });
-      return google(modelId);
-    }
-
-    case "venice": {
-      const openaiCompat = createOpenAI({
-        baseURL: "https://api.venice.ai/api/v1",
-        apiKey: process.env.VENICE_API_KEY,
-      });
-      return openaiCompat(modelId);
-    }
-
-    case "openrouter":
-    default: {
-      const openrouter = createOpenAI({
-        baseURL: "https://openrouter.ai/api/v1",
-        apiKey: process.env.OPENROUTER_API_KEY,
-      });
-      const routerModelId = modelId.includes("/")
-        ? modelId
-        : `${provider}/${modelId}`;
-      return openrouter(routerModelId);
-    }
-  }
-}
-
-/**
  * Classify an error for failover decision-making.
  */
 function classifyError(error: unknown): "rate_limit" | "server_error" | "timeout" | "network_error" | "auth_error" | "unknown" {
@@ -310,16 +260,13 @@ async function executeWithFailover(
       totalAttempts++;
 
       try {
-        const { generateText } = await import("ai");
-        const resolvedModel = await resolveModel(provider, modelId);
-
-        const result = await generateText({
-          model: resolvedModel,
-          system: systemPrompt,
-          messages,
-          ...(options.temperature != null && { temperature: options.temperature }),
-          ...(options.maxTokens != null && { maxTokens: options.maxTokens }),
+        const mastraAgent = new Agent({
+          name: "agentforge-executor",
+          instructions: systemPrompt,
+          model: modelKey,
         });
+
+        const result = await mastraAgent.generate(messages);
 
         const usage = result.usage
           ? {
