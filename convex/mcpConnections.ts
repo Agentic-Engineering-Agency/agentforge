@@ -5,28 +5,41 @@ import { mutation, query } from "./_generated/server";
 export const list = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
     isEnabled: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    if (args.projectId) {
+      const connections = await ctx.db
+        .query("mcpConnections")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
+
+      if (args.isEnabled !== undefined) {
+        return connections.filter((c) => c.isEnabled === args.isEnabled);
+      }
+      return connections;
+    }
+
     if (args.isEnabled !== undefined) {
       const connections = await ctx.db
         .query("mcpConnections")
         .withIndex("byIsEnabled", (q) => q.eq("isEnabled", args.isEnabled!))
         .collect();
-      
+
       if (args.userId) {
         return connections.filter((c) => c.userId === args.userId);
       }
       return connections;
     }
-    
+
     if (args.userId) {
       return await ctx.db
         .query("mcpConnections")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
         .collect();
     }
-    
+
     return await ctx.db.query("mcpConnections").collect();
   },
 });
@@ -48,6 +61,7 @@ export const create = mutation({
     credentials: v.optional(v.any()),
     capabilities: v.optional(v.any()),
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
