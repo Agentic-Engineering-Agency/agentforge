@@ -5,6 +5,7 @@ import { mutation, query } from "./_generated/server";
 export const list = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
     agentId: v.optional(v.string()),
     provider: v.optional(v.string()),
     startTime: v.optional(v.number()),
@@ -12,8 +13,13 @@ export const list = query({
   },
   handler: async (ctx, args) => {
     let records;
-    
-    if (args.provider) {
+
+    if (args.projectId) {
+      records = await ctx.db
+        .query("usage")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
+    } else if (args.provider) {
       records = await ctx.db
         .query("usage")
         .withIndex("byProvider", (q) => q.eq("provider", args.provider!))
@@ -163,6 +169,7 @@ export const record = mutation({
     totalTokens: v.number(),
     cost: v.optional(v.number()),
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const usageId = await ctx.db.insert("usage", {
