@@ -16,6 +16,7 @@ import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
+import { resolveMemoryConfig } from "./lib/memoryConfig";
 
 // ---------------------------------------------------------------------------
 // Agent instance cache
@@ -235,6 +236,11 @@ export const executeAgent = action({
       throw new Error(`Agent ${args.agentId} not found`);
     }
 
+    // Resolve memory configuration from agent tools/metadata
+    const memoryConfig = resolveMemoryConfig(
+      agent?.tools as Record<string, unknown> | undefined
+    );
+
     // Create or get thread
     let threadId = args.threadId;
     if (!threadId) {
@@ -262,6 +268,36 @@ export const executeAgent = action({
     });
 
     try {
+      // Recall relevant memories if memory is enabled
+      let memoryContext = "";
+      if (memoryConfig.enabled) {
+        try {
+          // Dynamic import to avoid loading when not needed
+          const { hybridSearch } = await import("./lib/memorySearch");
+          const memories = await hybridSearch(ctx, {
+            query: args.prompt,
+            agentId: args.agentId,
+            projectId: agent?.projectId ? (agent.projectId as string) : undefined,
+            limit: memoryConfig.maxRecallItems,
+          });
+
+          if (memories.length > 0) {
+            memoryContext =
+              "\n\n## Relevant Memories\n" +
+              memories
+                .filter((m) => m._score >= memoryConfig.recallThreshold)
+                .map((m, i) => `${i + 1}. [${m.type}] ${m.content}`)
+                .join("\n");
+          }
+        } catch (error) {
+          console.warn("[memory] Recall failed, continuing without memories:", error);
+        }
+      }
+
+      // Build system prompt with optional memory context
+      const systemPrompt =
+        (agent.instructions || "You are a helpful AI assistant.") + memoryContext;
+
       // Build failover chain from agent config
       const failoverChain = buildFailoverChain(agent as {
         provider?: string;
@@ -281,7 +317,7 @@ export const executeAgent = action({
       // Execute with failover
       const result = await executeWithFailover(
         failoverChain,
-        agent.instructions || "You are a helpful AI assistant.",
+        systemPrompt,
         conversationMessages,
         {
           temperature: agent.temperature ?? undefined,
@@ -295,6 +331,24 @@ export const executeAgent = action({
         role: "assistant",
         content: result.text,
       });
+
+      // Store interaction as memory if enabled
+      if (memoryConfig.enabled && memoryConfig.autoStore) {
+        try {
+          const interactionText = `User: ${args.prompt}\nAssistant: ${result.text}`;
+          await ctx.runMutation(api.memory.add, {
+            content: interactionText,
+            type: "conversation",
+            agentId: args.agentId,
+            threadId: threadId,
+            projectId: agent?.projectId,
+            userId: args.userId,
+            importance: 0.5,
+          });
+        } catch (error) {
+          console.warn("[memory] Failed to store interaction:", error);
+        }
+      }
 
       // Update session status
       await ctx.runMutation(api.sessions.updateStatus, {
