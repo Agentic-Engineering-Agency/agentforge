@@ -13,10 +13,12 @@
 import Dockerode from 'dockerode';
 import { randomUUID } from 'node:crypto';
 import { DockerSandbox } from './docker-sandbox.js';
+import { NativeSandbox, isNativeSandboxAvailable } from './native-sandbox.js';
 import type {
   DockerSandboxConfig,
   ExecOptions,
   ExecResult,
+  NativeSandboxConfig,
   SandboxManagerConfig,
   SandboxProvider,
 } from './types.js';
@@ -123,6 +125,18 @@ export class SandboxManager {
       }
     }
 
+    if (this.config.provider === 'native') {
+      const { available, method } = await isNativeSandboxAvailable();
+      if (!available) {
+        console.warn(
+          '[SandboxManager] No native isolation method found (sandbox-exec / bwrap). ' +
+            'Sandboxes will run with limited isolation (timeout + env filtering only).',
+        );
+      } else {
+        console.info(`[SandboxManager] Native isolation available: ${method}`);
+      }
+    }
+
     this._registerShutdownHandlers();
   }
 
@@ -143,6 +157,19 @@ export class SandboxManager {
       const id = this._generateId(overrides.scope);
       this.active.set(id, stub);
       return stub;
+    }
+
+    if (this.config.provider === 'native') {
+      const nativeConfig: NativeSandboxConfig = {
+        scope: overrides.scope,
+        profile: this.config.nativeConfig?.profile,
+        workingDirectory: this.config.nativeConfig?.workingDirectory,
+      };
+      const sandbox = new NativeSandbox(nativeConfig);
+      await sandbox.start();
+      const id = this._generateId(overrides.scope);
+      this.active.set(id, sandbox);
+      return sandbox;
     }
 
     const mergedConfig: DockerSandboxConfig = {
