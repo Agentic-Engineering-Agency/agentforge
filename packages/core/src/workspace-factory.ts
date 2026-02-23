@@ -7,7 +7,6 @@ export function createWorkspaceProvider(config: WorkspaceConfig): WorkspaceProvi
       return new LocalWorkspaceProvider(config.basePath ?? './workspace');
     case 'r2': {
       try {
-        // Dynamic import - teammate 2 will create this file
         const { R2WorkspaceProvider } = require('./providers/r2-provider.js');
         return new R2WorkspaceProvider({
           bucket: config.bucket!,
@@ -18,19 +17,6 @@ export function createWorkspaceProvider(config: WorkspaceConfig): WorkspaceProvi
       } catch {
         throw new Error(
           'R2 workspace provider not available. Check that @agentforge-ai/core is properly built.'
-        );
-      }
-    }
-    case 'gcs': {
-      try {
-        const { GCSWorkspaceProvider } = require('./providers/gcs-provider.js');
-        return new GCSWorkspaceProvider({
-          bucket: config.bucket!,
-          keyFilePath: config.credentials?.keyFilePath,
-        });
-      } catch {
-        throw new Error(
-          'GCS workspace provider not available. Install @google-cloud/storage: pnpm add @google-cloud/storage'
         );
       }
     }

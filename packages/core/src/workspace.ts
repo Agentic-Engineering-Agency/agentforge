@@ -44,14 +44,13 @@ export interface WorkspaceProvider {
 }
 
 export interface WorkspaceConfig {
-  type: 'local' | 'r2' | 'gcs';
+  type: 'local' | 'r2';
   basePath?: string;
   bucket?: string;
   region?: string;
   credentials?: {
     accessKeyId?: string;
     secretAccessKey?: string;
-    keyFilePath?: string;
   };
 }
 

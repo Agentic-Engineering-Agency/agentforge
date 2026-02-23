@@ -5,8 +5,7 @@
  * Covers:
  *   1. WorkspaceProvider interface via LocalWorkspaceProvider
  *   2. R2WorkspaceProvider with mocked S3 client
- *   3. GCSWorkspaceProvider with mocked GCS client
- *   4. Workspace factory (createWorkspaceProvider)
+ *   3. Workspace factory (createWorkspaceProvider)
  *   5. NativeSandbox (with mocked child_process spawn)
  *   6. Backward compatibility — existing exports still work
  *   7. WorkspaceProvider interface shape validation
@@ -373,146 +372,6 @@ describe('R2WorkspaceProvider — mocked fetch', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. GCSWorkspaceProvider — mocked GCS client
-// ---------------------------------------------------------------------------
-
-const mockFile = {
-  download: vi.fn(),
-  save: vi.fn(),
-  delete: vi.fn(),
-  exists: vi.fn(),
-  getMetadata: vi.fn(),
-  getSignedUrl: vi.fn(),
-};
-
-const mockBucket = {
-  file: vi.fn(() => mockFile),
-  getFiles: vi.fn(),
-};
-
-const mockStorageInstance = {
-  bucket: vi.fn(() => mockBucket),
-};
-
-vi.mock('@google-cloud/storage', () => ({
-  Storage: vi.fn().mockImplementation(() => mockStorageInstance),
-}));
-
-describe('GCSWorkspaceProvider — mocked GCS', () => {
-  type GCSModule = typeof import('../packages/core/src/providers/gcs-provider.js');
-  let GCSWorkspaceProvider: GCSModule['GCSWorkspaceProvider'];
-  let provider: InstanceType<GCSModule['GCSWorkspaceProvider']>;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    mockBucket.file.mockReturnValue(mockFile);
-    mockStorageInstance.bucket.mockReturnValue(mockBucket);
-
-    let module: GCSModule;
-    try {
-      module = await import('../packages/core/src/providers/gcs-provider.js');
-    } catch {
-      return;
-    }
-    GCSWorkspaceProvider = module.GCSWorkspaceProvider;
-    provider = new GCSWorkspaceProvider({
-      bucket: 'test-gcs-bucket',
-      projectId: 'test-project',
-      keyFilePath: '/path/to/key.json',
-    });
-  });
-
-  it('constructor stores config without throwing', () => {
-    if (!provider) return;
-    expect(provider).toBeDefined();
-  });
-
-  it('read() downloads file and returns content', async () => {
-    if (!provider) return;
-    mockFile.download.mockResolvedValueOnce([Buffer.from('gcs content')]);
-    const result = await provider.read('test/file.txt');
-    expect(result).toBe('gcs content');
-    expect(mockFile.download).toHaveBeenCalledOnce();
-  });
-
-  it('write() saves content to file', async () => {
-    if (!provider) return;
-    mockFile.save.mockResolvedValueOnce(undefined);
-    await provider.write('test/write.txt', 'write me');
-    expect(mockFile.save).toHaveBeenCalledWith('write me');
-  });
-
-  it('list() lists files with prefix and returns names', async () => {
-    if (!provider) return;
-    mockBucket.getFiles.mockResolvedValueOnce([[{ name: 'prefix/a.txt' }, { name: 'prefix/b.txt' }]]);
-    const result = await provider.list('prefix/');
-    expect(result).toEqual(['prefix/a.txt', 'prefix/b.txt']);
-    expect(mockBucket.getFiles).toHaveBeenCalledWith({ prefix: 'prefix/' });
-  });
-
-  it('list() without prefix returns all files', async () => {
-    if (!provider) return;
-    mockBucket.getFiles.mockResolvedValueOnce([[{ name: 'all.txt' }]]);
-    const result = await provider.list();
-    expect(result).toEqual(['all.txt']);
-    expect(mockBucket.getFiles).toHaveBeenCalledWith({});
-  });
-
-  it('delete() deletes file', async () => {
-    if (!provider) return;
-    mockFile.delete.mockResolvedValueOnce(undefined);
-    await provider.delete('remove-me.txt');
-    expect(mockFile.delete).toHaveBeenCalledOnce();
-  });
-
-  it('exists() returns true when file exists', async () => {
-    if (!provider) return;
-    mockFile.exists.mockResolvedValueOnce([true]);
-    const result = await provider.exists('present.txt');
-    expect(result).toBe(true);
-  });
-
-  it('exists() returns false when file does not exist', async () => {
-    if (!provider) return;
-    mockFile.exists.mockResolvedValueOnce([false]);
-    const result = await provider.exists('absent.txt');
-    expect(result).toBe(false);
-  });
-
-  it('exists() returns false when an error is thrown', async () => {
-    if (!provider) return;
-    mockFile.exists.mockRejectedValueOnce(new Error('network error'));
-    const result = await provider.exists('error-file.txt');
-    expect(result).toBe(false);
-  });
-
-  it('stat() returns size and modified from metadata', async () => {
-    if (!provider) return;
-    const updated = '2025-06-01T12:00:00Z';
-    mockFile.getMetadata.mockResolvedValueOnce([{ size: '1024', updated }]);
-    const result = await provider.stat('file.txt');
-    expect(result).not.toBeNull();
-    expect(result!.size).toBe(1024);
-    expect(result!.modified).toEqual(new Date(updated));
-    expect(result!.isDirectory).toBe(false);
-  });
-
-  it('stat() returns null on 404 error code', async () => {
-    if (!provider) return;
-    const err = Object.assign(new Error('Not Found'), { code: 404 });
-    mockFile.getMetadata.mockRejectedValueOnce(err);
-    const result = await provider.stat('missing.txt');
-    expect(result).toBeNull();
-  });
-
-  it('stat() rethrows non-404 errors', async () => {
-    if (!provider) return;
-    mockFile.getMetadata.mockRejectedValueOnce(new Error('internal error'));
-    await expect(provider.stat('error.txt')).rejects.toThrow('internal error');
-  });
-});
-
-// ---------------------------------------------------------------------------
 // 4. Workspace Factory (createWorkspaceProvider)
 // ---------------------------------------------------------------------------
 describe('createWorkspaceProvider — factory function', () => {
@@ -553,18 +412,6 @@ describe('createWorkspaceProvider — factory function', () => {
     expect(typeof threwDescriptiveError).toBe('boolean');
   });
 
-  it('type "gcs" returns a provider or throws a descriptive error', () => {
-    let threwDescriptiveError = false;
-    try {
-      const p = createWorkspaceProvider({ type: 'gcs', bucket: 'my-bucket' });
-      expect(p).toBeDefined();
-      expect(typeof p.read).toBe('function');
-    } catch (e: unknown) {
-      threwDescriptiveError = true;
-      expect((e as Error).message).toContain('GCS workspace provider');
-    }
-    expect(typeof threwDescriptiveError).toBe('boolean');
-  });
 
   it('throws on unknown workspace type', () => {
     expect(() =>
@@ -984,21 +831,6 @@ describe('WorkspaceProvider interface — structural validation', () => {
     expect(typeof instance.stat).toBe('function');
   });
 
-  it('GCSWorkspaceProvider implements all 6 WorkspaceProvider methods', async () => {
-    let mod: typeof import('../packages/core/src/providers/gcs-provider.js');
-    try {
-      mod = await import('../packages/core/src/providers/gcs-provider.js');
-    } catch {
-      return;
-    }
-    const instance = new mod.GCSWorkspaceProvider({ bucket: 'b' });
-    expect(typeof instance.read).toBe('function');
-    expect(typeof instance.write).toBe('function');
-    expect(typeof instance.list).toBe('function');
-    expect(typeof instance.delete).toBe('function');
-    expect(typeof instance.exists).toBe('function');
-    expect(typeof instance.stat).toBe('function');
-  });
 
   it('R2WorkspaceProvider has getPresignedUrl extension method', async () => {
     let mod: typeof import('../packages/core/src/providers/r2-provider.js');
@@ -1011,18 +843,8 @@ describe('WorkspaceProvider interface — structural validation', () => {
     expect(typeof instance.getPresignedUrl).toBe('function');
   });
 
-  it('GCSWorkspaceProvider has getSignedUrl extension method', async () => {
-    let mod: typeof import('../packages/core/src/providers/gcs-provider.js');
-    try {
-      mod = await import('../packages/core/src/providers/gcs-provider.js');
-    } catch {
-      return;
-    }
-    const instance = new mod.GCSWorkspaceProvider({ bucket: 'b' });
-    expect(typeof instance.getSignedUrl).toBe('function');
-  });
 
-  it('WorkspaceConfig type supports local/r2/gcs variants', async () => {
+  it('WorkspaceConfig type supports local/r2 variants', async () => {
     const { createWorkspaceProvider } = await import('../packages/core/src/workspace-factory.js');
     // Local config — fully typed
     const localProvider = createWorkspaceProvider({ type: 'local', basePath: '/tmp' });
