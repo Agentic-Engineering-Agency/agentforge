@@ -134,6 +134,12 @@ export function getGitHubUrl(nameOrUrl: string): string {
   return `https://github.com/${nameOrUrl}`;
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function getConvexUrl(): string | undefined {
+  return process.env['CONVEX_URL'] || process.env['NEXT_PUBLIC_CONVEX_URL'];
+}
+
 // ─── Command Registration ─────────────────────────────────────────────────────
 
 export function registerSkillCommand(program: Command): void {
@@ -254,6 +260,128 @@ export function registerSkillCommand(program: Command): void {
         error((err as Error).message);
         info('List installed skills with: agentforge skill list');
         process.exit(1);
+      }
+    });
+
+  // ─── skill search ──────────────────────────────────────────────────
+  skillCmd
+    .command('search <query>')
+    .description('Search the skill marketplace')
+    .option('-c, --category <category>', 'Filter by category')
+    .action(async (query: string, options: { category?: string }) => {
+      const { searchSkills: searchMarketplace } = await import('@agentforge-ai/core');
+      const convexUrl = getConvexUrl();
+      if (!convexUrl) {
+        error('No CONVEX_URL configured. Set CONVEX_URL environment variable.');
+        return;
+      }
+      try {
+        info(`Searching marketplace for "${query}"...`);
+        const skills = await searchMarketplace(query, convexUrl, options.category);
+        if (skills.length === 0) {
+          info('No skills found matching your query.');
+          return;
+        }
+        header(`Found ${skills.length} skill(s)`);
+        table(
+          skills.map((s) => ({
+            Name: s.name,
+            Version: s.version,
+            Category: s.category,
+            Downloads: s.downloads.toString(),
+            Description: truncate(s.description, 50),
+          }))
+        );
+      } catch (err: unknown) {
+        error(`Search failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    });
+
+  // ─── skill publish ─────────────────────────────────────────────────
+  skillCmd
+    .command('publish')
+    .description('Publish a skill to the marketplace')
+    .option('-d, --dir <directory>', 'Skill directory (default: current directory)', '.')
+    .action(async (options: { dir: string }) => {
+      const fsExtra = await import('fs-extra');
+      const pathMod = await import('node:path');
+      const { parseSkillManifest, publishSkill: publishToMarketplace } = await import('@agentforge-ai/core');
+
+      const convexUrl = getConvexUrl();
+      if (!convexUrl) {
+        error('No CONVEX_URL configured. Set CONVEX_URL environment variable.');
+        return;
+      }
+
+      const skillDir = pathMod.resolve(options.dir);
+      const skillMdPath = pathMod.join(skillDir, 'SKILL.md');
+
+      if (!(await fsExtra.pathExists(skillMdPath))) {
+        error('No SKILL.md found in the specified directory.');
+        return;
+      }
+
+      try {
+        const skillMdContent = await fsExtra.readFile(skillMdPath, 'utf-8');
+        const manifest = parseSkillManifest(skillMdContent);
+
+        let readmeContent: string | undefined;
+        const readmePath = pathMod.join(skillDir, 'README.md');
+        if (await fsExtra.pathExists(readmePath)) {
+          readmeContent = await fsExtra.readFile(readmePath, 'utf-8');
+        }
+
+        const meta = manifest.metadata ?? {};
+        info(`Publishing "${manifest.name}" v${manifest.version}...`);
+        await publishToMarketplace(
+          {
+            name: manifest.name,
+            version: manifest.version,
+            description: manifest.description,
+            author: meta.author ?? 'unknown',
+            category: (meta as Record<string, unknown>)['category'] as string ?? 'general',
+            tags: meta.tags ?? [],
+            skillMdContent,
+            readmeContent,
+            repositoryUrl: meta.repository,
+          },
+          convexUrl,
+        );
+        success(`Skill "${manifest.name}" published successfully!`);
+      } catch (err: unknown) {
+        error(`Publish failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    });
+
+  // ─── skill featured ────────────────────────────────────────────────
+  skillCmd
+    .command('featured')
+    .description('Show featured skills from the marketplace')
+    .action(async () => {
+      const { fetchFeaturedSkills } = await import('@agentforge-ai/core');
+      const convexUrl = getConvexUrl();
+      if (!convexUrl) {
+        error('No CONVEX_URL configured. Set CONVEX_URL environment variable.');
+        return;
+      }
+      try {
+        const skills = await fetchFeaturedSkills(convexUrl);
+        if (skills.length === 0) {
+          info('No featured skills available.');
+          return;
+        }
+        header('Featured Skills');
+        table(
+          skills.map((s) => ({
+            Name: s.name,
+            Version: s.version,
+            Category: s.category,
+            Downloads: s.downloads.toString(),
+            Description: truncate(s.description, 60),
+          }))
+        );
+      } catch (err: unknown) {
+        error(`Failed to fetch featured skills: ${err instanceof Error ? err.message : String(err)}`);
       }
     });
 }

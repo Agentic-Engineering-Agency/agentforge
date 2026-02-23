@@ -3,7 +3,7 @@ import { Link, useRouterState } from "@tanstack/react-router";
 import {
   MessageSquare, LayoutDashboard, Radio, Server, Activity, Clock,
   Bot, Sparkles, Network, Settings, Bug, FileText, Menu, X,
-  ChevronLeft, ChevronRight, User, Heart, FolderKanban, Folder,
+  ChevronLeft, ChevronRight, User, Heart, FolderKanban, Folder, Store,
 } from "lucide-react";
 
 const navItems = [
@@ -28,6 +28,7 @@ const navItems = [
     items: [
       { href: "/agents", label: "Agents", icon: Bot },
       { href: "/skills", label: "Skills", icon: Sparkles },
+      { href: "/skills-marketplace", label: "Marketplace", icon: Store },
       { href: "/connections", label: "Connections", icon: Network },
     ],
   },

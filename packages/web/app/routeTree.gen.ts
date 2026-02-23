@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UsageRouteImport } from './routes/usage'
+import { Route as SkillsMarketplaceRouteImport } from './routes/skills-marketplace'
 import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
@@ -26,6 +27,11 @@ import { Route as RunsRunIdRouteImport } from './routes/runs.$runId'
 const UsageRoute = UsageRouteImport.update({
   id: '/usage',
   path: '/usage',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SkillsMarketplaceRoute = SkillsMarketplaceRouteImport.update({
+  id: '/skills-marketplace',
+  path: '/skills-marketplace',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SkillsRoute = SkillsRouteImport.update({
@@ -101,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
+  '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
   '/runs/$runId': typeof RunsRunIdRoute
 }
@@ -116,6 +123,7 @@ export interface FileRoutesByTo {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
+  '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
   '/runs/$runId': typeof RunsRunIdRoute
 }
@@ -132,6 +140,7 @@ export interface FileRoutesById {
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
+  '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
   '/runs/$runId': typeof RunsRunIdRoute
 }
@@ -149,6 +158,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/skills'
+    | '/skills-marketplace'
     | '/usage'
     | '/runs/$runId'
   fileRoutesByTo: FileRoutesByTo
@@ -164,6 +174,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/skills'
+    | '/skills-marketplace'
     | '/usage'
     | '/runs/$runId'
   id:
@@ -179,6 +190,7 @@ export interface FileRouteTypes {
     | '/sessions'
     | '/settings'
     | '/skills'
+    | '/skills-marketplace'
     | '/usage'
     | '/runs/$runId'
   fileRoutesById: FileRoutesById
@@ -195,6 +207,7 @@ export interface RootRouteChildren {
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SkillsRoute: typeof SkillsRoute
+  SkillsMarketplaceRoute: typeof SkillsMarketplaceRoute
   UsageRoute: typeof UsageRoute
   RunsRunIdRoute: typeof RunsRunIdRoute
 }
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/usage'
       fullPath: '/usage'
       preLoaderRoute: typeof UsageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/skills-marketplace': {
+      id: '/skills-marketplace'
+      path: '/skills-marketplace'
+      fullPath: '/skills-marketplace'
+      preLoaderRoute: typeof SkillsMarketplaceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/skills': {
@@ -307,6 +327,7 @@ const rootRouteChildren: RootRouteChildren = {
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SkillsRoute: SkillsRoute,
+  SkillsMarketplaceRoute: SkillsMarketplaceRoute,
   UsageRoute: UsageRoute,
   RunsRunIdRoute: RunsRunIdRoute,
 }
