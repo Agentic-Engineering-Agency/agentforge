@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { validateFileUpload } from "./lib/fileUpload";
 
 // Query: List files
 export const list = query({
@@ -99,5 +100,60 @@ export const moveToFolder = mutation({
       folderId: args.folderId,
     });
     return args.id;
+  },
+});
+
+// Mutation: Generate an upload URL for Convex file storage
+export const generateUploadUrl = mutation({
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+// Mutation: Confirm upload after file is stored in Convex storage
+export const confirmUpload = mutation({
+  args: {
+    storageId: v.id("_storage"),
+    name: v.string(),
+    originalName: v.string(),
+    mimeType: v.string(),
+    size: v.number(),
+    folderId: v.optional(v.id("folders")),
+    projectId: v.optional(v.id("projects")),
+    userId: v.optional(v.string()),
+    metadata: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    const validation = validateFileUpload({ mimeType: args.mimeType, size: args.size });
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+
+    const url = await ctx.storage.getUrl(args.storageId);
+    if (!url) throw new Error("Failed to get storage URL");
+
+    const fileId = await ctx.db.insert("files", {
+      name: args.name,
+      originalName: args.originalName,
+      mimeType: args.mimeType,
+      size: args.size,
+      url,
+      folderId: args.folderId,
+      projectId: args.projectId,
+      userId: args.userId,
+      uploadedAt: Date.now(),
+      metadata: args.metadata,
+    });
+    return fileId;
+  },
+});
+
+// Query: Get download URL for a file
+export const getDownloadUrl = query({
+  args: { id: v.id("files") },
+  handler: async (ctx, args) => {
+    const file = await ctx.db.get(args.id);
+    if (!file) throw new Error("File not found");
+    return { url: file.url, name: file.originalName, mimeType: file.mimeType };
   },
 });
