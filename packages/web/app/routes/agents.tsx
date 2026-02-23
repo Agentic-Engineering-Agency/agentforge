@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, ChangeEvent, FormEvent } from 'react';
 import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X } from 'lucide-react';
+import { LLM_PROVIDERS, getModelsByProvider } from '../../../../convex/llmProviders';
 
 interface Agent {
   id: string;
@@ -23,7 +24,7 @@ const initialAgents: Agent[] = [
     description: 'An agent specialized in gathering and summarizing information from the web.',
     instructions: 'You are a research assistant. Your goal is to find the most relevant and up-to-date information on any given topic. Use search tools and summarize your findings clearly.',
     model: 'gpt-4.1-mini',
-    provider: 'OpenAI',
+    provider: 'openai',
     temperature: 0.7,
     maxTokens: 4096,
     status: 'active',
@@ -34,7 +35,7 @@ const initialAgents: Agent[] = [
     description: 'Generates code in various programming languages based on user requirements.',
     instructions: 'You are a senior software engineer. Write clean, efficient, and well-documented code. Always ask for clarification if the requirements are ambiguous.',
     model: 'gemini-2.5-flash',
-    provider: 'Google',
+    provider: 'google',
     temperature: 0.5,
     maxTokens: 8192,
     status: 'inactive',
@@ -45,7 +46,7 @@ const initialAgents: Agent[] = [
     description: 'A creative partner for brainstorming and writing stories, scripts, and more.',
     instructions: 'You are a creative writer. Help users brainstorm ideas, develop characters, and write compelling narratives. Be imaginative and inspiring.',
     model: 'grok-4',
-    provider: 'xAI',
+    provider: 'xai',
     temperature: 0.9,
     maxTokens: 2048,
     status: 'active',
@@ -183,7 +184,7 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
     description: agent?.description || '',
     instructions: agent?.instructions || '',
     model: agent?.model || 'gpt-4.1-mini',
-    provider: agent?.provider || 'OpenAI',
+    provider: agent?.provider || 'openai',
     temperature: agent?.temperature || 0.7,
     maxTokens: agent?.maxTokens || 4096,
   });
@@ -202,16 +203,8 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
     onSave(formData);
   };
 
-  const providers = ['OpenAI', 'Anthropic', 'OpenRouter', 'Google', 'xAI'] as const;
-  type Provider = typeof providers[number];
-
-  const models: Record<Provider, string[]> = {
-    OpenAI: ['gpt-4.1-mini', 'gpt-4o', 'gpt-3.5-turbo'],
-    Google: ['gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.0-pro'],
-    Anthropic: ['claude-3-opus', 'claude-3-sonnet', 'claude-3-haiku'],
-    OpenRouter: ['openrouter/auto'],
-    xAI: ['grok-4', 'grok-4-314b'],
-  };
+  const providers = LLM_PROVIDERS;
+  const modelsForProvider = getModelsByProvider(formData.provider);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center">
@@ -236,16 +229,38 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Provider</label>
-              <select name="provider" value={formData.provider} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
-                {providers.map(p => <option key={p} value={p}>{p}</option>)}
+              <select name="provider" value={formData.provider} onChange={(e) => {
+                const newProvider = e.target.value;
+                const providerModels = getModelsByProvider(newProvider);
+                setFormData(prev => ({
+                  ...prev,
+                  provider: newProvider,
+                  model: providerModels[0]?.id.split('/').slice(1).join('/') || '',
+                }));
+              }} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+                {providers.map(p => <option key={p.key} value={p.key}>{p.displayName}</option>)}
               </select>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Model</label>
               <select name="model" value={formData.model} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
-                {(models[formData.provider as Provider] || []).map(m => <option key={m} value={m}>{m}</option>)}
+                {modelsForProvider.map(m => (
+                  <option key={m.id} value={m.id.split('/').slice(1).join('/')}>
+                    {m.displayName} ({Math.round(m.contextWindow / 1000)}K ctx)
+                  </option>
+                ))}
               </select>
             </div>
+            {modelsForProvider.find(m => m.id.split('/').slice(1).join('/') === formData.model) && (
+              <div className="col-span-2 flex flex-wrap gap-2 text-xs">
+                {modelsForProvider.find(m => m.id.split('/').slice(1).join('/') === formData.model)!.capabilities.map(cap => (
+                  <span key={cap} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary">{cap}</span>
+                ))}
+                <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                  {modelsForProvider.find(m => m.id.split('/').slice(1).join('/') === formData.model)!.pricingTier}
+                </span>
+              </div>
+            )}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
