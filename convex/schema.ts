@@ -488,6 +488,24 @@ export default defineSchema({
       filterFields: ["agentId", "projectId", "type"],
     }),
 
+  // Granular usage events for cost analytics and observability
+  usageEvents: defineTable({
+    agentId: v.string(),
+    projectId: v.optional(v.string()),
+    threadId: v.optional(v.string()),
+    model: v.string(),
+    inputTokens: v.number(),
+    outputTokens: v.number(),
+    costUsd: v.number(),
+    timestamp: v.number(),
+    latencyMs: v.optional(v.number()),
+    metadata: v.optional(v.any()),
+  })
+    .index("byAgentId", ["agentId"])
+    .index("byProjectId", ["projectId"])
+    .index("byModel", ["model"])
+    .index("byTimestamp", ["timestamp"]),
+
   // Memory consolidation records
   memoryConsolidations: defineTable({
     agentId: v.string(),
