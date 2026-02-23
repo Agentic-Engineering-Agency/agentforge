@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 
 // Mutation: Add a message to a thread
@@ -51,15 +52,17 @@ export const create = mutation({
   },
 });
 
-// Query: Get messages by thread
+// Query: Get messages by thread (paginated)
 export const list = query({
-  args: { threadId: v.id("threads") },
+  args: {
+    threadId: v.id("threads"),
+    paginationOpts: paginationOptsValidator,
+  },
   handler: async (ctx, args) => {
-    const messages = await ctx.db
+    return await ctx.db
       .query("messages")
       .withIndex("byThread", (q) => q.eq("threadId", args.threadId!))
-      .collect();
-    return messages;
+      .paginate(args.paginationOpts);
   },
 });
 
