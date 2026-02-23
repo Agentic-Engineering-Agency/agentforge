@@ -2,7 +2,11 @@ export type ModelCapability = "chat" | "code" | "vision" | "reasoning" | "functi
 export type PricingTier = "free" | "standard" | "premium";
 
 export interface LLMModel {
-  /** Mastra-native model ID, format: "provider/model-name" */
+  /**
+   * Mastra-native model ID.
+   * Standard format: "provider/model-name"
+   * OpenRouter format: "openrouter/<upstream-provider>/<model>"
+   */
   id: string;
   /** Human-readable display name */
   displayName: string;
@@ -53,7 +57,7 @@ export const LLM_PROVIDERS: ProviderConfig[] = [
   {
     key: "google",
     displayName: "Google",
-    envVar: "GOOGLE_GENERATIVE_AI_API_KEY",
+    envVar: "GOOGLE_API_KEY",
     website: "https://ai.google.dev",
   },
   {
@@ -438,6 +442,12 @@ export const LLM_MODELS: LLMModel[] = [
 // Failover chain
 // ---------------------------------------------------------------------------
 
+/**
+ * Default failover chain for the registry layer.
+ * NOTE: Runtime failover in convex/chat.ts and convex/mastraIntegration.ts
+ * uses its own {provider, model} pairs. Wire this into the runtime or
+ * keep in sync manually when updating models.
+ */
 export const DEFAULT_FAILOVER_CHAIN: string[] = [
   "openai/gpt-4.1-mini",
   "anthropic/claude-haiku-4-5",

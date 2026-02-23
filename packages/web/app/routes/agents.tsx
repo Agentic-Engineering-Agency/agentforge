@@ -45,7 +45,7 @@ const initialAgents: Agent[] = [
     name: 'Creative Writer',
     description: 'A creative partner for brainstorming and writing stories, scripts, and more.',
     instructions: 'You are a creative writer. Help users brainstorm ideas, develop characters, and write compelling narratives. Be imaginative and inspiring.',
-    model: 'grok-4',
+    model: 'grok-3',
     provider: 'xai',
     temperature: 0.9,
     maxTokens: 2048,
@@ -251,16 +251,22 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
                 ))}
               </select>
             </div>
-            {modelsForProvider.find(m => m.id.split('/').slice(1).join('/') === formData.model) && (
-              <div className="col-span-2 flex flex-wrap gap-2 text-xs">
-                {modelsForProvider.find(m => m.id.split('/').slice(1).join('/') === formData.model)!.capabilities.map(cap => (
-                  <span key={cap} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary">{cap}</span>
-                ))}
-                <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
-                  {modelsForProvider.find(m => m.id.split('/').slice(1).join('/') === formData.model)!.pricingTier}
-                </span>
-              </div>
-            )}
+            {(() => {
+              const selectedModel = modelsForProvider.find(
+                m => m.id.split('/').slice(1).join('/') === formData.model,
+              );
+              if (!selectedModel) return null;
+              return (
+                <div className="col-span-2 flex flex-wrap gap-2 text-xs">
+                  {selectedModel.capabilities.map(cap => (
+                    <span key={cap} className="px-2 py-0.5 rounded-full bg-primary/10 text-primary">{cap}</span>
+                  ))}
+                  <span className="px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
+                    {selectedModel.pricingTier}
+                  </span>
+                </div>
+              );
+            })()}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
