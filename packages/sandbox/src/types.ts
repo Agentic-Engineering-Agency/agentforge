@@ -202,6 +202,42 @@ export interface PoolEntry {
 }
 
 // ---------------------------------------------------------------------------
+// Native sandbox types
+// ---------------------------------------------------------------------------
+
+/**
+ * Security profile for the native process sandbox.
+ * Controls network access, filesystem access, and resource limits.
+ */
+export interface SandboxProfile {
+  /** Whether the sandboxed process may access the network. */
+  allowNetwork: boolean;
+  /** List of filesystem paths the sandbox is allowed to access. */
+  allowFS: string[];
+  /** Maximum execution time in seconds. */
+  timeout: number;
+  /** Maximum memory usage in MB. */
+  memory: number;
+}
+
+/**
+ * Configuration for a {@link NativeSandbox} instance.
+ */
+export interface NativeSandboxConfig {
+  /**
+   * Lifecycle scope:
+   * - `session` — one sandbox per user session
+   * - `agent`   — one sandbox per agent run
+   * - `shared`  — long-running shared sandbox
+   */
+  scope: 'session' | 'agent' | 'shared';
+  /** Security profile controlling access restrictions. */
+  profile?: SandboxProfile;
+  /** Working directory for command execution. */
+  workingDirectory?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Sandbox manager config
 // ---------------------------------------------------------------------------
 
@@ -213,7 +249,7 @@ export interface SandboxManagerConfig {
    * Which provider to use when creating new sandboxes.
    * Defaults to `docker`.
    */
-  provider?: 'docker' | 'e2b';
+  provider?: 'docker' | 'e2b' | 'native';
 
   /**
    * Passed through to DockerSandbox when provider === 'docker'.
@@ -229,4 +265,9 @@ export interface SandboxManagerConfig {
     port?: number;
     protocol?: 'http' | 'https';
   };
+
+  /**
+   * Passed through to NativeSandbox when provider === 'native'.
+   */
+  nativeConfig?: Omit<NativeSandboxConfig, 'scope'>;
 }

@@ -31,6 +31,100 @@
  */
 
 import { Workspace, LocalFilesystem, LocalSandbox } from '@mastra/core/workspace';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+
+export interface WorkspaceProvider {
+  read(path: string): Promise<string>;
+  write(path: string, content: string | Buffer): Promise<void>;
+  list(prefix?: string): Promise<string[]>;
+  delete(path: string): Promise<void>;
+  exists(path: string): Promise<boolean>;
+  stat(path: string): Promise<{ size: number; modified: Date; isDirectory: boolean } | null>;
+}
+
+export interface WorkspaceConfig {
+  type: 'local' | 'r2';
+  basePath?: string;
+  bucket?: string;
+  region?: string;
+  credentials?: {
+    accessKeyId?: string;
+    secretAccessKey?: string;
+  };
+}
+
+export class LocalWorkspaceProvider implements WorkspaceProvider {
+  private basePath: string;
+
+  constructor(basePath: string) {
+    this.basePath = basePath;
+  }
+
+  private resolve(filePath: string): string {
+    const resolved = path.resolve(this.basePath, filePath);
+    // Prevent path traversal outside the workspace root
+    if (!resolved.startsWith(path.resolve(this.basePath))) {
+      throw new Error(`[LocalWorkspaceProvider] Path traversal detected: "${filePath}" escapes workspace root`);
+    }
+    return resolved;
+  }
+
+  async read(filePath: string): Promise<string> {
+    return fs.readFile(this.resolve(filePath), 'utf8');
+  }
+
+  async write(filePath: string, content: string | Buffer): Promise<void> {
+    const fullPath = this.resolve(filePath);
+    await fs.mkdir(path.dirname(fullPath), { recursive: true });
+    await fs.writeFile(fullPath, content);
+  }
+
+  async list(prefix?: string): Promise<string[]> {
+    const dir = prefix ? this.resolve(prefix) : this.basePath;
+    try {
+      return await listRecursive(dir, this.basePath);
+    } catch {
+      return [];
+    }
+  }
+
+  async delete(filePath: string): Promise<void> {
+    await fs.rm(this.resolve(filePath), { recursive: true, force: true });
+  }
+
+  async exists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(this.resolve(filePath));
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async stat(filePath: string): Promise<{ size: number; modified: Date; isDirectory: boolean } | null> {
+    try {
+      const s = await fs.stat(this.resolve(filePath));
+      return { size: s.size, modified: s.mtime, isDirectory: s.isDirectory() };
+    } catch {
+      return null;
+    }
+  }
+}
+
+async function listRecursive(dir: string, basePath: string): Promise<string[]> {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const results: string[] = [];
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      results.push(...await listRecursive(fullPath, basePath));
+    } else {
+      results.push(path.relative(basePath, fullPath));
+    }
+  }
+  return results;
+}
 
 /**
  * Configuration for a local AgentForge workspace.
