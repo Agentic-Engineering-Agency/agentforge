@@ -316,8 +316,8 @@ var CloudClient = class {
    */
   getUrl(endpoint) {
     const base = this.baseUrl.replace(/\/$/, "");
-    const path12 = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-    return `${base}${path12}`;
+    const path14 = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    return `${base}${path14}`;
   }
   /**
    * Get request headers with authentication
@@ -2770,6 +2770,268 @@ console.log('Hello from ${name}!');
   });
 }
 
+// src/commands/skill.ts
+import fs7 from "fs-extra";
+import path7 from "path";
+import os2 from "os";
+import { execFileSync } from "child_process";
+function getGlobalSkillsDir() {
+  return path7.join(os2.homedir(), ".agentforge", "skills");
+}
+function parseSkillMd2(content) {
+  const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!fmMatch) {
+    return { name: "", description: "", version: "1.0.0" };
+  }
+  const frontmatter = fmMatch[1];
+  const data = {};
+  for (const line of frontmatter.split("\n")) {
+    const match = line.match(/^(\w+):\s*(.+)$/);
+    if (match) {
+      data[match[1]] = match[2].trim();
+    }
+  }
+  return {
+    name: data["name"] || "",
+    description: data["description"] || "",
+    version: data["version"] || "1.0.0"
+  };
+}
+async function installSkillFromPath(sourcePath, skillsDir) {
+  if (!await fs7.pathExists(sourcePath)) {
+    throw new Error(`Source path not found: ${sourcePath}`);
+  }
+  const skillMdPath = path7.join(sourcePath, "SKILL.md");
+  if (!await fs7.pathExists(skillMdPath)) {
+    throw new Error(`No SKILL.md found in ${sourcePath}. Not a valid skill directory.`);
+  }
+  const skillName = path7.basename(sourcePath);
+  const destPath = path7.join(skillsDir, skillName);
+  await fs7.mkdirp(skillsDir);
+  await fs7.copy(sourcePath, destPath, { overwrite: true });
+  return destPath;
+}
+async function listInstalledSkills(skillsDir) {
+  if (!await fs7.pathExists(skillsDir)) {
+    return [];
+  }
+  const entries = await fs7.readdir(skillsDir);
+  const skills = [];
+  for (const entry of entries) {
+    const entryPath = path7.join(skillsDir, entry);
+    const stat = await fs7.stat(entryPath);
+    if (!stat.isDirectory()) continue;
+    const skillMdPath = path7.join(entryPath, "SKILL.md");
+    if (!await fs7.pathExists(skillMdPath)) continue;
+    const content = await fs7.readFile(skillMdPath, "utf-8");
+    const meta = parseSkillMd2(content);
+    skills.push({
+      name: meta.name || entry,
+      version: meta.version,
+      description: meta.description
+    });
+  }
+  return skills;
+}
+async function removeSkill(name, skillsDir) {
+  const skillDir = path7.join(skillsDir, name);
+  if (!await fs7.pathExists(skillDir)) {
+    throw new Error(`Skill "${name}" not found in ${skillsDir}`);
+  }
+  await fs7.remove(skillDir);
+}
+function getGitHubUrl(nameOrUrl) {
+  if (nameOrUrl.startsWith("https://") || nameOrUrl.startsWith("http://")) {
+    return nameOrUrl;
+  }
+  return `https://github.com/${nameOrUrl}`;
+}
+function getConvexUrl2() {
+  return process.env["CONVEX_URL"] || process.env["NEXT_PUBLIC_CONVEX_URL"];
+}
+function registerSkillCommand(program2) {
+  const skillCmd = program2.command("skill").description("Manage global skills installed in ~/.agentforge/skills/");
+  skillCmd.command("install").argument("<name>", "Local path or GitHub owner/repo to install from").description("Install a skill to ~/.agentforge/skills/").action(async (name) => {
+    const skillsDir = getGlobalSkillsDir();
+    const isLocalPath = await fs7.pathExists(name);
+    if (isLocalPath) {
+      const sourcePath = path7.resolve(name);
+      try {
+        const installedPath = await installSkillFromPath(sourcePath, skillsDir);
+        const skillName = path7.basename(installedPath);
+        success(`Skill "${skillName}" installed from local path.`);
+        info(`Location: ${installedPath}`);
+      } catch (err) {
+        error(err.message);
+        process.exit(1);
+      }
+    } else {
+      const repoUrl = getGitHubUrl(name);
+      const repoName = name.split("/").pop().replace(/\.git$/, "");
+      const destPath = path7.join(skillsDir, repoName);
+      await fs7.mkdirp(skillsDir);
+      info(`Cloning skill from ${repoUrl}...`);
+      try {
+        execFileSync("git", ["clone", "--depth", "1", repoUrl, destPath], {
+          encoding: "utf-8",
+          stdio: "pipe"
+        });
+        await fs7.remove(path7.join(destPath, ".git"));
+        const skillMdPath = path7.join(destPath, "SKILL.md");
+        if (!await fs7.pathExists(skillMdPath)) {
+          error("Cloned repo does not contain a SKILL.md. Not a valid skill.");
+          await fs7.remove(destPath);
+          process.exit(1);
+        }
+        success(`Skill "${repoName}" installed from GitHub.`);
+        info(`Location: ${destPath}`);
+      } catch (err) {
+        error(`Failed to clone: ${err.message}`);
+        process.exit(1);
+      }
+    }
+  });
+  skillCmd.command("list").description("List skills installed in ~/.agentforge/skills/").option("--json", "Output as JSON").action(async (opts) => {
+    const skillsDir = getGlobalSkillsDir();
+    header("Global Skills");
+    let skills;
+    try {
+      skills = await listInstalledSkills(skillsDir);
+    } catch {
+      skills = [];
+    }
+    if (skills.length === 0) {
+      info("No global skills installed.");
+      dim(
+        `  Install a skill with: ${colors.cyan}agentforge skill install <path-or-owner/repo>${colors.reset}`
+      );
+      return;
+    }
+    if (opts.json) {
+      console.log(JSON.stringify(skills, null, 2));
+      return;
+    }
+    table(
+      skills.map((s) => ({
+        Name: s.name,
+        Version: s.version,
+        Description: truncate(s.description, 60)
+      }))
+    );
+    dim(`  Skills directory: ${skillsDir}`);
+  });
+  skillCmd.command("remove").argument("<name>", "Skill name to remove").description("Remove a skill from ~/.agentforge/skills/").action(async (name) => {
+    const skillsDir = getGlobalSkillsDir();
+    try {
+      await removeSkill(name, skillsDir);
+      success(`Skill "${name}" removed.`);
+    } catch (err) {
+      error(err.message);
+      info("List installed skills with: agentforge skill list");
+      process.exit(1);
+    }
+  });
+  skillCmd.command("search <query>").description("Search the skill marketplace").option("-c, --category <category>", "Filter by category").action(async (query, options) => {
+    const { searchSkills: searchMarketplace } = await import("@agentforge-ai/core");
+    const convexUrl = getConvexUrl2();
+    if (!convexUrl) {
+      error("No CONVEX_URL configured. Set CONVEX_URL environment variable.");
+      return;
+    }
+    try {
+      info(`Searching marketplace for "${query}"...`);
+      const skills = await searchMarketplace(query, convexUrl, options.category);
+      if (skills.length === 0) {
+        info("No skills found matching your query.");
+        return;
+      }
+      header(`Found ${skills.length} skill(s)`);
+      table(
+        skills.map((s) => ({
+          Name: s.name,
+          Version: s.version,
+          Category: s.category,
+          Downloads: s.downloads.toString(),
+          Description: truncate(s.description, 50)
+        }))
+      );
+    } catch (err) {
+      error(`Search failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+  skillCmd.command("publish").description("Publish a skill to the marketplace").option("-d, --dir <directory>", "Skill directory (default: current directory)", ".").action(async (options) => {
+    const fsExtra = await import("fs-extra");
+    const pathMod = await import("path");
+    const { parseSkillManifest, publishSkill: publishToMarketplace } = await import("@agentforge-ai/core");
+    const convexUrl = getConvexUrl2();
+    if (!convexUrl) {
+      error("No CONVEX_URL configured. Set CONVEX_URL environment variable.");
+      return;
+    }
+    const skillDir = pathMod.resolve(options.dir);
+    const skillMdPath = pathMod.join(skillDir, "SKILL.md");
+    if (!await fsExtra.pathExists(skillMdPath)) {
+      error("No SKILL.md found in the specified directory.");
+      return;
+    }
+    try {
+      const skillMdContent = await fsExtra.readFile(skillMdPath, "utf-8");
+      const manifest = parseSkillManifest(skillMdContent);
+      let readmeContent;
+      const readmePath = pathMod.join(skillDir, "README.md");
+      if (await fsExtra.pathExists(readmePath)) {
+        readmeContent = await fsExtra.readFile(readmePath, "utf-8");
+      }
+      const meta = manifest.metadata ?? {};
+      info(`Publishing "${manifest.name}" v${manifest.version}...`);
+      await publishToMarketplace(
+        {
+          name: manifest.name,
+          version: manifest.version,
+          description: manifest.description,
+          author: meta.author ?? "unknown",
+          category: meta["category"] ?? "general",
+          tags: meta.tags ?? [],
+          skillMdContent,
+          readmeContent,
+          repositoryUrl: meta.repository
+        },
+        convexUrl
+      );
+      success(`Skill "${manifest.name}" published successfully!`);
+    } catch (err) {
+      error(`Publish failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+  skillCmd.command("featured").description("Show featured skills from the marketplace").action(async () => {
+    const { fetchFeaturedSkills } = await import("@agentforge-ai/core");
+    const convexUrl = getConvexUrl2();
+    if (!convexUrl) {
+      error("No CONVEX_URL configured. Set CONVEX_URL environment variable.");
+      return;
+    }
+    try {
+      const skills = await fetchFeaturedSkills(convexUrl);
+      if (skills.length === 0) {
+        info("No featured skills available.");
+        return;
+      }
+      header("Featured Skills");
+      table(
+        skills.map((s) => ({
+          Name: s.name,
+          Version: s.version,
+          Category: s.category,
+          Downloads: s.downloads.toString(),
+          Description: truncate(s.description, 60)
+        }))
+      );
+    } catch (err) {
+      error(`Failed to fetch featured skills: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+}
+
 // src/commands/cron.ts
 import readline4 from "readline";
 function prompt3(q) {
@@ -2933,8 +3195,8 @@ function registerMcpCommand(program2) {
 }
 
 // src/commands/files.ts
-import fs7 from "fs-extra";
-import path7 from "path";
+import fs8 from "fs-extra";
+import path8 from "path";
 function registerFilesCommand(program2) {
   const files = program2.command("files").description("Manage files");
   files.command("list").argument("[folder]", "Folder ID to list files from").option("--json", "Output as JSON").description("List files").action(async (folder, opts) => {
@@ -2961,14 +3223,14 @@ function registerFilesCommand(program2) {
     })));
   });
   files.command("upload").argument("<filepath>", "Path to file to upload").option("--folder <id>", "Folder ID to upload to").option("--project <id>", "Project ID to associate with").description("Upload a file").action(async (filepath, opts) => {
-    const absPath = path7.resolve(filepath);
-    if (!fs7.existsSync(absPath)) {
+    const absPath = path8.resolve(filepath);
+    if (!fs8.existsSync(absPath)) {
       error(`File not found: ${absPath}`);
       process.exit(1);
     }
-    const stat = fs7.statSync(absPath);
-    const name = path7.basename(absPath);
-    const ext = path7.extname(absPath).toLowerCase();
+    const stat = fs8.statSync(absPath);
+    const name = path8.basename(absPath);
+    const ext = path8.extname(absPath).toLowerCase();
     const mimeTypes = {
       ".txt": "text/plain",
       ".md": "text/markdown",
@@ -3132,8 +3394,8 @@ function registerProjectsCommand(program2) {
 }
 
 // src/commands/config.ts
-import fs8 from "fs-extra";
-import path8 from "path";
+import fs9 from "fs-extra";
+import path9 from "path";
 import readline7 from "readline";
 function prompt6(q) {
   const rl = readline7.createInterface({ input: process.stdin, output: process.stdout });
@@ -3149,10 +3411,10 @@ function registerConfigCommand(program2) {
     const cwd = process.cwd();
     const envFiles = [".env", ".env.local", ".env.production"];
     for (const envFile of envFiles) {
-      const envPath = path8.join(cwd, envFile);
-      if (fs8.existsSync(envPath)) {
+      const envPath = path9.join(cwd, envFile);
+      if (fs9.existsSync(envPath)) {
         console.log(`  ${colors.cyan}${envFile}${colors.reset}`);
-        const content = fs8.readFileSync(envPath, "utf-8");
+        const content = fs9.readFileSync(envPath, "utf-8");
         content.split("\n").forEach((line) => {
           if (line.trim() && !line.startsWith("#")) {
             const [key, ...rest] = line.split("=");
@@ -3164,25 +3426,25 @@ function registerConfigCommand(program2) {
         console.log();
       }
     }
-    const convexDir = path8.join(cwd, ".convex");
-    if (fs8.existsSync(convexDir)) {
+    const convexDir = path9.join(cwd, ".convex");
+    if (fs9.existsSync(convexDir)) {
       info("Convex: Configured");
     } else {
       info("Convex: Not configured (run `npx convex dev`)");
     }
-    const skillsDir = path8.join(cwd, "skills");
-    if (fs8.existsSync(skillsDir)) {
-      const skills = fs8.readdirSync(skillsDir).filter((d) => fs8.statSync(path8.join(skillsDir, d)).isDirectory());
+    const skillsDir = path9.join(cwd, "skills");
+    if (fs9.existsSync(skillsDir)) {
+      const skills = fs9.readdirSync(skillsDir).filter((d) => fs9.statSync(path9.join(skillsDir, d)).isDirectory());
       info(`Skills: ${skills.length} installed (${skills.join(", ")})`);
     } else {
       info("Skills: None installed");
     }
   });
   config.command("set").argument("<key>", "Configuration key").argument("<value>", "Configuration value").option("--env <file>", "Environment file to update", ".env.local").description("Set a configuration value").action(async (key, value, opts) => {
-    const envPath = path8.join(process.cwd(), opts.env);
+    const envPath = path9.join(process.cwd(), opts.env);
     let content = "";
-    if (fs8.existsSync(envPath)) {
-      content = fs8.readFileSync(envPath, "utf-8");
+    if (fs9.existsSync(envPath)) {
+      content = fs9.readFileSync(envPath, "utf-8");
     }
     const lines = content.split("\n");
     const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
@@ -3191,16 +3453,16 @@ function registerConfigCommand(program2) {
     } else {
       lines.push(`${key}=${value}`);
     }
-    fs8.writeFileSync(envPath, lines.join("\n"));
+    fs9.writeFileSync(envPath, lines.join("\n"));
     success(`Set ${key} in ${opts.env}`);
   });
   config.command("get").argument("<key>", "Configuration key").description("Get a configuration value").action(async (key) => {
     const cwd = process.cwd();
     const envFiles = [".env.local", ".env", ".env.production"];
     for (const envFile of envFiles) {
-      const envPath = path8.join(cwd, envFile);
-      if (fs8.existsSync(envPath)) {
-        const content = fs8.readFileSync(envPath, "utf-8");
+      const envPath = path9.join(cwd, envFile);
+      if (fs9.existsSync(envPath)) {
+        const content = fs9.readFileSync(envPath, "utf-8");
         const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
         if (match) {
           console.log(match[1].trim());
@@ -3226,7 +3488,7 @@ function registerConfigCommand(program2) {
     else if (provider === "openrouter") envContent.push(`OPENROUTER_API_KEY=${apiKey}`);
     else if (provider === "anthropic") envContent.push(`ANTHROPIC_API_KEY=${apiKey}`);
     else if (provider === "google") envContent.push(`GOOGLE_API_KEY=${apiKey}`);
-    fs8.writeFileSync(path8.join(process.cwd(), ".env.local"), envContent.join("\n") + "\n");
+    fs9.writeFileSync(path9.join(process.cwd(), ".env.local"), envContent.join("\n") + "\n");
     success("Configuration saved to .env.local");
     info("Run `npx convex dev` to start the Convex backend.");
   });
@@ -3248,9 +3510,9 @@ function registerConfigCommand(program2) {
       error("API key is required.");
       process.exit(1);
     }
-    const envPath = path8.join(process.cwd(), ".env.local");
+    const envPath = path9.join(process.cwd(), ".env.local");
     let content = "";
-    if (fs8.existsSync(envPath)) content = fs8.readFileSync(envPath, "utf-8");
+    if (fs9.existsSync(envPath)) content = fs9.readFileSync(envPath, "utf-8");
     const lines = content.split("\n");
     const idx = lines.findIndex((l) => l.startsWith(`${keyName}=`));
     if (idx >= 0) lines[idx] = `${keyName}=${apiKey}`;
@@ -3258,7 +3520,7 @@ function registerConfigCommand(program2) {
     const provIdx = lines.findIndex((l) => l.startsWith("LLM_PROVIDER="));
     if (provIdx >= 0) lines[provIdx] = `LLM_PROVIDER=${provider}`;
     else lines.push(`LLM_PROVIDER=${provider}`);
-    fs8.writeFileSync(envPath, lines.join("\n"));
+    fs9.writeFileSync(envPath, lines.join("\n"));
     success(`Provider "${provider}" configured.`);
   });
 }
@@ -3425,7 +3687,7 @@ function maskKey(key) {
 }
 function promptSecret2(question) {
   return new Promise((resolve2) => {
-    const readline12 = __require("readline");
+    const readline13 = __require("readline");
     if (process.stdin.isTTY) {
       process.stdout.write(question);
       process.stdin.setRawMode(true);
@@ -3453,7 +3715,7 @@ function promptSecret2(question) {
       };
       process.stdin.on("data", onData);
     } else {
-      const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
+      const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
       rl.question(question, (ans) => {
         rl.close();
         resolve2(ans.trim());
@@ -3544,8 +3806,8 @@ function registerKeysCommand(program2) {
     }
     const target = items[0];
     if (!opts.force) {
-      const readline12 = __require("readline");
-      const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
+      const readline13 = __require("readline");
+      const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
       const answer = await new Promise((resolve2) => {
         rl.question(`Delete "${target.keyName}" for ${provider}? (y/N): `, (ans) => {
           rl.close();
@@ -3617,19 +3879,19 @@ function registerKeysCommand(program2) {
 
 // src/commands/status.ts
 import { spawn as spawn2 } from "child_process";
-import path9 from "path";
-import fs9 from "fs-extra";
+import path10 from "path";
+import fs10 from "fs-extra";
 import readline9 from "readline";
 function registerStatusCommand(program2) {
   program2.command("status").description("Show system health and connection status").action(async () => {
     header("AgentForge Status");
     const cwd = process.cwd();
     const checks = {};
-    checks["Project Root"] = fs9.existsSync(path9.join(cwd, "package.json")) ? "\u2714 Found" : "\u2716 Not found";
-    checks["Convex Dir"] = fs9.existsSync(path9.join(cwd, "convex")) ? "\u2714 Found" : "\u2716 Not found";
-    checks["Skills Dir"] = fs9.existsSync(path9.join(cwd, "skills")) ? "\u2714 Found" : "\u2716 Not configured";
-    checks["Dashboard Dir"] = fs9.existsSync(path9.join(cwd, "dashboard")) ? "\u2714 Found" : "\u2716 Not found";
-    checks["Env Config"] = fs9.existsSync(path9.join(cwd, ".env.local")) || fs9.existsSync(path9.join(cwd, ".env")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Project Root"] = fs10.existsSync(path10.join(cwd, "package.json")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Convex Dir"] = fs10.existsSync(path10.join(cwd, "convex")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Skills Dir"] = fs10.existsSync(path10.join(cwd, "skills")) ? "\u2714 Found" : "\u2716 Not configured";
+    checks["Dashboard Dir"] = fs10.existsSync(path10.join(cwd, "dashboard")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Env Config"] = fs10.existsSync(path10.join(cwd, ".env.local")) || fs10.existsSync(path10.join(cwd, ".env")) ? "\u2714 Found" : "\u2716 Not found";
     try {
       const client = await createClient();
       const agents = await client.query("agents:list", {});
@@ -3640,9 +3902,9 @@ function registerStatusCommand(program2) {
     const envFiles = [".env.local", ".env"];
     let provider = "Not configured";
     for (const envFile of envFiles) {
-      const envPath = path9.join(cwd, envFile);
-      if (fs9.existsSync(envPath)) {
-        const content = fs9.readFileSync(envPath, "utf-8");
+      const envPath = path10.join(cwd, envFile);
+      if (fs10.existsSync(envPath)) {
+        const content = fs10.readFileSync(envPath, "utf-8");
         const match = content.match(/LLM_PROVIDER=(.+)/);
         if (match) {
           provider = match[1].trim();
@@ -3664,16 +3926,16 @@ function registerStatusCommand(program2) {
   program2.command("dashboard").description("Launch the web dashboard").option("-p, --port <port>", "Port for the dashboard", "3000").option("--install", "Install dashboard dependencies before starting").action(async (opts) => {
     const cwd = process.cwd();
     const searchPaths = [
-      path9.join(cwd, "dashboard"),
+      path10.join(cwd, "dashboard"),
       // 1. Bundled in project (agentforge create)
-      path9.join(cwd, "packages", "web"),
+      path10.join(cwd, "packages", "web"),
       // 2. Monorepo structure
-      path9.join(cwd, "node_modules", "@agentforge-ai", "web")
+      path10.join(cwd, "node_modules", "@agentforge-ai", "web")
       // 3. Installed as dependency
     ];
     let dashDir = "";
     for (const p of searchPaths) {
-      if (fs9.existsSync(path9.join(p, "package.json"))) {
+      if (fs10.existsSync(path10.join(p, "package.json"))) {
         dashDir = p;
         break;
       }
@@ -3695,10 +3957,10 @@ function registerStatusCommand(program2) {
       console.log();
       return;
     }
-    const nodeModulesExists = fs9.existsSync(path9.join(dashDir, "node_modules"));
+    const nodeModulesExists = fs10.existsSync(path10.join(dashDir, "node_modules"));
     if (!nodeModulesExists || opts.install) {
       header("AgentForge Dashboard \u2014 Installing Dependencies");
-      info(`Installing in ${path9.relative(cwd, dashDir) || "."}...`);
+      info(`Installing in ${path10.relative(cwd, dashDir) || "."}...`);
       console.log();
       const installChild = spawn2("pnpm", ["install"], {
         cwd: dashDir,
@@ -3716,15 +3978,15 @@ function registerStatusCommand(program2) {
       success("Dependencies installed.");
       console.log();
     }
-    const envPath = path9.join(cwd, ".env.local");
-    if (fs9.existsSync(envPath)) {
-      const envContent = fs9.readFileSync(envPath, "utf-8");
+    const envPath = path10.join(cwd, ".env.local");
+    if (fs10.existsSync(envPath)) {
+      const envContent = fs10.readFileSync(envPath, "utf-8");
       const convexUrlMatch = envContent.match(/CONVEX_URL=(.+)/);
       if (convexUrlMatch) {
-        const dashEnvPath = path9.join(dashDir, ".env.local");
+        const dashEnvPath = path10.join(dashDir, ".env.local");
         const dashEnvContent = `VITE_CONVEX_URL=${convexUrlMatch[1].trim()}
 `;
-        fs9.writeFileSync(dashEnvPath, dashEnvContent);
+        fs10.writeFileSync(dashEnvPath, dashEnvContent);
       }
     }
     header("AgentForge Dashboard");
@@ -3944,8 +4206,8 @@ function registerLoginCommand(program2) {
 }
 
 // src/commands/channel-telegram.ts
-import fs10 from "fs-extra";
-import path10 from "path";
+import fs11 from "fs-extra";
+import path11 from "path";
 import readline10 from "readline";
 function prompt8(q) {
   const rl = readline10.createInterface({ input: process.stdin, output: process.stdout });
@@ -3958,9 +4220,9 @@ function readEnvValue(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path10.join(cwd, envFile);
-    if (fs10.existsSync(envPath)) {
-      const content = fs10.readFileSync(envPath, "utf-8");
+    const envPath = path11.join(cwd, envFile);
+    if (fs11.existsSync(envPath)) {
+      const content = fs11.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
       if (match) return match[1].trim().replace(/["']/g, "");
     }
@@ -3968,10 +4230,10 @@ function readEnvValue(key) {
   return void 0;
 }
 function writeEnvValue(key, value, envFile = ".env.local") {
-  const envPath = path10.join(process.cwd(), envFile);
+  const envPath = path11.join(process.cwd(), envFile);
   let content = "";
-  if (fs10.existsSync(envPath)) {
-    content = fs10.readFileSync(envPath, "utf-8");
+  if (fs11.existsSync(envPath)) {
+    content = fs11.readFileSync(envPath, "utf-8");
   }
   const lines = content.split("\n");
   const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
@@ -3980,7 +4242,7 @@ function writeEnvValue(key, value, envFile = ".env.local") {
   } else {
     lines.push(`${key}=${value}`);
   }
-  fs10.writeFileSync(envPath, lines.join("\n"));
+  fs11.writeFileSync(envPath, lines.join("\n"));
 }
 function registerChannelTelegramCommand(program2) {
   const channel = program2.command("channel:telegram").description("Manage the Telegram messaging channel");
@@ -4309,8 +4571,8 @@ Commands:
 }
 
 // src/commands/channel-whatsapp.ts
-import fs11 from "fs-extra";
-import path11 from "path";
+import fs12 from "fs-extra";
+import path12 from "path";
 import readline11 from "readline";
 function prompt9(q) {
   const rl = readline11.createInterface({ input: process.stdin, output: process.stdout });
@@ -4323,9 +4585,9 @@ function readEnvValue2(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path11.join(cwd, envFile);
-    if (fs11.existsSync(envPath)) {
-      const content = fs11.readFileSync(envPath, "utf-8");
+    const envPath = path12.join(cwd, envFile);
+    if (fs12.existsSync(envPath)) {
+      const content = fs12.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
       if (match) return match[1].trim().replace(/["']/g, "");
     }
@@ -4333,10 +4595,10 @@ function readEnvValue2(key) {
   return void 0;
 }
 function writeEnvValue2(key, value, envFile = ".env.local") {
-  const envPath = path11.join(process.cwd(), envFile);
+  const envPath = path12.join(process.cwd(), envFile);
   let content = "";
-  if (fs11.existsSync(envPath)) {
-    content = fs11.readFileSync(envPath, "utf-8");
+  if (fs12.existsSync(envPath)) {
+    content = fs12.readFileSync(envPath, "utf-8");
   }
   const lines = content.split("\n");
   const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
@@ -4345,7 +4607,7 @@ function writeEnvValue2(key, value, envFile = ".env.local") {
   } else {
     lines.push(`${key}=${value}`);
   }
-  fs11.writeFileSync(envPath, lines.join("\n"));
+  fs12.writeFileSync(envPath, lines.join("\n"));
 }
 function registerChannelWhatsAppCommand(program2) {
   const channel = program2.command("channel:whatsapp").description("Manage the WhatsApp messaging channel");
@@ -4781,6 +5043,546 @@ async function runMinimalWhatsAppBot(config) {
   });
 }
 
+// src/commands/channel-slack.ts
+import fs13 from "fs-extra";
+import path13 from "path";
+import readline12 from "readline";
+function prompt10(q) {
+  const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((r) => rl.question(q, (a) => {
+    rl.close();
+    r(a.trim());
+  }));
+}
+function readEnvValue3(key) {
+  const cwd = process.cwd();
+  const envFiles = [".env.local", ".env", ".env.production"];
+  for (const envFile of envFiles) {
+    const envPath = path13.join(cwd, envFile);
+    if (fs13.existsSync(envPath)) {
+      const content = fs13.readFileSync(envPath, "utf-8");
+      const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
+      if (match) return match[1].trim().replace(/["']/g, "");
+    }
+  }
+  return void 0;
+}
+function writeEnvValue3(key, value, envFile = ".env.local") {
+  const envPath = path13.join(process.cwd(), envFile);
+  let content = "";
+  if (fs13.existsSync(envPath)) {
+    content = fs13.readFileSync(envPath, "utf-8");
+  }
+  const lines = content.split("\n");
+  const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
+  if (idx >= 0) {
+    lines[idx] = `${key}=${value}`;
+  } else {
+    lines.push(`${key}=${value}`);
+  }
+  fs13.writeFileSync(envPath, lines.join("\n"));
+}
+function registerChannelSlackCommand(program2) {
+  const channel = program2.command("channel:slack").description("Manage the Slack messaging channel");
+  channel.command("start").description("Start the Slack bot and begin routing messages to an agent").option("-a, --agent <id>", "Agent ID to route messages to").option("--bot-token <token>", "Slack bot token (xoxb-...) (overrides .env)").option("--app-token <token>", "Slack app-level token (xapp-...) for socket mode (overrides .env)").option("--signing-secret <secret>", "Slack signing secret (overrides .env)").option("--socket-mode", "Enable socket mode (default: true)", true).option("--log-level <level>", "Log level: debug, info, warn, error", "info").action(async (opts) => {
+    header("Slack Channel");
+    const botToken = opts.botToken || readEnvValue3("SLACK_BOT_TOKEN") || process.env.SLACK_BOT_TOKEN;
+    if (!botToken) {
+      error("Slack Bot Token not found.");
+      info("Set it with: agentforge channel:slack configure");
+      info("Or pass it with: --bot-token <token>");
+      info("Or set SLACK_BOT_TOKEN in your .env.local file");
+      process.exit(1);
+    }
+    const appToken = opts.appToken || readEnvValue3("SLACK_APP_TOKEN") || process.env.SLACK_APP_TOKEN;
+    if (opts.socketMode && !appToken) {
+      error("Slack App Token not found (required for socket mode).");
+      info("Set it with: agentforge channel:slack configure");
+      info("Or pass it with: --app-token <token>");
+      info("Or set SLACK_APP_TOKEN in your .env.local file");
+      info("Or disable socket mode with: --no-socket-mode");
+      process.exit(1);
+    }
+    const signingSecret = opts.signingSecret || readEnvValue3("SLACK_SIGNING_SECRET") || process.env.SLACK_SIGNING_SECRET;
+    if (!signingSecret) {
+      error("Slack Signing Secret not found.");
+      info("Set it with: agentforge channel:slack configure");
+      info("Or pass it with: --signing-secret <secret>");
+      info("Or set SLACK_SIGNING_SECRET in your .env.local file");
+      process.exit(1);
+    }
+    const convexUrl = readEnvValue3("CONVEX_URL") || process.env.CONVEX_URL;
+    if (!convexUrl) {
+      error("CONVEX_URL not found. Run `npx convex dev` first.");
+      process.exit(1);
+    }
+    let agentId = opts.agent;
+    if (!agentId) {
+      agentId = readEnvValue3("AGENTFORGE_AGENT_ID") || process.env.AGENTFORGE_AGENT_ID;
+    }
+    if (!agentId) {
+      info("No agent specified. Fetching available agents...");
+      const client = await createClient();
+      const agents = await safeCall(
+        () => client.query("agents:list", {}),
+        "Failed to list agents"
+      );
+      if (!agents || agents.length === 0) {
+        error("No agents found. Create one first: agentforge agents create");
+        process.exit(1);
+      }
+      console.log();
+      agents.forEach((a, i) => {
+        console.log(
+          `  ${colors.cyan}${i + 1}.${colors.reset} ${a.name} ${colors.dim}(${a.id})${colors.reset} \u2014 ${a.model}`
+        );
+      });
+      console.log();
+      const choice = await prompt10("Select agent (number or ID): ");
+      const idx = parseInt(choice) - 1;
+      agentId = idx >= 0 && idx < agents.length ? agents[idx].id : choice;
+    }
+    info(`Agent:       ${agentId}`);
+    info(`Convex:      ${convexUrl}`);
+    info(`Mode:        ${opts.socketMode ? "Socket Mode" : "Events API"}`);
+    info(`Log:         ${opts.logLevel}`);
+    console.log();
+    let startSlackChannel;
+    try {
+      const slackPkg = "@agentforge-ai/channels-slack";
+      const mod = await import(
+        /* @vite-ignore */
+        slackPkg
+      );
+      startSlackChannel = mod.startSlackChannel;
+    } catch (importError) {
+      error("Could not import @agentforge-ai/channels-slack. Using built-in Slack runner.");
+      dim(`  Error: ${importError.message}`);
+      console.log();
+      await runMinimalSlackBot({
+        botToken,
+        appToken: appToken || "",
+        signingSecret,
+        agentId,
+        convexUrl,
+        socketMode: opts.socketMode,
+        logLevel: opts.logLevel
+      });
+      return;
+    }
+    try {
+      await startSlackChannel({
+        botToken,
+        appToken,
+        signingSecret,
+        agentId,
+        convexUrl,
+        socketMode: opts.socketMode,
+        logLevel: opts.logLevel
+      });
+      success("Slack bot is running!");
+      dim("  Press Ctrl+C to stop.");
+      await new Promise(() => {
+      });
+    } catch (startError) {
+      error(`Failed to start Slack bot: ${startError.message}`);
+      process.exit(1);
+    }
+  });
+  channel.command("configure").description("Configure the Slack bot credentials and settings").action(async () => {
+    header("Configure Slack Channel");
+    console.log();
+    info("To set up a Slack app:");
+    dim("  1. Go to https://api.slack.com/apps and create a new app");
+    dim("  2. Enable Socket Mode under Settings > Socket Mode");
+    dim("  3. Add bot scopes: chat:write, im:history, im:read, channels:history");
+    dim("  4. Install the app to your workspace");
+    dim("  5. Copy the Bot Token, App-Level Token, and Signing Secret");
+    console.log();
+    const currentBotToken = readEnvValue3("SLACK_BOT_TOKEN");
+    if (currentBotToken) {
+      const masked = currentBotToken.slice(0, 8) + "****" + currentBotToken.slice(-4);
+      info(`Current bot token: ${masked}`);
+    }
+    const botToken = await prompt10("Slack Bot Token (xoxb-...): ");
+    if (!botToken) {
+      error("Bot token is required.");
+      process.exit(1);
+    }
+    if (!botToken.startsWith("xoxb-")) {
+      warn('Bot token should start with "xoxb-". Please verify this is correct.');
+    }
+    info("Validating bot token...");
+    try {
+      const response = await fetch("https://slack.com/api/auth.test", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${botToken}`,
+          "Content-Type": "application/json"
+        }
+      });
+      const data = await response.json();
+      if (!data.ok) {
+        warn(`Token validation warning: ${data.error}`);
+        info("Saving token anyway. You can validate later with: agentforge channel:slack status");
+      } else {
+        success(`Bot verified: @${data.user} in workspace "${data.team}"`);
+      }
+    } catch (fetchError) {
+      warn(`Could not validate token (network error): ${fetchError.message}`);
+      info("Saving token anyway.");
+    }
+    writeEnvValue3("SLACK_BOT_TOKEN", botToken);
+    success("Bot token saved to .env.local");
+    console.log();
+    const currentAppToken = readEnvValue3("SLACK_APP_TOKEN");
+    if (currentAppToken) {
+      const masked = currentAppToken.slice(0, 8) + "****" + currentAppToken.slice(-4);
+      info(`Current app token: ${masked}`);
+    }
+    const appToken = await prompt10("Slack App-Level Token (xapp-..., for socket mode): ");
+    if (!appToken) {
+      warn("App-level token not provided. Socket mode will not be available.");
+    } else {
+      if (!appToken.startsWith("xapp-")) {
+        warn('App token should start with "xapp-". Please verify this is correct.');
+      }
+      writeEnvValue3("SLACK_APP_TOKEN", appToken);
+      success("App token saved to .env.local");
+    }
+    console.log();
+    const currentSigningSecret = readEnvValue3("SLACK_SIGNING_SECRET");
+    if (currentSigningSecret) {
+      info(`Current signing secret: ${currentSigningSecret.slice(0, 6)}****`);
+    }
+    const signingSecret = await prompt10("Slack Signing Secret: ");
+    if (!signingSecret) {
+      error("Signing secret is required.");
+      process.exit(1);
+    }
+    if (signingSecret.length < 20) {
+      warn("Signing secret looks too short. Please verify this is correct.");
+    }
+    writeEnvValue3("SLACK_SIGNING_SECRET", signingSecret);
+    success("Signing secret saved to .env.local");
+    console.log();
+    const defaultAgent = await prompt10("Default agent ID (optional, press Enter to skip): ");
+    if (defaultAgent) {
+      writeEnvValue3("AGENTFORGE_AGENT_ID", defaultAgent);
+      success(`Default agent set to: ${defaultAgent}`);
+    }
+    console.log();
+    success("Configuration complete!");
+    info("Start the bot with: agentforge channel:slack start");
+  });
+  channel.command("status").description("Check the Slack bot configuration and connectivity").action(async () => {
+    header("Slack Channel Status");
+    const botToken = readEnvValue3("SLACK_BOT_TOKEN");
+    const appToken = readEnvValue3("SLACK_APP_TOKEN");
+    const signingSecret = readEnvValue3("SLACK_SIGNING_SECRET");
+    const agentId = readEnvValue3("AGENTFORGE_AGENT_ID");
+    const convexUrl = readEnvValue3("CONVEX_URL");
+    const statusData = {
+      "Bot Token": botToken ? `${botToken.slice(0, 8)}****${botToken.slice(-4)}` : `${colors.red}Not configured${colors.reset}`,
+      "App Token": appToken ? `${appToken.slice(0, 8)}****${appToken.slice(-4)}` : `${colors.dim}Not set${colors.reset}`,
+      "Signing Secret": signingSecret ? `${signingSecret.slice(0, 6)}****` : `${colors.red}Not configured${colors.reset}`,
+      "Default Agent": agentId || `${colors.dim}Not set${colors.reset}`,
+      "Convex URL": convexUrl || `${colors.red}Not configured${colors.reset}`
+    };
+    details(statusData);
+    if (botToken) {
+      info("Checking Slack API connectivity...");
+      try {
+        const response = await fetch("https://slack.com/api/auth.test", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${botToken}`,
+            "Content-Type": "application/json"
+          }
+        });
+        const data = await response.json();
+        if (data.ok) {
+          success(`Slack API connected: @${data.user} in workspace "${data.team}" (${data.team_id})`);
+        } else {
+          error(`Slack API error: ${data.error}`);
+        }
+      } catch {
+        warn("Could not reach Slack API (network error).");
+      }
+    }
+    if (convexUrl) {
+      info("Checking Convex connectivity...");
+      try {
+        const client = await createClient();
+        const agents = await client.query("agents:list", {});
+        success(`Convex connected. ${agents.length} agents available.`);
+      } catch {
+        warn("Could not reach Convex deployment.");
+      }
+    }
+  });
+}
+async function runMinimalSlackBot(config) {
+  const { botToken, appToken, signingSecret, agentId, convexUrl } = config;
+  const convexBase = convexUrl.replace(/\/$/, "");
+  const threadMap = /* @__PURE__ */ new Map();
+  info("Verifying Slack bot token...");
+  try {
+    const res = await fetch("https://slack.com/api/auth.test", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${botToken}`,
+        "Content-Type": "application/json"
+      }
+    });
+    const data = await res.json();
+    if (!data.ok) {
+      error(`Slack auth error: ${data.error}`);
+      process.exit(1);
+    }
+    success(`Slack bot connected: @${data.user} in "${data.team}"`);
+  } catch (fetchError) {
+    warn(`Could not verify bot token: ${fetchError.message}`);
+    info("Continuing anyway...");
+  }
+  async function convexMutation(fn, args) {
+    const res = await fetch(`${convexBase}/api/mutation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: fn, args })
+    });
+    const data = await res.json();
+    if (data.status === "error") throw new Error(data.errorMessage);
+    return data.value;
+  }
+  async function convexAction(fn, args) {
+    const res = await fetch(`${convexBase}/api/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: fn, args })
+    });
+    const data = await res.json();
+    if (data.status === "error") throw new Error(data.errorMessage);
+    return data.value;
+  }
+  async function sendSlackMessage(channel, text, threadTs) {
+    const body = { channel, text };
+    if (threadTs) body.thread_ts = threadTs;
+    await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${botToken}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+  }
+  async function getOrCreateThread(channelThreadKey, senderName) {
+    const cached = threadMap.get(channelThreadKey);
+    if (cached) return cached;
+    const threadId = await convexMutation("chat:createThread", {
+      agentId,
+      name: senderName ? `Slack: ${senderName}` : `Slack ${channelThreadKey}`,
+      userId: `slack:${channelThreadKey}`
+    });
+    threadMap.set(channelThreadKey, threadId);
+    return threadId;
+  }
+  async function handleSlackMessage(event) {
+    if (event.bot_id || event.subtype) return;
+    const channelId = event.channel;
+    const userId = event.user;
+    const text = (event.text || "").trim();
+    const threadTs = event.thread_ts || event.ts;
+    if (!text) return;
+    const threadKey = `${channelId}:${userId}`;
+    console.log(`[Slack:${channelId}] ${text}`);
+    try {
+      const convexThreadId = await getOrCreateThread(threadKey, `slack:${userId}`);
+      const result = await convexAction("chat:sendMessage", {
+        agentId,
+        threadId: convexThreadId,
+        content: text,
+        userId: `slack:${userId}`
+      });
+      if (result?.response) {
+        const response = result.response;
+        if (response.length <= 4e3) {
+          await sendSlackMessage(channelId, response, threadTs);
+        } else {
+          const chunks = response.match(/.{1,4000}/gs) || [];
+          for (const chunk of chunks) {
+            await sendSlackMessage(channelId, chunk, threadTs);
+          }
+        }
+        console.log(`[Agent] ${response.substring(0, 100)}${response.length > 100 ? "..." : ""}`);
+      } else {
+        await sendSlackMessage(channelId, "I couldn't generate a response. Please try again.", threadTs);
+      }
+    } catch (routeError) {
+      console.error(`Error: ${routeError.message}`);
+      await sendSlackMessage(channelId, "Sorry, I encountered an error. Please try again.", threadTs);
+    }
+  }
+  if (appToken && config.socketMode !== false) {
+    info("Starting in Socket Mode...");
+    try {
+      const wsUrlRes = await fetch("https://slack.com/api/apps.connections.open", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${appToken}`,
+          "Content-Type": "application/json"
+        }
+      });
+      const wsData = await wsUrlRes.json();
+      if (!wsData.ok || !wsData.url) {
+        throw new Error(`Could not open WebSocket connection: ${wsData.error}`);
+      }
+      const { default: WebSocket } = await import("ws");
+      const ws = new WebSocket(wsData.url);
+      ws.on("open", () => {
+        success("Socket Mode connected!");
+        dim("  Listening for messages. Press Ctrl+C to stop.");
+        console.log();
+      });
+      ws.on("message", async (data) => {
+        try {
+          const payload = JSON.parse(data.toString());
+          if (payload.envelope_id) {
+            ws.send(JSON.stringify({ envelope_id: payload.envelope_id }));
+          }
+          if (payload.type === "events_api" && payload.payload?.event) {
+            const event = payload.payload.event;
+            if (event.type === "message") {
+              await handleSlackMessage(event);
+            }
+          }
+          if (payload.type === "slash_commands" && payload.payload) {
+            const slashPayload = payload.payload;
+            const command = slashPayload.command;
+            const channelId = slashPayload.channel_id;
+            const userId = slashPayload.user_id;
+            const text = slashPayload.text || "";
+            if (command === "/start" || command === "/new") {
+              const key = `${channelId}:${userId}`;
+              threadMap.delete(key);
+              await sendSlackMessage(channelId, "New conversation started! Send me a message.");
+            } else if (command === "/help") {
+              await sendSlackMessage(channelId, "AgentForge Slack Bot\n\nJust send me a message and I'll respond using AI.\n\nCommands:\n/start \u2014 Reset and start fresh\n/new \u2014 Start a fresh conversation\n/help \u2014 Show this help\n/ask <question> \u2014 Ask a question");
+            } else if (command === "/ask") {
+              await handleSlackMessage({ channel: channelId, user: userId, text, ts: Date.now().toString() });
+            }
+          }
+        } catch (parseError) {
+          console.error(`Error processing message: ${parseError.message}`);
+        }
+      });
+      ws.on("close", (code) => {
+        warn(`Socket Mode disconnected (code: ${code}). Reconnecting in 5s...`);
+        setTimeout(() => runMinimalSlackBot(config), 5e3);
+      });
+      ws.on("error", (err) => {
+        console.error(`WebSocket error: ${err.message}`);
+      });
+      process.on("SIGINT", () => {
+        console.log("\nStopping...");
+        ws.close();
+        process.exit(0);
+      });
+      await new Promise(() => {
+      });
+    } catch (socketError) {
+      warn(`Socket Mode failed: ${socketError.message}`);
+      info("Falling back to HTTP Events API server...");
+    }
+  }
+  info("Starting HTTP server for Events API...");
+  const port = 3002;
+  const path_ = "/slack/events";
+  const http = await import("http");
+  const { createHmac, timingSafeEqual } = await import("crypto");
+  function verifySlackSignature(body, timestamp, signature) {
+    const sigBaseString = `v0:${timestamp}:${body}`;
+    const hmac = createHmac("sha256", signingSecret);
+    hmac.update(sigBaseString);
+    const computedSig = `v0=${hmac.digest("hex")}`;
+    try {
+      return timingSafeEqual(Buffer.from(computedSig), Buffer.from(signature));
+    } catch {
+      return false;
+    }
+  }
+  const server = http.createServer(async (req, res) => {
+    const url = new URL(req.url || "/", `http://localhost:${port}`);
+    if (url.pathname !== path_) {
+      res.writeHead(404);
+      res.end("Not Found");
+      return;
+    }
+    if (req.method !== "POST") {
+      res.writeHead(405);
+      res.end("Method Not Allowed");
+      return;
+    }
+    try {
+      const chunks = [];
+      for await (const chunk of req) {
+        chunks.push(chunk);
+      }
+      const rawBody = Buffer.concat(chunks).toString();
+      const timestamp = req.headers["x-slack-request-timestamp"];
+      const signature = req.headers["x-slack-signature"];
+      if (timestamp && signature && signingSecret) {
+        const now = Math.floor(Date.now() / 1e3);
+        if (Math.abs(now - parseInt(timestamp)) > 300) {
+          res.writeHead(403);
+          res.end("Request too old");
+          return;
+        }
+        if (!verifySlackSignature(rawBody, timestamp, signature)) {
+          res.writeHead(403);
+          res.end("Invalid signature");
+          return;
+        }
+      }
+      const body = JSON.parse(rawBody);
+      if (body.type === "url_verification") {
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ challenge: body.challenge }));
+        return;
+      }
+      res.writeHead(200);
+      res.end("OK");
+      if (body.type === "event_callback" && body.event?.type === "message") {
+        await handleSlackMessage(body.event);
+      }
+    } catch (parseError) {
+      console.error(`Parse error: ${parseError.message}`);
+      if (!res.headersSent) {
+        res.writeHead(400);
+        res.end("Bad Request");
+      }
+    }
+  });
+  process.on("SIGINT", () => {
+    console.log("\nStopping...");
+    server.close();
+    process.exit(0);
+  });
+  server.listen(port, () => {
+    success(`Events API server listening on port ${port}`);
+    info(`Events API URL: http://localhost:${port}${path_}`);
+    console.log();
+    info("Next steps:");
+    dim("  1. Expose this URL publicly (e.g., ngrok http " + port + ")");
+    dim("  2. Configure the Events API URL in your Slack app settings");
+    dim('  3. Subscribe to the "message.im" and "message.channels" events');
+    dim("  Press Ctrl+C to stop.");
+  });
+  await new Promise(() => {
+  });
+}
+
 // src/index.ts
 import { readFileSync } from "fs";
 import { fileURLToPath as fileURLToPath2 } from "url";
@@ -4805,6 +5607,7 @@ registerChatCommand(program);
 registerSessionsCommand(program);
 registerThreadsCommand(program);
 registerSkillsCommand(program);
+registerSkillCommand(program);
 registerCronCommand(program);
 registerMcpCommand(program);
 registerFilesCommand(program);
@@ -4814,6 +5617,7 @@ registerVaultCommand(program);
 registerKeysCommand(program);
 registerChannelTelegramCommand(program);
 registerChannelWhatsAppCommand(program);
+registerChannelSlackCommand(program);
 registerStatusCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map
