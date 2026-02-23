@@ -1,0 +1,58 @@
+name: CLI Build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/cli/templates/**'
+      - 'packages/cli/src/**'
+      - 'packages/cli/tsup.config.ts'
+      - 'packages/cli/package.json'
+
+jobs:
+  cli-build:
+    name: Rebuild CLI Distribution
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # Only auto-commit on main branch pushes
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build CLI package
+        run: pnpm --filter @agentforge-ai/cli build
+
+      - name: Check for changes in dist
+        id: check_changes
+        run: |
+          git add packages/cli/dist/
+          if git diff --cached --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit updated dist
+        if: steps.check_changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "chore(cli): rebuild dist from template changes"
+          git push
