@@ -42,7 +42,7 @@ jobs:
       - name: Check for changes in dist
         id: check_changes
         run: |
-          git add packages/cli/dist/
+          git add -f packages/cli/dist/
           if git diff --cached --quiet; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
