@@ -521,4 +521,47 @@ export default defineSchema({
   })
     .index("byAgentId", ["agentId"])
     .index("byProjectId", ["projectId"]),
+
+  // Agent-to-Agent (A2A) protocol task tracking
+  a2aTasks: defineTable({
+    taskId: v.string(),           // UUID
+    fromAgentId: v.string(),      // Delegating agent
+    toAgentId: v.string(),        // Receiving agent
+    instruction: v.string(),      // Task description
+    context: v.optional(v.any()), // Conversation context
+    constraints: v.optional(v.object({
+      maxTokens: v.optional(v.number()),
+      timeoutMs: v.optional(v.number()),
+      maxCost: v.optional(v.number()),
+    })),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("success"),
+      v.literal("error"),
+      v.literal("timeout")
+    ),
+    output: v.optional(v.string()),
+    artifacts: v.optional(v.array(v.object({
+      type: v.union(v.literal("text"), v.literal("code"), v.literal("file"), v.literal("data")),
+      content: v.string(),
+      mimeType: v.optional(v.string()),
+      name: v.optional(v.string()),
+    }))),
+    usage: v.optional(v.object({
+      inputTokens: v.number(),
+      outputTokens: v.number(),
+      cost: v.number(),
+    })),
+    durationMs: v.optional(v.number()),
+    callbackUrl: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("byTaskId", ["taskId"])
+    .index("byFromAgentId", ["fromAgentId"])
+    .index("byToAgentId", ["toAgentId"])
+    .index("byStatus", ["status"])
+    .index("byProjectId", ["projectId"]),
 });

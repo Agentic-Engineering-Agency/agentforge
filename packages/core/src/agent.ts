@@ -1,5 +1,7 @@
 import { Agent as MastraAgent } from '@mastra/core/agent';
 import type { MCPServer } from './mcp-server.js';
+import { A2AClient } from './a2a/index.js';
+import type { A2AAgentRegistry, A2AContext, A2AConstraints, A2AResult } from './a2a/index.js';
 
 /**
  * Supported model types for AgentForge agents.
@@ -34,6 +36,8 @@ export interface AgentConfig {
   model: AgentModel;
   /** An MCPServer instance providing tools for the agent. */
   tools?: MCPServer;
+  /** An A2AAgentRegistry for delegating tasks to other agents. */
+  a2aRegistry?: A2AAgentRegistry;
 }
 
 /**
@@ -106,6 +110,9 @@ export class Agent {
   /** The collection of MCP servers providing tools to this agent. */
   private toolServers: MCPServer[] = [];
 
+  /** The A2A client for delegating tasks to other agents. */
+  private a2aClient?: A2AClient;
+
   /**
    * Creates a new AgentForge Agent.
    * @param config - The configuration for the agent.
@@ -118,6 +125,10 @@ export class Agent {
 
     if (config.tools) {
       this.toolServers.push(config.tools);
+    }
+
+    if (config.a2aRegistry) {
+      this.a2aClient = new A2AClient(config.a2aRegistry);
     }
 
     this.mastraAgent = this.buildMastraAgent();
@@ -215,6 +226,26 @@ export class Agent {
     for await (const chunk of result.textStream) {
       yield { content: typeof chunk === 'string' ? chunk : String(chunk) };
     }
+  }
+
+  /**
+   * Delegates a task to another agent via the A2A protocol.
+   * Requires `a2aRegistry` to be provided in `AgentConfig`.
+   *
+   * @param task - The task to delegate, including the target agent ID and instruction.
+   * @returns A promise that resolves to the result from the target agent.
+   * @throws {Error} If `a2aRegistry` was not provided in `AgentConfig`.
+   */
+  async delegate(task: {
+    to: string;
+    instruction: string;
+    context?: A2AContext;
+    constraints?: A2AConstraints;
+  }): Promise<A2AResult> {
+    if (!this.a2aClient) {
+      throw new Error('A2A not configured. Provide a2aRegistry in AgentConfig.');
+    }
+    return this.a2aClient.delegate({ from: this.id, ...task });
   }
 
   /**
