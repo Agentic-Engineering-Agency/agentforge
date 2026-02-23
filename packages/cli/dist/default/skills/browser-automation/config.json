@@ -1,0 +1,11 @@
+{
+  "name": "browser-automation",
+  "version": "1.0.0",
+  "description": "Built-in browser automation skill for AgentForge agents. Navigate web pages, interact with elements, extract content, and take screenshots using Playwright.",
+  "category": "web",
+  "author": "AgentForge",
+  "isBuiltIn": true,
+  "tools": ["browser"],
+  "dependencies": ["playwright"],
+  "agentInstructions": "You have access to the Browser Automation tool. Use it to navigate web pages, click elements, type text, extract page content, take screenshots, and wait for elements. Each session has isolated cookies and state. Always close sessions when done."
+}
