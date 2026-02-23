@@ -9,6 +9,8 @@ export const SYSTEM_DEFAULTS = {
   maxTokens: 4096,
   instructionPrefix: "",
   failoverModels: [] as Array<{ provider: string; model: string }>,
+  a2aEnabled: false,
+  a2aMaxConcurrentTasks: 5,
 } as const;
 
 export interface VoiceConfig {
@@ -31,6 +33,11 @@ export interface AgentConfig {
   instructions?: string;
   failoverModels?: Array<{ provider: string; model: string }>;
   voiceConfig?: VoiceConfig;
+  a2aConfig?: {
+    enabled?: boolean;
+    allowedDelegates?: string[];  // Agent IDs this agent can delegate to
+    maxConcurrentTasks?: number;
+  };
 }
 
 export interface ProjectSettings {
@@ -39,6 +46,8 @@ export interface ProjectSettings {
   defaultMaxTokens?: number;
   instructionPrefix?: string;
   failoverModels?: Array<{ provider: string; model: string }>;
+  a2aEnabled?: boolean;
+  a2aMaxConcurrentTasks?: number;
 }
 
 export interface GlobalSettings {
@@ -55,6 +64,8 @@ export interface ResolvedConfig {
   maxTokens: number;
   systemPrompt: string;
   failoverModels: Array<{ provider: string; model: string }>;
+  a2aEnabled: boolean;
+  a2aMaxConcurrentTasks: number;
 }
 
 export function resolveConfig(
@@ -101,11 +112,19 @@ export function resolveConfig(
     ? `${instructionPrefix}\n\n${agentInstructions}`
     : agentInstructions;
 
+  const a2aEnabled = agent.a2aConfig?.enabled ?? ps.a2aEnabled ?? false;
+  const a2aMaxConcurrentTasks =
+    agent.a2aConfig?.maxConcurrentTasks ??
+    ps.a2aMaxConcurrentTasks ??
+    SYSTEM_DEFAULTS.a2aMaxConcurrentTasks;
+
   return {
     model,
     temperature,
     maxTokens,
     systemPrompt,
     failoverModels,
+    a2aEnabled,
+    a2aMaxConcurrentTasks,
   };
 }
