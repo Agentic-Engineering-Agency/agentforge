@@ -124,7 +124,13 @@ export const backfillProjectIds = internalMutation({
 
     const systemDefault = userIdToProjectId.get("__system_default__");
 
-    const resolveProjectId = (userId: string | undefined): Id<"projects"> | undefined => {
+    if (!systemDefault) {
+      throw new Error(
+        "Migration error: system default project not found. Run createDefaultProjects first."
+      );
+    }
+
+    const resolveProjectId = (userId: string | undefined): Id<"projects"> => {
       if (!userId) return systemDefault;
       return userIdToProjectId.get(userId) ?? systemDefault;
     };

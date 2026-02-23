@@ -32,7 +32,8 @@ export default defineSchema({
     .index("byAgentId", ["id"])
     .index("byUserId", ["userId"])
     .index("byIsActive", ["isActive"])
-    .index("byProjectId", ["projectId"]),
+    .index("byProjectId", ["projectId"])
+    .index("byProjectAndActive", ["projectId", "isActive"]),
 
   // Conversation threads
   threads: defineTable({
@@ -291,7 +292,8 @@ export default defineSchema({
     .index("bySource", ["source"])
     .index("byTimestamp", ["timestamp"])
     .index("byUserId", ["userId"])
-    .index("byProjectId", ["projectId"]),
+    .index("byProjectId", ["projectId"])
+    .index("byProjectAndTimestamp", ["projectId", "timestamp"]),
 
   // Channels for multi-platform support
   channels: defineTable({

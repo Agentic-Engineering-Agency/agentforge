@@ -15,7 +15,7 @@ export const list = query({
     if (args.projectId) {
       results = await ctx.db
         .query("logs")
-        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .withIndex("byProjectAndTimestamp", (q) => q.eq("projectId", args.projectId!))
         .order("desc")
         .collect();
     } else {
