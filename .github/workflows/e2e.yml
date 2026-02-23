@@ -36,7 +36,7 @@ on:
         type: boolean
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
 
 jobs:
   # ── Stage 1: Local tests (no infra needed) ──────────────────────────
