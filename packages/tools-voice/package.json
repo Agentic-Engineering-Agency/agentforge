@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/tools-voice",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "Voice tools for AgentForge \u2014 ElevenLabs TTS + OpenAI Whisper STT",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
