@@ -127,3 +127,21 @@ export type {
   A2AStreamChunk,
   A2AServerConfig,
 } from './a2a/index.js';
+
+export { parseSkillManifest } from './skills/skill-parser.js';
+export { discoverSkills, fetchSkillFromGitHub } from './skills/skill-discovery.js';
+export type { SkillFileSystem } from './skills/skill-discovery.js';
+export { skillDefinitionSchema, SkillParseError } from './skills/types.js';
+export type { SkillDefinition, SkillToolDefinition } from './skills/types.js';
+
+export {
+  fetchFeaturedSkills,
+  searchSkills,
+  getSkill,
+  publishSkill,
+  installFromMarketplace,
+  MarketplaceError,
+  marketplaceSkillSchema,
+  publishSkillInputSchema,
+} from './skills/marketplace-client.js';
+export type { MarketplaceSkill, PublishSkillInput } from './skills/marketplace-client.js';
