@@ -1,0 +1,11 @@
+{
+  "name": "skill-creator",
+  "version": "1.0.0",
+  "description": "Built-in skill for creating, managing, and discovering AgentForge skills. Allows agents to generate new skills from natural language descriptions.",
+  "category": "utility",
+  "author": "AgentForge",
+  "isBuiltIn": true,
+  "tools": ["create-skill", "list-examples", "validate-skill"],
+  "dependencies": [],
+  "agentInstructions": "You have access to the Skill Creator tool. When a user asks you to create a skill, use the create-skill tool to generate the skill code, config, and documentation. You can also use list-examples to show available example skills, and validate-skill to check if a skill definition is valid."
+}
