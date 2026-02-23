@@ -20,8 +20,8 @@ import { Route as CronRouteImport } from './routes/cron'
 import { Route as ConnectionsRouteImport } from './routes/connections'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AgentsRouteImport } from './routes/agents'
-import { Route as AgentRunRouteImport } from './routes/agent-run'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RunsRunIdRouteImport } from './routes/runs.$runId'
 
 const UsageRoute = UsageRouteImport.update({
   id: '/usage',
@@ -78,20 +78,19 @@ const AgentsRoute = AgentsRouteImport.update({
   path: '/agents',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AgentRunRoute = AgentRunRouteImport.update({
-  id: '/agent-run',
-  path: '/agent-run',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RunsRunIdRoute = RunsRunIdRouteImport.update({
+  id: '/runs/$runId',
+  path: '/runs/$runId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/agent-run': typeof AgentRunRoute
   '/agents': typeof AgentsRoute
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
@@ -103,10 +102,10 @@ export interface FileRoutesByFullPath {
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/usage': typeof UsageRoute
+  '/runs/$runId': typeof RunsRunIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/agent-run': typeof AgentRunRoute
   '/agents': typeof AgentsRoute
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
@@ -118,11 +117,11 @@ export interface FileRoutesByTo {
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/usage': typeof UsageRoute
+  '/runs/$runId': typeof RunsRunIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/agent-run': typeof AgentRunRoute
   '/agents': typeof AgentsRoute
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
@@ -134,12 +133,12 @@ export interface FileRoutesById {
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/usage': typeof UsageRoute
+  '/runs/$runId': typeof RunsRunIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
-    | '/agent-run'
     | '/agents'
     | '/chat'
     | '/connections'
@@ -151,10 +150,10 @@ export interface FileRouteTypes {
     | '/settings'
     | '/skills'
     | '/usage'
+    | '/runs/$runId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
-    | '/agent-run'
     | '/agents'
     | '/chat'
     | '/connections'
@@ -166,10 +165,10 @@ export interface FileRouteTypes {
     | '/settings'
     | '/skills'
     | '/usage'
+    | '/runs/$runId'
   id:
     | '__root__'
     | '/'
-    | '/agent-run'
     | '/agents'
     | '/chat'
     | '/connections'
@@ -181,11 +180,11 @@ export interface FileRouteTypes {
     | '/settings'
     | '/skills'
     | '/usage'
+    | '/runs/$runId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AgentRunRoute: typeof AgentRunRoute
   AgentsRoute: typeof AgentsRoute
   ChatRoute: typeof ChatRoute
   ConnectionsRoute: typeof ConnectionsRoute
@@ -197,6 +196,7 @@ export interface RootRouteChildren {
   SettingsRoute: typeof SettingsRoute
   SkillsRoute: typeof SkillsRoute
   UsageRoute: typeof UsageRoute
+  RunsRunIdRoute: typeof RunsRunIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -278,13 +278,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/agent-run': {
-      id: '/agent-run'
-      path: '/agent-run'
-      fullPath: '/agent-run'
-      preLoaderRoute: typeof AgentRunRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/': {
       id: '/'
       path: '/'
@@ -292,12 +285,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/runs/$runId': {
+      id: '/runs/$runId'
+      path: '/runs/$runId'
+      fullPath: '/runs/$runId'
+      preLoaderRoute: typeof RunsRunIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AgentRunRoute: AgentRunRoute,
   AgentsRoute: AgentsRoute,
   ChatRoute: ChatRoute,
   ConnectionsRoute: ConnectionsRoute,
@@ -309,6 +308,7 @@ const rootRouteChildren: RootRouteChildren = {
   SettingsRoute: SettingsRoute,
   SkillsRoute: SkillsRoute,
   UsageRoute: UsageRoute,
+  RunsRunIdRoute: RunsRunIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

@@ -16,9 +16,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // ---------------------------------------------------------------------------
 
 describe('AGE-119: Agent Run Route — file existence', () => {
-  const routePath = path.resolve(__dirname, '../packages/web/app/routes/agent-run.tsx');
+  const routePath = path.resolve(__dirname, '../packages/web/app/routes/runs.$runId.tsx');
 
-  it('agent-run.tsx route file should exist', () => {
+  it('runs.$runId.tsx route file should exist', () => {
     expect(fs.existsSync(routePath)).toBe(true);
   });
 
@@ -47,7 +47,7 @@ describe('AGE-119: Agent Run Route — file existence', () => {
 // ---------------------------------------------------------------------------
 
 describe('AGE-119: Agent Run Route — event types', () => {
-  const routePath = path.resolve(__dirname, '../packages/web/app/routes/agent-run.tsx');
+  const routePath = path.resolve(__dirname, '../packages/web/app/routes/runs.$runId.tsx');
   const routeContent = fs.existsSync(routePath) ? fs.readFileSync(routePath, 'utf-8') : '';
 
   it('should define llm event type', () => {
@@ -88,7 +88,7 @@ describe('AGE-119: Agent Run Route — event types', () => {
 // ---------------------------------------------------------------------------
 
 describe('AGE-119: Agent Run Route — timeline structure', () => {
-  const routePath = path.resolve(__dirname, '../packages/web/app/routes/agent-run.tsx');
+  const routePath = path.resolve(__dirname, '../packages/web/app/routes/runs.$runId.tsx');
   const routeContent = fs.existsSync(routePath) ? fs.readFileSync(routePath, 'utf-8') : '';
 
   it('should show timestamp for each event', () => {
@@ -123,7 +123,7 @@ describe('AGE-119: Agent Run Route — timeline structure', () => {
 // ---------------------------------------------------------------------------
 
 describe('AGE-119: Agent Run Route — empty state', () => {
-  const routePath = path.resolve(__dirname, '../packages/web/app/routes/agent-run.tsx');
+  const routePath = path.resolve(__dirname, '../packages/web/app/routes/runs.$runId.tsx');
   const routeContent = fs.existsSync(routePath) ? fs.readFileSync(routePath, 'utf-8') : '';
 
   it('should handle empty events gracefully', () => {
