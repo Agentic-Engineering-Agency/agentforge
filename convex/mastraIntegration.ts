@@ -17,6 +17,43 @@ import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
 
+// ---------------------------------------------------------------------------
+// Agent instance cache
+// ---------------------------------------------------------------------------
+
+const MAX_CACHE_SIZE = 100;
+const agentCache = new Map<string, Agent>();
+
+/**
+ * Get or create a cached Agent instance.
+ * Key is derived from the model string and the first 100 chars of the system prompt
+ * so agents with different instructions are not conflated.
+ */
+function getCachedAgent(modelKey: string, systemPrompt: string): Agent {
+  const cacheKey = `${modelKey}::${systemPrompt.slice(0, 100)}`;
+
+  if (agentCache.has(cacheKey)) {
+    return agentCache.get(cacheKey)!;
+  }
+
+  // Evict oldest entry when at capacity
+  if (agentCache.size >= MAX_CACHE_SIZE) {
+    const oldestKey = agentCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      agentCache.delete(oldestKey);
+    }
+  }
+
+  const agent = new Agent({
+    name: "agentforge-executor",
+    instructions: systemPrompt,
+    model: modelKey,
+  });
+
+  agentCache.set(cacheKey, agent);
+  return agent;
+}
+
 // Return type for executeAgent
 type ExecuteAgentResult = {
   success: boolean;
@@ -122,13 +159,13 @@ async function executeWithFailover(
       totalAttempts++;
 
       try {
-        const mastraAgent = new Agent({
-          name: "agentforge-executor",
-          instructions: systemPrompt,
-          model: modelKey,
-        });
+        const mastraAgent = getCachedAgent(modelKey, systemPrompt);
 
-        const result = await mastraAgent.generate(messages);
+        const generateOptions: Record<string, unknown> = {};
+        if (options.temperature !== undefined) generateOptions.temperature = options.temperature;
+        if (options.maxTokens !== undefined) generateOptions.maxTokens = options.maxTokens;
+
+        const result = await mastraAgent.generate(messages, generateOptions);
 
         const usage = result.usage
           ? {
