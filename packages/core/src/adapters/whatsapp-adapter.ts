@@ -30,6 +30,91 @@ import {
 } from '../channel-adapter.js';
 
 // =====================================================
+// WhatsApp-specific Types
+// =====================================================
+
+/**
+ * A single row inside a WhatsApp list message section.
+ */
+export interface WhatsAppListRow {
+  /** Row ID returned in callback */
+  id: string;
+  /** Row display title (max 24 chars) */
+  title: string;
+  /** Optional description (max 72 chars) */
+  description?: string;
+}
+
+/**
+ * A section inside a WhatsApp list message.
+ */
+export interface WhatsAppListSection {
+  /** Section title (max 24 chars) */
+  title?: string;
+  /** Rows within this section (max 10 per section, 10 total) */
+  rows: WhatsAppListRow[];
+}
+
+/**
+ * Parameters for sending a WhatsApp list message.
+ */
+export interface WhatsAppListMessageParams {
+  /** Target phone number */
+  to: string;
+  /** Main body text */
+  bodyText: string;
+  /** Button label that opens the list (max 20 chars) */
+  buttonText: string;
+  /** List sections */
+  sections: WhatsAppListSection[];
+  /** Optional header text */
+  headerText?: string;
+  /** Optional footer text */
+  footerText?: string;
+  /** Message to reply to */
+  replyToMessageId?: string;
+}
+
+/**
+ * A single component parameter for a WhatsApp template message.
+ */
+export interface WhatsAppTemplateParameter {
+  type: 'text' | 'currency' | 'date_time' | 'image' | 'document' | 'video';
+  text?: string;
+  currency?: { fallback_value: string; code: string; amount_1000: number };
+  date_time?: { fallback_value: string };
+  image?: { link: string };
+  document?: { link: string; filename?: string };
+  video?: { link: string };
+}
+
+/**
+ * A component block in a WhatsApp template message.
+ */
+export interface WhatsAppTemplateComponent {
+  type: 'header' | 'body' | 'button';
+  sub_type?: 'quick_reply' | 'url';
+  index?: number;
+  parameters: WhatsAppTemplateParameter[];
+}
+
+/**
+ * Parameters for sending a WhatsApp template message.
+ */
+export interface WhatsAppTemplateMessageParams {
+  /** Target phone number */
+  to: string;
+  /** Template name (as registered in Meta Business Manager) */
+  templateName: string;
+  /** Language code (e.g. 'en_US') */
+  languageCode: string;
+  /** Optional template components with variable substitutions */
+  components?: WhatsAppTemplateComponent[];
+  /** Message to reply to */
+  replyToMessageId?: string;
+}
+
+// =====================================================
 // WhatsApp Cloud API Types
 // =====================================================
 
@@ -201,6 +286,9 @@ export class WhatsAppAdapter extends ChannelAdapter {
   // Rate limiting
   private messageTimestamps: number[] = [];
   private rateLimitPerSecond: number = 80;
+
+  // Track last inbound message ID per chat for typing indicator (mark-as-read)
+  private lastInboundMessageId: Map<string, string> = new Map();
 
   // Built-in webhook server
   private httpServer: import('node:http').Server | null = null;
@@ -382,10 +470,16 @@ export class WhatsAppAdapter extends ChannelAdapter {
 
   // ----- Optional Overrides -----
 
+  /**
+   * WhatsApp has no native typing indicator, but we track the latest inbound
+   * message ID per chat so we can issue a mark-as-read when this is called,
+   * which surfaces as blue double-ticks to the user — the closest equivalent.
+   */
   override async sendTypingIndicator(chatId: string): Promise<void> {
-    // WhatsApp doesn't have a typing indicator API, but we can mark messages as read
-    // which shows the blue checkmarks. For actual typing, we do nothing.
-    void chatId;
+    const lastMsgId = this.lastInboundMessageId.get(chatId);
+    if (lastMsgId) {
+      await this.markAsRead(lastMsgId);
+    }
   }
 
   override async addReaction(
@@ -418,15 +512,21 @@ export class WhatsAppAdapter extends ChannelAdapter {
 
   /**
    * Verify a webhook GET request from Meta.
+   * Uses constant-time comparison via Web Crypto API to prevent timing attacks.
    * Returns the challenge string if verification succeeds, null otherwise.
    */
-  verifyWebhook(
+  async verifyWebhook(
     mode: string | undefined,
     token: string | undefined,
     challenge: string | undefined
-  ): string | null {
-    if (mode === 'subscribe' && token === this.verifyToken) {
-      return challenge || null;
+  ): Promise<string | null> {
+    if (mode !== 'subscribe' || !token || !challenge) {
+      return null;
+    }
+
+    const isValid = await timingSafeEqual(token, this.verifyToken);
+    if (isValid) {
+      return challenge;
     }
     return null;
   }
@@ -493,6 +593,9 @@ export class WhatsAppAdapter extends ChannelAdapter {
     contact: WhatsAppContact | undefined,
     metadata: { display_phone_number: string; phone_number_id: string }
   ): void {
+    // Track the latest message ID per chat for typing indicator support
+    this.lastInboundMessageId.set(message.from, message.id);
+
     // Handle interactive responses (button/list replies) as callbacks
     if (message.type === 'interactive' && message.interactive) {
       this.processInteractiveResponse(message, contact, metadata);
@@ -991,9 +1094,177 @@ export class WhatsAppAdapter extends ChannelAdapter {
     return data;
   }
 
+  // ----- Public: List Messages -----
+
+  /**
+   * Send a WhatsApp interactive list message.
+   * Lists can contain up to 10 sections with up to 10 rows each (10 rows total).
+   */
+  async sendListMessage(params: WhatsAppListMessageParams): Promise<SendResult> {
+    try {
+      await this.enforceRateLimit();
+
+      const interactive: Record<string, unknown> = {
+        type: 'list',
+        body: { text: params.bodyText },
+        action: {
+          button: params.buttonText.substring(0, 20),
+          sections: params.sections.map((s) => ({
+            title: s.title,
+            rows: s.rows.map((r) => ({
+              id: r.id,
+              title: r.title.substring(0, 24),
+              description: r.description?.substring(0, 72),
+            })),
+          })),
+        },
+      };
+
+      if (params.headerText) {
+        interactive.header = { type: 'text', text: params.headerText };
+      }
+
+      if (params.footerText) {
+        interactive.footer = { text: params.footerText };
+      }
+
+      const body: Record<string, unknown> = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: params.to,
+        type: 'interactive',
+        interactive,
+      };
+
+      if (params.replyToMessageId) {
+        body.context = { message_id: params.replyToMessageId };
+      }
+
+      const result = await this.callApi<{ messages: Array<{ id: string }> }>(
+        `${this.phoneNumberId}/messages`,
+        'POST',
+        body
+      );
+
+      return {
+        success: true,
+        platformMessageId: result.messages?.[0]?.id,
+        deliveredAt: new Date(),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  // ----- Public: Template Messages -----
+
+  /**
+   * Send a WhatsApp template message.
+   * Templates must be pre-approved in Meta Business Manager.
+   */
+  async sendTemplateMessage(params: WhatsAppTemplateMessageParams): Promise<SendResult> {
+    try {
+      await this.enforceRateLimit();
+
+      const template: Record<string, unknown> = {
+        name: params.templateName,
+        language: { code: params.languageCode },
+      };
+
+      if (params.components && params.components.length > 0) {
+        template.components = params.components;
+      }
+
+      const body: Record<string, unknown> = {
+        messaging_product: 'whatsapp',
+        recipient_type: 'individual',
+        to: params.to,
+        type: 'template',
+        template,
+      };
+
+      if (params.replyToMessageId) {
+        body.context = { message_id: params.replyToMessageId };
+      }
+
+      const result = await this.callApi<{ messages: Array<{ id: string }> }>(
+        `${this.phoneNumberId}/messages`,
+        'POST',
+        body
+      );
+
+      return {
+        success: true,
+        platformMessageId: result.messages?.[0]?.id,
+        deliveredAt: new Date(),
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  // ----- Public: Mark as Read -----
+
+  /**
+   * Mark a specific message as read.
+   * This shows blue double-ticks to the sender.
+   */
+  async markMessageAsRead(messageId: string): Promise<void> {
+    await this.markAsRead(messageId);
+  }
+
   // ----- Utility -----
 
   private sleep(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+}
+
+// =====================================================
+// Utility: Constant-Time String Comparison (Web Crypto)
+// =====================================================
+
+/**
+ * Constant-time string comparison using the Web Crypto API.
+ * Prevents timing attacks on webhook token verification.
+ * Uses `crypto.subtle` — no `node:crypto` import needed.
+ */
+async function timingSafeEqual(a: string, b: string): Promise<boolean> {
+  const encoder = new TextEncoder();
+  const aBytes = encoder.encode(a);
+  const bBytes = encoder.encode(b);
+
+  // Import both as HMAC keys and sign a fixed message — comparing the signatures
+  // ensures constant time regardless of early mismatch.
+  // Alternatively, use subtle.digest for simpler approach:
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode('webhook-verify'),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign']
+  );
+
+  const [sigA, sigB] = await Promise.all([
+    crypto.subtle.sign('HMAC', key, aBytes),
+    crypto.subtle.sign('HMAC', key, bBytes),
+  ]);
+
+  // Compare the HMAC signatures byte-by-byte — both are same length (32 bytes)
+  const viewA = new Uint8Array(sigA);
+  const viewB = new Uint8Array(sigB);
+
+  if (viewA.length !== viewB.length) return false;
+
+  let diff = 0;
+  for (let i = 0; i < viewA.length; i++) {
+    diff |= viewA[i] ^ viewB[i];
+  }
+  return diff === 0;
 }
