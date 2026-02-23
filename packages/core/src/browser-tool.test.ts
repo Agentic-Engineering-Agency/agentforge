@@ -204,6 +204,87 @@ describe('BrowserSessionManager', () => {
 
     await limitedManager.shutdown();
   });
+
+  it('should call connectOverCDP when cdpEndpoint is provided', async () => {
+    const { chromium } = await import('playwright');
+    const cdpManager = new BrowserSessionManager({
+      headless: true,
+      cdpEndpoint: 'ws://localhost:9222',
+    });
+
+    await cdpManager.getPage('cdp-session');
+
+    expect(chromium.connectOverCDP).toHaveBeenCalledWith('ws://localhost:9222');
+
+    await cdpManager.shutdown();
+  });
+
+  it('should pass userAgent to context options', async () => {
+    const ua = 'TestAgent/1.0';
+    const uaManager = new BrowserSessionManager({
+      headless: true,
+      userAgent: ua,
+    });
+
+    await uaManager.getPage('ua-session');
+
+    expect(mockBrowser.newContext).toHaveBeenCalledWith(
+      expect.objectContaining({ userAgent: ua })
+    );
+
+    await uaManager.shutdown();
+  });
+
+  it('should pass viewport dimensions to context options', async () => {
+    const vpManager = new BrowserSessionManager({
+      headless: true,
+      viewportWidth: 1920,
+      viewportHeight: 1080,
+    });
+
+    await vpManager.getPage('vp-session');
+
+    expect(mockBrowser.newContext).toHaveBeenCalledWith(
+      expect.objectContaining({
+        viewport: { width: 1920, height: 1080 },
+      })
+    );
+
+    await vpManager.shutdown();
+  });
+
+  it('should pass storageState path to context options when persistState is true', async () => {
+    const stateManager = new BrowserSessionManager({
+      headless: true,
+      persistState: true,
+      statePath: '/tmp/state.json',
+    });
+
+    await stateManager.getPage('state-session');
+
+    expect(mockBrowser.newContext).toHaveBeenCalledWith(
+      expect.objectContaining({ storageState: '/tmp/state.json' })
+    );
+
+    await stateManager.shutdown();
+  });
+
+  it('should call setDefaultTimeout on new context', async () => {
+    const timeoutManager = new BrowserSessionManager({
+      headless: true,
+      defaultTimeout: 45_000,
+    });
+
+    await timeoutManager.getPage('timeout-session');
+
+    expect(mockContext.setDefaultTimeout).toHaveBeenCalledWith(45_000);
+
+    await timeoutManager.shutdown();
+  });
+
+  it('should not throw when closing a non-existent session', async () => {
+    await expect(manager.closeSession('does-not-exist')).resolves.toBeUndefined();
+  });
 });
 
 describe('BrowserActionExecutor', () => {
@@ -473,6 +554,18 @@ describe('BrowserActionExecutor', () => {
     expect(result2.success).toBe(true);
     expect(mockBrowser.newContext).toHaveBeenCalledTimes(2);
   });
+
+  it('should pass custom timeout to waitForSelector when both selector and timeMs provided', async () => {
+    const result = await executor.execute({
+      kind: 'wait',
+      selector: '#content',
+      timeMs: 10_000,
+    });
+    expect(result.success).toBe(true);
+    expect(mockPage.waitForSelector).toHaveBeenCalledWith('#content', {
+      timeout: 10_000,
+    });
+  });
 });
 
 describe('Zod Schemas', () => {
@@ -663,6 +756,22 @@ describe('createBrowserTool', () => {
     expect(tool.inputSchema).toBeDefined();
     expect(tool.outputSchema).toBeDefined();
     expect(typeof tool.handler).toBe('function');
+    shutdown();
+  });
+
+  it('should delegate to executor when handler is called', async () => {
+    const { tool, shutdown } = createBrowserTool({ headless: true });
+
+    const result = await tool.handler({
+      action: { kind: 'navigate', url: 'https://example.com' },
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.action).toBe('navigate');
+    expect(mockPage.goto).toHaveBeenCalledWith('https://example.com', {
+      waitUntil: 'domcontentloaded',
+    });
+
     shutdown();
   });
 });
