@@ -245,13 +245,13 @@ export const getConsolidationHistory = query({
         .query("memoryConsolidations")
         .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
         .order("desc")
-        .collect();
+        .take(100);
     }
 
     return await ctx.db
       .query("memoryConsolidations")
       .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
       .order("desc")
-      .collect();
+      .take(100);
   },
 });

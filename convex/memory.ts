@@ -260,6 +260,7 @@ export const getStats = query({
     projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
+    // Bound to 10k entries to prevent OOM on large datasets
     let entries;
     if (args.projectId) {
       entries = await ctx.db
@@ -267,12 +268,12 @@ export const getStats = query({
         .withIndex("byAgentAndProject", (q) =>
           q.eq("agentId", args.agentId).eq("projectId", args.projectId!)
         )
-        .collect();
+        .take(10000);
     } else {
       entries = await ctx.db
         .query("memoryEntries")
         .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-        .collect();
+        .take(10000);
     }
 
     const countByType: Record<string, number> = {
