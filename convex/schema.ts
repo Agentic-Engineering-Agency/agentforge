@@ -564,4 +564,25 @@ export default defineSchema({
     .index("byToAgentId", ["toAgentId"])
     .index("byStatus", ["status"])
     .index("byProjectId", ["projectId"]),
+
+  // Skill Marketplace — public registry of published skills
+  skillMarketplace: defineTable({
+    name: v.string(),
+    version: v.string(),
+    description: v.string(),
+    author: v.string(),
+    category: v.string(),
+    tags: v.array(v.string()),
+    downloads: v.number(),
+    featured: v.boolean(),
+    skillMdContent: v.string(),
+    readmeContent: v.optional(v.string()),
+    repositoryUrl: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_category", ["category"])
+    .index("by_downloads", ["downloads"])
+    .searchIndex("search_skills", { searchField: "description", filterFields: ["category"] }),
 });
