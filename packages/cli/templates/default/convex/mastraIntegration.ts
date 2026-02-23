@@ -2,20 +2,17 @@
  * Mastra Integration Actions for Convex
  *
  * These actions run in the Convex Node.js runtime and execute LLM calls
- * using the Vercel AI SDK with OpenRouter as the default provider.
+ * using Mastra-native model routing with OpenRouter as the default provider.
  *
  * Architecture:
  * - For chat: use `chat.sendMessage` (preferred entry point)
  * - For programmatic agent execution: use `mastraIntegration.executeAgent`
- * - Model resolution: uses AI SDK providers directly (OpenRouter, OpenAI, etc.)
- *
- * This replaces the previous broken approach of dynamically importing
- * @mastra/core inside Convex actions. The AI SDK is the correct way to
- * call LLMs from Convex Node.js actions.
+ * - Model resolution: uses Mastra Agent with "provider/model-name" format
  */
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import { Agent } from "@mastra/core/agent";
 
 // Return type for executeAgent
 type ExecuteAgentResult = {
@@ -29,54 +26,6 @@ type ExecuteAgentResult = {
     totalTokens: number;
   };
 };
-
-/**
- * Resolve a model instance from provider + modelId using the AI SDK.
- *
- * Supports: openrouter, openai, anthropic, google, venice, custom.
- * Falls back to OpenRouter for unknown providers (it routes to all models).
- */
-async function resolveModel(provider: string, modelId: string) {
-  const { createOpenAI } = await import("@ai-sdk/openai");
-
-  switch (provider) {
-    case "openai": {
-      const openai = createOpenAI({
-        apiKey: process.env.OPENAI_API_KEY,
-      });
-      return openai(modelId);
-    }
-
-    case "anthropic": {
-      const { createAnthropic } = await import("@ai-sdk/anthropic");
-      const anthropic = createAnthropic({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-      });
-      return anthropic(modelId);
-    }
-
-    case "google": {
-      const { createGoogleGenerativeAI } = await import("@ai-sdk/google");
-      const google = createGoogleGenerativeAI({
-        apiKey: process.env.GEMINI_API_KEY,
-      });
-      return google(modelId);
-    }
-
-    case "openrouter":
-    default: {
-      // OpenRouter is OpenAI-compatible and routes to all providers
-      const openrouter = createOpenAI({
-        baseURL: "https://openrouter.ai/api/v1",
-        apiKey: process.env.OPENROUTER_API_KEY,
-      });
-      const routerModelId = modelId.includes("/")
-        ? modelId
-        : `${provider}/${modelId}`;
-      return openrouter(routerModelId);
-    }
-  }
-}
 
 /**
  * Execute an agent with a prompt and return the response.
@@ -127,12 +76,10 @@ export const executeAgent = action({
     });
 
     try {
-      const { generateText } = await import("ai");
-
       // Resolve the model
       const provider = agent.provider || "openrouter";
       const modelId = agent.model || "openai/gpt-4o-mini";
-      const model = await resolveModel(provider, modelId);
+      const modelKey = `${provider}/${modelId}`;
 
       // Get conversation history for context
       const messages = await ctx.runQuery(api.messages.list, { threadId });
@@ -143,14 +90,14 @@ export const executeAgent = action({
           content: m.content,
         }));
 
-      // Execute the LLM call
-      const result = await generateText({
-        model,
-        system: agent.instructions || "You are a helpful AI assistant.",
-        messages: conversationMessages,
-        ...(agent.temperature != null && { temperature: agent.temperature }),
-        ...(agent.maxTokens != null && { maxTokens: agent.maxTokens }),
+      // Execute via Mastra Agent
+      const mastraAgent = new Agent({
+        name: "agentforge-executor",
+        instructions: agent.instructions || "You are a helpful AI assistant.",
+        model: modelKey,
       });
+
+      const result = await mastraAgent.generate(conversationMessages);
 
       const responseContent = result.text;
 
