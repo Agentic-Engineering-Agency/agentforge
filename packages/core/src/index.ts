@@ -115,6 +115,8 @@ export type { TelegramChannelConfig } from './channels/telegram.js';
 export { WhatsAppChannel, startWhatsAppChannel } from './channels/whatsapp.js';
 export type { WhatsAppChannelConfig } from './channels/whatsapp.js';
 
+export * from './mcp/index.js';
+
 export { A2AAgentRegistry, A2AClient, A2AServer } from './a2a/index.js';
 export type {
   A2ATask,
