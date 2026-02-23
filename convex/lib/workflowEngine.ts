@@ -13,7 +13,10 @@ import { z } from "zod";
 
 // ─── Registered Function Handlers ────────────────────────────────────────────
 
-type StepHandler = (inputData: Record<string, unknown>) => Promise<Record<string, unknown>>;
+type StepHandler = (
+  inputData: Record<string, unknown>,
+  resumeData?: Record<string, unknown>
+) => Promise<Record<string, unknown>>;
 
 const _registeredHandlers: Map<string, StepHandler> = new Map();
 
@@ -53,6 +56,35 @@ export interface WorkflowExecutionResult {
   error?: string;
   suspendedAtStep?: string;
   suspendPayload?: Record<string, unknown>;
+  runId?: string;
+}
+
+// ─── Suspended Run Tracking ───────────────────────────────────────────────────
+
+export interface SuspendedRunRecord {
+  runId: string;
+  workflowId: string;
+  suspendedAtStep: string;
+  suspendPayload?: Record<string, unknown>;
+  suspendedAt: number;
+  /** The Mastra run object, kept in memory for resumption */
+  _run: unknown;
+}
+
+const _suspendedRuns: Map<string, SuspendedRunRecord> = new Map();
+
+/**
+ * Retrieve a suspended run record by runId.
+ */
+export function getSuspendedRun(runId: string): SuspendedRunRecord | undefined {
+  return _suspendedRuns.get(runId);
+}
+
+/**
+ * List all currently suspended run IDs.
+ */
+export function listSuspendedRunIds(): string[] {
+  return Array.from(_suspendedRuns.keys());
 }
 
 // ─── Parsing ─────────────────────────────────────────────────────────────────
@@ -102,6 +134,44 @@ export function parseWorkflowDefinition(stepsJson: string): StepDefinition[] {
   });
 }
 
+// ─── Shared Zod Schemas ───────────────────────────────────────────────────────
+
+/** Common input schema for agent steps */
+const agentStepInputSchema = z.object({
+  input: z.record(z.unknown()).optional(),
+  prompt: z.string().optional(),
+  agentId: z.string().optional(),
+});
+
+/** Common output schema for agent steps */
+const agentStepOutputSchema = z.object({
+  agentId: z.string().optional(),
+  prompt: z.string(),
+  input: z.record(z.unknown()),
+});
+
+/** Common input schema for function steps */
+const functionStepInputSchema = z.object({
+  input: z.record(z.unknown()).optional(),
+}).passthrough();
+
+/** Common output schema for function steps */
+const functionStepOutputSchema = z.record(z.unknown());
+
+/** Resume schema for steps that support human-in-the-loop */
+const humanApprovalResumeSchema = z.object({
+  approved: z.boolean(),
+  reason: z.string().optional(),
+  resumedBy: z.string().optional(),
+});
+
+/** Suspend schema describing why a step suspended */
+const humanApprovalSuspendSchema = z.object({
+  reason: z.string(),
+  requestedAt: z.number().optional(),
+  metadata: z.record(z.unknown()).optional(),
+});
+
 // ─── Step Builder ─────────────────────────────────────────────────────────────
 
 /**
@@ -110,6 +180,9 @@ export function parseWorkflowDefinition(stepsJson: string): StepDefinition[] {
  * - "agent" type:    creates a step that prepares agent invocation context.
  * - "function" type: creates a step that calls a registered handler by name.
  * - "condition" type: throws — conditions are handled at the workflow level via .branch().
+ *
+ * Steps that have `config.requiresApproval = true` are given suspend/resume schemas
+ * and will call `suspend()` on first execution until resumed with approval data.
  */
 export function buildMastraStep(stepDef: StepDefinition): ReturnType<typeof createStep> {
   if (stepDef.type === "condition") {
@@ -118,17 +191,69 @@ export function buildMastraStep(stepDef: StepDefinition): ReturnType<typeof crea
     );
   }
 
+  const requiresApproval = Boolean(stepDef.config.requiresApproval);
+
   if (stepDef.type === "agent") {
     const agentId = stepDef.config.agentId as string | undefined;
     const promptTemplate =
       (stepDef.config.promptTemplate as string | undefined) || "{{input}}";
 
+    if (requiresApproval) {
+      return createStep({
+        id: stepDef.id,
+        description: stepDef.name,
+        inputSchema: agentStepInputSchema,
+        outputSchema: agentStepOutputSchema,
+        resumeSchema: humanApprovalResumeSchema,
+        suspendSchema: humanApprovalSuspendSchema,
+        execute: async ({
+          inputData,
+          resumeData,
+          suspend,
+        }: {
+          inputData: Record<string, unknown>;
+          resumeData?: z.infer<typeof humanApprovalResumeSchema>;
+          suspend: (payload: z.infer<typeof humanApprovalSuspendSchema>) => Promise<void>;
+        }) => {
+          if (!resumeData) {
+            await suspend({
+              reason: (stepDef.config.approvalReason as string | undefined) ?? "Human approval required",
+              requestedAt: Date.now(),
+            });
+            return { agentId: agentId ?? "", prompt: "", input: inputData };
+          }
+
+          if (!resumeData.approved) {
+            throw new Error(
+              `Step '${stepDef.id}' was rejected: ${resumeData.reason ?? "No reason provided"}`
+            );
+          }
+
+          const prompt = promptTemplate.replace(
+            /\{\{(\w+)\}\}/g,
+            (_, key: string) => {
+              const val = inputData[key];
+              return val !== undefined ? String(val) : `{{${key}}}`;
+            }
+          );
+
+          return { agentId, prompt, input: inputData };
+        },
+      });
+    }
+
     return createStep({
       id: stepDef.id,
       description: stepDef.name,
-      inputSchema: z.object({}).passthrough(),
-      outputSchema: z.object({}).passthrough(),
-      execute: async ({ inputData }: { inputData: Record<string, unknown> }) => {
+      inputSchema: agentStepInputSchema,
+      outputSchema: agentStepOutputSchema,
+      execute: async ({
+        inputData,
+      }: {
+        inputData: Record<string, unknown>;
+        resumeData?: Record<string, unknown>;
+        suspend: (payload: Record<string, unknown>) => Promise<void>;
+      }) => {
         // Replace {{key}} placeholders in the prompt template
         const prompt = promptTemplate.replace(
           /\{\{(\w+)\}\}/g,
@@ -148,12 +273,66 @@ export function buildMastraStep(stepDef: StepDefinition): ReturnType<typeof crea
   // "function" type — call a registered handler by name
   const handlerName = stepDef.config.handlerName as string | undefined;
 
+  if (requiresApproval) {
+    return createStep({
+      id: stepDef.id,
+      description: stepDef.name,
+      inputSchema: functionStepInputSchema,
+      outputSchema: functionStepOutputSchema,
+      resumeSchema: humanApprovalResumeSchema,
+      suspendSchema: humanApprovalSuspendSchema,
+      execute: async ({
+        inputData,
+        resumeData,
+        suspend,
+      }: {
+        inputData: Record<string, unknown>;
+        resumeData?: z.infer<typeof humanApprovalResumeSchema>;
+        suspend: (payload: z.infer<typeof humanApprovalSuspendSchema>) => Promise<void>;
+      }) => {
+        if (!resumeData) {
+          await suspend({
+            reason: (stepDef.config.approvalReason as string | undefined) ?? "Human approval required",
+            requestedAt: Date.now(),
+          });
+          return inputData;
+        }
+
+        if (!resumeData.approved) {
+          throw new Error(
+            `Step '${stepDef.id}' was rejected: ${resumeData.reason ?? "No reason provided"}`
+          );
+        }
+
+        if (!handlerName) {
+          return inputData;
+        }
+
+        const handler = _registeredHandlers.get(handlerName);
+        if (!handler) {
+          throw new Error(
+            `No handler registered for function step '${stepDef.id}' (handlerName: '${handlerName}'). ` +
+              `Register it with registerFunctionHandler('${handlerName}', fn) before executing the workflow.`
+          );
+        }
+
+        return handler(inputData, resumeData as unknown as Record<string, unknown>);
+      },
+    });
+  }
+
   return createStep({
     id: stepDef.id,
     description: stepDef.name,
-    inputSchema: z.object({}).passthrough(),
-    outputSchema: z.object({}).passthrough(),
-    execute: async ({ inputData }: { inputData: Record<string, unknown> }) => {
+    inputSchema: functionStepInputSchema,
+    outputSchema: functionStepOutputSchema,
+    execute: async ({
+      inputData,
+    }: {
+      inputData: Record<string, unknown>;
+      resumeData?: Record<string, unknown>;
+      suspend: (payload: Record<string, unknown>) => Promise<void>;
+    }) => {
       if (!handlerName) {
         // No handler configured — pass data through unchanged
         return inputData;
@@ -249,6 +428,8 @@ export function buildMastraWorkflow(definition: WorkflowDefinitionData) {
  * Build and execute a workflow, returning a normalised WorkflowExecutionResult.
  *
  * Maps Mastra run statuses to our result type and captures suspend payloads.
+ * When a workflow suspends, the run is registered in _suspendedRuns so it can
+ * be resumed later via resumeWorkflow().
  */
 export async function executeWorkflow(
   definition: WorkflowDefinitionData,
@@ -258,15 +439,18 @@ export async function executeWorkflow(
     const workflow = buildMastraWorkflow(definition);
 
     const run = workflow.createRun();
+    const runId = (run as any).runId ?? `run_${Date.now()}`;
     const result = await run.start({ inputData: input });
 
     const status = (result as any).status as string | undefined;
 
     if (status === "success" || status === "completed") {
+      _suspendedRuns.delete(runId);
       return {
         success: true,
         status: "completed",
         output: (result as any).result as Record<string, unknown> | undefined,
+        runId,
       };
     }
 
@@ -290,15 +474,29 @@ export async function executeWorkflow(
         }
       }
 
+      // Register the suspended run for later resumption
+      if (suspendedAtStep) {
+        _suspendedRuns.set(runId, {
+          runId,
+          workflowId: definition.id,
+          suspendedAtStep,
+          suspendPayload,
+          suspendedAt: Date.now(),
+          _run: run,
+        });
+      }
+
       return {
         success: false,
         status: "suspended",
         suspendedAtStep,
         suspendPayload,
+        runId,
       };
     }
 
     // "failed" or unknown status
+    _suspendedRuns.delete(runId);
     const error = (result as any).error;
     const errorMsg =
       error instanceof Error
@@ -311,6 +509,7 @@ export async function executeWorkflow(
       success: false,
       status: "failed",
       error: errorMsg,
+      runId,
     };
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
@@ -318,6 +517,128 @@ export async function executeWorkflow(
       success: false,
       status: "failed",
       error: errorMsg,
+    };
+  }
+}
+
+// ─── Resume ───────────────────────────────────────────────────────────────────
+
+/**
+ * Resume a previously suspended workflow run.
+ *
+ * Looks up the in-memory run record by runId, then calls run.resume()
+ * with the given stepId and resumeData. Clears the suspended run entry
+ * regardless of outcome.
+ *
+ * @param runId      The run ID returned by executeWorkflow()
+ * @param stepId     The step to resume (must match suspendedAtStep)
+ * @param resumeData Data to pass to the step's execute function as resumeData
+ */
+export async function resumeWorkflow(
+  runId: string,
+  stepId: string,
+  resumeData: Record<string, unknown>
+): Promise<WorkflowExecutionResult> {
+  const record = _suspendedRuns.get(runId);
+  if (!record) {
+    return {
+      success: false,
+      status: "failed",
+      error: `No suspended workflow run found with runId '${runId}'. It may have already been resumed or expired.`,
+      runId,
+    };
+  }
+
+  if (record.suspendedAtStep !== stepId) {
+    return {
+      success: false,
+      status: "failed",
+      error: `Run '${runId}' is suspended at step '${record.suspendedAtStep}', not '${stepId}'.`,
+      runId,
+    };
+  }
+
+  try {
+    const run = record._run as any;
+    const result = await run.resume({ stepId, resumeData });
+
+    // Clean up regardless of outcome
+    _suspendedRuns.delete(runId);
+
+    const status = (result as any).status as string | undefined;
+
+    if (status === "success" || status === "completed") {
+      return {
+        success: true,
+        status: "completed",
+        output: (result as any).result as Record<string, unknown> | undefined,
+        runId,
+      };
+    }
+
+    if (status === "suspended") {
+      const steps = (result as any).steps as
+        | Record<string, { status: string; output?: unknown }>
+        | undefined;
+
+      let suspendedAtStep: string | undefined;
+      let suspendPayload: Record<string, unknown> | undefined;
+
+      if (steps) {
+        for (const [sid, stepResult] of Object.entries(steps)) {
+          if ((stepResult as any).status === "suspended") {
+            suspendedAtStep = sid;
+            suspendPayload = (stepResult as any).output as
+              | Record<string, unknown>
+              | undefined;
+            break;
+          }
+        }
+      }
+
+      // Re-register if it suspended again (e.g. multi-step approval flow)
+      if (suspendedAtStep) {
+        _suspendedRuns.set(runId, {
+          runId,
+          workflowId: record.workflowId,
+          suspendedAtStep,
+          suspendPayload,
+          suspendedAt: Date.now(),
+          _run: run,
+        });
+      }
+
+      return {
+        success: false,
+        status: "suspended",
+        suspendedAtStep,
+        suspendPayload,
+        runId,
+      };
+    }
+
+    const error = (result as any).error;
+    const errorMsg =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+          ? error
+          : "Workflow failed after resume with unknown status";
+
+    return {
+      success: false,
+      status: "failed",
+      error: errorMsg,
+      runId,
+    };
+  } catch (err: unknown) {
+    _suspendedRuns.delete(runId);
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      status: "failed",
+      error: errorMsg,
+      runId,
     };
   }
 }
