@@ -35,6 +35,7 @@
 export { DockerSandbox } from './docker-sandbox.js';
 export { ContainerPool } from './container-pool.js';
 export { SandboxManager, isDockerAvailable } from './sandbox-manager.js';
+export { NativeSandbox, isNativeSandboxAvailable, DEFAULT_SANDBOX_PROFILE } from './native-sandbox.js';
 export {
   SecurityError,
   validateBind,
@@ -53,4 +54,6 @@ export type {
   PoolConfig,
   PoolEntry,
   SandboxManagerConfig,
+  SandboxProfile,
+  NativeSandboxConfig,
 } from './types.js';
