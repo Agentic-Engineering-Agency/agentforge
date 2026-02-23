@@ -395,23 +395,23 @@ describe('WhatsAppAdapter', () => {
       await adapter.connect(createConfig({ settings: { webhookPort: 0 } }));
     });
 
-    it('should verify valid webhook request', () => {
-      const result = adapter.verifyWebhook('subscribe', 'test-verify-token', 'challenge-123');
+    it('should verify valid webhook request', async () => {
+      const result = await adapter.verifyWebhook('subscribe', 'test-verify-token', 'challenge-123');
       expect(result).toBe('challenge-123');
     });
 
-    it('should reject invalid verify token', () => {
-      const result = adapter.verifyWebhook('subscribe', 'wrong-token', 'challenge-123');
+    it('should reject invalid verify token', async () => {
+      const result = await adapter.verifyWebhook('subscribe', 'wrong-token', 'challenge-123');
       expect(result).toBeNull();
     });
 
-    it('should reject non-subscribe mode', () => {
-      const result = adapter.verifyWebhook('unsubscribe', 'test-verify-token', 'challenge-123');
+    it('should reject non-subscribe mode', async () => {
+      const result = await adapter.verifyWebhook('unsubscribe', 'test-verify-token', 'challenge-123');
       expect(result).toBeNull();
     });
 
-    it('should handle missing parameters', () => {
-      const result = adapter.verifyWebhook(undefined, undefined, undefined);
+    it('should handle missing parameters', async () => {
+      const result = await adapter.verifyWebhook(undefined, undefined, undefined);
       expect(result).toBeNull();
     });
   });
