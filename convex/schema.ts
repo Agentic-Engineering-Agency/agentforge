@@ -452,4 +452,55 @@ export default defineSchema({
   })
     .index("byRunId", ["runId"])
     .index("byStatus", ["status"]),
+
+  // Memory entries for agent long-term and short-term memory
+  memoryEntries: defineTable({
+    content: v.string(),
+    type: v.union(
+      v.literal("conversation"),
+      v.literal("fact"),
+      v.literal("summary"),
+      v.literal("episodic")
+    ),
+    agentId: v.string(),
+    threadId: v.optional(v.id("threads")),
+    projectId: v.optional(v.id("projects")),
+    userId: v.optional(v.string()),
+    embedding: v.optional(v.array(v.float64())),
+    importance: v.number(),
+    accessCount: v.number(),
+    lastAccessedAt: v.optional(v.number()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.optional(v.number()),
+  })
+    .index("byAgentId", ["agentId"])
+    .index("byThreadId", ["threadId"])
+    .index("byProjectId", ["projectId"])
+    .index("byAgentAndType", ["agentId", "type"])
+    .index("byAgentAndProject", ["agentId", "projectId"])
+    .index("byCreatedAt", ["createdAt"])
+    .index("byImportance", ["importance"])
+    .vectorIndex("byEmbedding", {
+      vectorField: "embedding",
+      dimensions: 1536,
+      filterFields: ["agentId", "projectId", "type"],
+    }),
+
+  // Memory consolidation records
+  memoryConsolidations: defineTable({
+    agentId: v.string(),
+    projectId: v.optional(v.id("projects")),
+    sourceMemoryIds: v.array(v.id("memoryEntries")),
+    resultMemoryId: v.id("memoryEntries"),
+    strategy: v.union(
+      v.literal("summarize"),
+      v.literal("merge"),
+      v.literal("deduplicate")
+    ),
+    createdAt: v.number(),
+  })
+    .index("byAgentId", ["agentId"])
+    .index("byProjectId", ["projectId"]),
 });
