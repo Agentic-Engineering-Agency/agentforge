@@ -38,7 +38,7 @@ export const webSearch = createTool({
   {
     name: 'code-executor',
     displayName: 'Code Executor',
-    description: 'Safely execute JavaScript/TypeScript code snippets in a sandboxed environment and return the output.',
+    description: 'Execute JavaScript/TypeScript code snippets via the AgentForge sandbox API and return the output.',
     category: 'Tools',
     version: '1.0.0',
     author: 'AgentForge',
@@ -48,18 +48,25 @@ import { z } from 'zod';
 
 export const codeExecutor = createTool({
   id: 'code-executor',
-  description: 'Execute JavaScript code and return the result',
+  description: 'Execute JavaScript code via the sandbox API and return the result',
   inputSchema: z.object({
     code: z.string().describe('JavaScript code to execute'),
+    language: z.enum(['javascript', 'typescript']).default('javascript'),
   }),
   execute: async ({ context }) => {
-    try {
-      const fn = new Function('return (async () => {' + context.code + '})()');
-      const result = await fn();
-      return { success: true, output: String(result) };
-    } catch (error: any) {
-      return { success: false, error: error.message };
+    // Code is executed server-side via the AgentForge sandbox API,
+    // not via eval or Function constructor, to prevent arbitrary code execution risks.
+    const response = await fetch('/api/sandbox/execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: context.code, language: context.language }),
+    });
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({ error: 'Unknown error' }));
+      return { success: false, error: err.error ?? 'Sandbox execution failed' };
     }
+    const data = await response.json();
+    return { success: true, output: String(data.output ?? '') };
   },
 });`,
   },
@@ -74,16 +81,71 @@ export const codeExecutor = createTool({
     code: `import { createTool } from '@mastra/core';
 import { z } from 'zod';
 
+// Safe arithmetic evaluator — no eval or Function constructor used.
+function evaluateExpression(expr: string): number {
+  // Allow only digits, operators, parentheses, dots, and whitespace.
+  if (!/^[0-9+\\-*/().%\\s]+$/.test(expr)) {
+    throw new Error('Expression contains invalid characters');
+  }
+  // Recursive descent parser for: expr = term (('+' | '-') term)*
+  let pos = 0;
+  const peek = () => expr[pos] ?? '';
+  const consume = () => expr[pos++];
+  const skipWs = () => { while (peek() === ' ') consume(); };
+
+  function parseNumber(): number {
+    skipWs();
+    let num = '';
+    if (peek() === '(') { consume(); const v = parseExpr(); skipWs(); consume(); return v; }
+    while (/[0-9.]/.test(peek())) num += consume();
+    if (num === '') throw new Error('Expected number');
+    return parseFloat(num);
+  }
+
+  function parseFactor(): number {
+    skipWs();
+    if (peek() === '-') { consume(); return -parseFactor(); }
+    return parseNumber();
+  }
+
+  function parseTerm(): number {
+    let left = parseFactor();
+    skipWs();
+    while (peek() === '*' || peek() === '/') {
+      const op = consume(); skipWs();
+      const right = parseFactor();
+      left = op === '*' ? left * right : left / right;
+      skipWs();
+    }
+    return left;
+  }
+
+  function parseExpr(): number {
+    let left = parseTerm();
+    skipWs();
+    while (peek() === '+' || peek() === '-') {
+      const op = consume(); skipWs();
+      const right = parseTerm();
+      left = op === '+' ? left + right : left - right;
+      skipWs();
+    }
+    return left;
+  }
+
+  const result = parseExpr();
+  if (pos !== expr.length) throw new Error('Unexpected token at position ' + pos);
+  return result;
+}
+
 export const calculator = createTool({
   id: 'calculator',
-  description: 'Evaluate a mathematical expression',
+  description: 'Evaluate a mathematical expression safely',
   inputSchema: z.object({
     expression: z.string().describe('Math expression to evaluate, e.g. "2 + 2 * 3"'),
   }),
   execute: async ({ context }) => {
     try {
-      const sanitized = context.expression.replace(/[^0-9+\\-*/().%\\s]/g, '');
-      const result = Function('"use strict"; return (' + sanitized + ')')();
+      const result = evaluateExpression(context.expression.trim());
       return { result: Number(result), expression: context.expression };
     } catch (error: any) {
       return { error: 'Invalid expression: ' + error.message };

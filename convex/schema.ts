@@ -33,7 +33,8 @@ export default defineSchema({
     .index("byUserId", ["userId"])
     .index("byIsActive", ["isActive"])
     .index("byProjectId", ["projectId"])
-    .index("byProjectAndActive", ["projectId", "isActive"]),
+    .index("byProjectAndActive", ["projectId", "isActive"])
+    .index("byActiveUser", ["isActive", "userId"]),
 
   // Conversation threads
   threads: defineTable({
@@ -129,7 +130,9 @@ export default defineSchema({
     updatedAt: v.number(),
     isDefault: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
-  }).index("byUserId", ["userId"]),
+  })
+    .index("byUserId", ["userId"])
+    .index("byUserAndDefault", ["userId", "isDefault"]),
 
   // Project membership / access control
   projectMembers: defineTable({
@@ -170,7 +173,8 @@ export default defineSchema({
     .index("byUserId", ["userId"])
     .index("byIsInstalled", ["isInstalled"])
     .index("byCategory", ["category"])
-    .index("byProjectId", ["projectId"]),
+    .index("byProjectId", ["projectId"])
+    .index("byProjectAndInstalled", ["projectId", "isInstalled"]),
 
   // Cron jobs/scheduled tasks
   cronJobs: defineTable({
@@ -261,7 +265,8 @@ export default defineSchema({
     .index("byUserId", ["userId"])
     .index("byTimestamp", ["timestamp"])
     .index("byProvider", ["provider"])
-    .index("byProjectId", ["projectId"]),
+    .index("byProjectId", ["projectId"])
+    .index("byUserAndTimestamp", ["userId", "timestamp"]),
 
   // User settings and configuration
   settings: defineTable({
