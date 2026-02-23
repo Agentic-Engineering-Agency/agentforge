@@ -355,18 +355,77 @@ export const streamAgent = action({
 });
 
 /**
- * Execute workflow with multiple agents (placeholder).
+ * Execute a workflow definition stored in Convex.
+ *
+ * Fetches the workflow definition, creates a run record, delegates execution
+ * to the workflow engine, and persists the final status back to Convex.
  */
 export const executeWorkflow = action({
   args: {
-    workflowId: v.string(),
-    input: v.any(),
+    workflowId: v.id("workflowDefinitions"),
+    input: v.optional(v.any()),
     userId: v.optional(v.string()),
   },
-  handler: async (_ctx, _args): Promise<{ success: boolean; message: string }> => {
-    return {
-      success: true,
-      message: "Workflow execution coming soon",
-    };
+  handler: async (ctx, args): Promise<{ success: boolean; message: string }> => {
+    // 1. Fetch workflow definition
+    const definition = await ctx.runQuery(api.workflows.get, { id: args.workflowId });
+    if (!definition) {
+      return { success: false, message: "Workflow not found" };
+    }
+
+    // 2. Create run record
+    const runId = await ctx.runMutation(api.workflows.createRun, {
+      workflowId: args.workflowId,
+      input: args.input ? JSON.stringify(args.input) : undefined,
+      projectId: definition.projectId,
+      userId: args.userId,
+    });
+
+    try {
+      // 3. Parse steps and execute via workflow engine
+      const { parseWorkflowDefinition, executeWorkflow: runWorkflow } = await import("./lib/workflowEngine");
+
+      const steps = parseWorkflowDefinition(definition.steps);
+      const workflowData = {
+        id: definition._id,
+        name: definition.name,
+        description: definition.description,
+        steps,
+      };
+
+      const result = await runWorkflow(workflowData, (args.input as Record<string, unknown>) || {});
+
+      // 4. Persist run result
+      await ctx.runMutation(api.workflows.updateRun, {
+        id: runId,
+        status: result.status,
+        output: result.output ? JSON.stringify(result.output) : undefined,
+        error: result.error,
+        completedAt: result.status !== "suspended" ? Date.now() : undefined,
+        ...(result.suspendedAtStep ? { suspendedAt: result.suspendedAtStep } : {}),
+        ...(result.suspendPayload
+          ? { suspendPayload: JSON.stringify(result.suspendPayload) }
+          : {}),
+      });
+
+      return {
+        success: result.success,
+        message:
+          result.status === "completed"
+            ? "Workflow completed successfully"
+            : result.error || result.status,
+      };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+
+      await ctx.runMutation(api.workflows.updateRun, {
+        id: runId,
+        status: "failed",
+        error: errorMsg,
+        completedAt: Date.now(),
+      });
+
+      return { success: false, message: errorMsg };
+    }
   },
 });

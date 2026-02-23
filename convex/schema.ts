@@ -381,4 +381,70 @@ export default defineSchema({
     .index("byStatus", ["status"])
     .index("byUserId", ["userId"])
     .index("byProjectId", ["projectId"]),
+
+  // Mastra Workflow definitions
+  workflowDefinitions: defineTable({
+    name: v.string(),
+    description: v.optional(v.string()),
+    steps: v.string(), // JSON-serialized step definitions
+    triggers: v.optional(v.string()), // JSON-serialized trigger config
+    inputSchema: v.optional(v.string()), // JSON-serialized Zod schema description
+    outputSchema: v.optional(v.string()), // JSON-serialized Zod schema description
+    isActive: v.boolean(),
+    projectId: v.optional(v.id("projects")),
+    userId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("byProjectId", ["projectId"])
+    .index("byUserId", ["userId"])
+    .index("byIsActive", ["isActive"]),
+
+  // Workflow execution runs
+  workflowRuns: defineTable({
+    workflowId: v.id("workflowDefinitions"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("suspended"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    input: v.optional(v.string()), // JSON-serialized input
+    output: v.optional(v.string()), // JSON-serialized output
+    currentStepIndex: v.number(),
+    suspendedAt: v.optional(v.string()), // Step ID where suspended
+    suspendPayload: v.optional(v.string()), // JSON-serialized suspend data
+    error: v.optional(v.string()),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    projectId: v.optional(v.id("projects")),
+    userId: v.optional(v.string()),
+  })
+    .index("byWorkflowId", ["workflowId"])
+    .index("byStatus", ["status"])
+    .index("byProjectId", ["projectId"])
+    .index("byUserId", ["userId"]),
+
+  // Individual step records for a workflow run
+  workflowSteps: defineTable({
+    runId: v.id("workflowRuns"),
+    stepId: v.string(),
+    name: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("skipped"),
+      v.literal("suspended")
+    ),
+    input: v.optional(v.string()), // JSON-serialized
+    output: v.optional(v.string()), // JSON-serialized
+    error: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+  })
+    .index("byRunId", ["runId"])
+    .index("byStatus", ["status"]),
 });
