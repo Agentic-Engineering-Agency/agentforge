@@ -17,6 +17,14 @@ import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
 import { resolveMemoryConfig } from "./lib/memoryConfig";
+import { computeCost } from "./lib/costAnalytics";
+import { initTracing, recordSpan, sendTraceToOpik } from "./lib/tracing";
+
+// Initialize tracing once at module load — enabled only when OPIK_API_KEY is set
+const _tracingConfig = initTracing({
+  apiKey: process.env.OPIK_API_KEY,
+  projectName: process.env.OPIK_PROJECT_NAME ?? "agentforge",
+});
 
 // ---------------------------------------------------------------------------
 // Agent instance cache
@@ -176,13 +184,30 @@ async function executeWithFailover(
             }
           : null;
 
+        const latencyMs = Date.now() - startTime;
+
+        // Fire-and-forget tracing — never blocks the response, never throws
+        const span = recordSpan({
+          name: "llm-call",
+          model: modelKey,
+          inputTokens: usage?.promptTokens,
+          outputTokens: usage?.completionTokens,
+          latencyMs,
+          metadata: {
+            provider,
+            didFailover: chainPos > 0,
+            totalAttempts,
+          },
+        });
+        sendTraceToOpik(span, _tracingConfig).catch(() => {});
+
         return {
           text: result.text,
           usage,
           provider,
           model: modelId,
           didFailover: chainPos > 0,
-          latencyMs: Date.now() - startTime,
+          latencyMs,
         };
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -358,6 +383,9 @@ export const executeAgent = action({
 
       // Record usage
       if (result.usage) {
+        const modelKey = `${result.provider}/${result.model}`;
+        const cost = computeCost(modelKey, result.usage.promptTokens, result.usage.completionTokens);
+
         await ctx.runMutation(api.usage.record, {
           agentId: args.agentId,
           sessionId,
@@ -367,6 +395,7 @@ export const executeAgent = action({
           completionTokens: result.usage.completionTokens,
           totalTokens: result.usage.totalTokens,
           userId: args.userId,
+          cost,
         });
       }
 
