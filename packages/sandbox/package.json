@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/sandbox",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "Docker-based sandbox provider for AgentForge agent tool execution isolation",
   "type": "module",
   "main": "./dist/index.js",
