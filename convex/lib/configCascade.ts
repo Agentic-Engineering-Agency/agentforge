@@ -11,12 +11,26 @@ export const SYSTEM_DEFAULTS = {
   failoverModels: [] as Array<{ provider: string; model: string }>,
 } as const;
 
+export interface VoiceConfig {
+  /** ElevenLabs voice ID */
+  voiceId?: string;
+  /** Speech speed multiplier (0.5–2.0) */
+  speed?: number;
+  /** TTS model ID (e.g., 'eleven_multilingual_v2') */
+  model?: string;
+  /** Voice provider */
+  provider?: 'elevenlabs';
+  /** Language code (e.g., 'en', 'es') */
+  language?: string;
+}
+
 export interface AgentConfig {
   model?: string;
   temperature?: number;
   maxTokens?: number;
   instructions?: string;
   failoverModels?: Array<{ provider: string; model: string }>;
+  voiceConfig?: VoiceConfig;
 }
 
 export interface ProjectSettings {

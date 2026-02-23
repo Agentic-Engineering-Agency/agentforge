@@ -20,6 +20,7 @@ import { Route as CronRouteImport } from './routes/cron'
 import { Route as ConnectionsRouteImport } from './routes/connections'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AgentsRouteImport } from './routes/agents'
+import { Route as AgentRunRouteImport } from './routes/agent-run'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UsageRoute = UsageRouteImport.update({
@@ -77,6 +78,11 @@ const AgentsRoute = AgentsRouteImport.update({
   path: '/agents',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentRunRoute = AgentRunRouteImport.update({
+  id: '/agent-run',
+  path: '/agent-run',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -85,6 +91,7 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/agent-run': typeof AgentRunRoute
   '/agents': typeof AgentsRoute
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
@@ -99,6 +106,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/agent-run': typeof AgentRunRoute
   '/agents': typeof AgentsRoute
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
@@ -114,6 +122,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/agent-run': typeof AgentRunRoute
   '/agents': typeof AgentsRoute
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
@@ -130,6 +139,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/agent-run'
     | '/agents'
     | '/chat'
     | '/connections'
@@ -144,6 +154,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/agent-run'
     | '/agents'
     | '/chat'
     | '/connections'
@@ -158,6 +169,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/agent-run'
     | '/agents'
     | '/chat'
     | '/connections'
@@ -173,6 +185,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AgentRunRoute: typeof AgentRunRoute
   AgentsRoute: typeof AgentsRoute
   ChatRoute: typeof ChatRoute
   ConnectionsRoute: typeof ConnectionsRoute
@@ -265,6 +278,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agent-run': {
+      id: '/agent-run'
+      path: '/agent-run'
+      fullPath: '/agent-run'
+      preLoaderRoute: typeof AgentRunRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -277,6 +297,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AgentRunRoute: AgentRunRoute,
   AgentsRoute: AgentsRoute,
   ChatRoute: ChatRoute,
   ConnectionsRoute: ConnectionsRoute,
