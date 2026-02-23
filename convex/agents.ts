@@ -44,11 +44,12 @@ export const listActive = query({
   },
   handler: async (ctx, args) => {
     if (args.projectId) {
-      const agents = await ctx.db
+      return await ctx.db
         .query("agents")
-        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .withIndex("byProjectAndActive", (q) =>
+          q.eq("projectId", args.projectId!).eq("isActive", true)
+        )
         .collect();
-      return agents.filter((agent) => agent.isActive);
     }
 
     const activeQuery = ctx.db

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const __dirname = path.dirname(new URL(import.meta.url).pathname);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // ---------------------------------------------------------------------------
 // Test Group 1: Schema Validation (static analysis of convex/schema.ts)
@@ -260,10 +261,14 @@ describe('AGE-106: Query Layer Updates', () => {
         expect(content).toContain('v.optional(v.id("projects"))');
       });
 
-      it('should use byProjectId index when projectId provided', () => {
+      it('should use project-scoped index when projectId provided', () => {
         const filePath = path.resolve(__dirname, '..', file);
         const content = fs.readFileSync(filePath, 'utf-8');
-        expect(content).toContain('byProjectId');
+        // logs.ts uses compound byProjectAndTimestamp; others use byProjectId
+        expect(
+          content.includes('byProjectId') || content.includes('byProjectAndTimestamp'),
+          `${file} should use a project-scoped index`
+        ).toBeTruthy();
       });
     });
   }
