@@ -357,4 +357,190 @@ describe('GitTool', () => {
       expect(git.getStatus().branch).toBe('feature/my-feature');
     });
   });
+
+  // ─── GitToolError Properties ────────────────────────────────────────
+
+  describe('GitToolError', () => {
+    it('should have correct name property', () => {
+      const err = new GitToolError('something failed', 'checkout');
+      expect(err.name).toBe('GitToolError');
+    });
+
+    it('should have command property matching the provided command', () => {
+      const err = new GitToolError('something failed', 'status --porcelain');
+      expect(err.command).toBe('status --porcelain');
+    });
+
+    it('should be an instance of Error', () => {
+      const err = new GitToolError('oops', 'log');
+      expect(err).toBeInstanceOf(Error);
+      expect(err).toBeInstanceOf(GitToolError);
+    });
+
+    it('should carry the message', () => {
+      const err = new GitToolError('git log failed: not a repo', 'log');
+      expect(err.message).toBe('git log failed: not a repo');
+    });
+
+    it('should set command property to sanitize when injection is detected', () => {
+      let caught: GitToolError | null = null;
+      try {
+        git.switchBranch('bad$(cmd)');
+      } catch (e) {
+        caught = e as GitToolError;
+      }
+      expect(caught).toBeInstanceOf(GitToolError);
+      expect(caught!.command).toBe('sanitize');
+    });
+  });
+
+  // --- exec Method ---------------------------------------------------
+
+  describe('exec', () => {
+    it('should execute a raw git command and return stdout', () => {
+      const output = git.exec('rev-parse --abbrev-ref HEAD');
+      expect(output.trim()).toMatch(/^(main|master)$/);
+    });
+
+    it('should throw GitToolError on invalid command', () => {
+      expect(() => git.exec('not-a-real-git-subcommand')).toThrow(GitToolError);
+    });
+
+    it('should accept an explicit cwd parameter', () => {
+      const output = git.exec('rev-parse --abbrev-ref HEAD', REPO_DIR);
+      expect(output.trim()).toMatch(/^(main|master)$/);
+    });
+
+    it('should throw GitToolError with the command in message on failure', () => {
+      let caught: GitToolError | null = null;
+      try {
+        git.exec('checkout nonexistent-xyz-branch');
+      } catch (e) {
+        caught = e as GitToolError;
+      }
+      expect(caught).toBeInstanceOf(GitToolError);
+      expect(caught!.message).toContain('checkout');
+    });
+  });
+
+  // --- Remote Operations (error path) --------------------------------
+
+  describe('pull', () => {
+    it('should throw GitToolError when no remote is configured', () => {
+      expect(() => git.pull()).toThrow(GitToolError);
+    });
+
+    it('should throw GitToolError with command context on failure', () => {
+      let caught: GitToolError | null = null;
+      try {
+        git.pull({ remote: 'origin', branch: 'main' });
+      } catch (e) {
+        caught = e as GitToolError;
+      }
+      expect(caught).toBeInstanceOf(GitToolError);
+    });
+  });
+
+  describe('push', () => {
+    it('should throw GitToolError when no remote is configured', () => {
+      expect(() => git.push()).toThrow(GitToolError);
+    });
+
+    it('should throw GitToolError with setUpstream flag when no remote is configured', () => {
+      expect(() => git.push({ setUpstream: true })).toThrow(GitToolError);
+    });
+  });
+
+  describe('fetch', () => {
+    it('should succeed with no remotes (fetch --all is a no-op)', () => {
+      // git fetch --all with no remotes configured exits 0
+      expect(() => git.fetch()).not.toThrow();
+    });
+
+    it('should throw GitToolError for a named remote that does not exist', () => {
+      expect(() => git.fetch('nonexistent-remote')).toThrow(GitToolError);
+    });
+  });
+
+  // --- stashDrop -----------------------------------------------------
+
+  describe('stashDrop', () => {
+    it('should drop the most recent stash', () => {
+      writeFileSync(join(REPO_DIR, 'README.md'), '# Stash drop test\n');
+      git.stash('Drop me');
+      const before = git.listStashes();
+      expect(before.length).toBeGreaterThanOrEqual(1);
+      git.stashDrop(0);
+      const after = git.listStashes();
+      expect(after.length).toBe(before.length - 1);
+    });
+
+    it('should throw GitToolError when dropping from empty stash', () => {
+      expect(() => git.stashDrop(0)).toThrow(GitToolError);
+    });
+  });
+
+  // --- diff between refs ---------------------------------------------
+
+  describe('diff with refs', () => {
+    it('should return empty diff when comparing identical refs', () => {
+      const headHash = git.exec('rev-parse HEAD').trim();
+      const d = git.diff({ ref1: headHash, ref2: headHash });
+      expect(d.filesChanged).toBe(0);
+      expect(d.insertions).toBe(0);
+      expect(d.deletions).toBe(0);
+    });
+
+    it('should show changes between two commits', () => {
+      writeFileSync(join(REPO_DIR, 'ref-diff.txt'), 'ref diff content\n');
+      gitExec('add ref-diff.txt', REPO_DIR);
+      gitExec('commit -m "Add ref-diff file"', REPO_DIR);
+
+      const log = git.log({ count: 2 });
+      expect(log.length).toBe(2);
+
+      const olderRef = log[1].hash;
+      const newerRef = log[0].hash;
+      const d = git.diff({ ref1: olderRef, ref2: newerRef });
+      expect(d.filesChanged).toBeGreaterThanOrEqual(1);
+      expect(d.raw).toContain('ref-diff');
+    });
+
+    it('should diff between HEAD and a single ref', () => {
+      writeFileSync(join(REPO_DIR, 'single-ref.txt'), 'single ref content\n');
+      gitExec('add single-ref.txt', REPO_DIR);
+      gitExec('commit -m "Add single-ref file"', REPO_DIR);
+
+      const log = git.log({ count: 2 });
+      const parentRef = log[1].hash;
+      const d = git.diff({ ref1: parentRef });
+      expect(d.filesChanged).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // --- createBranch from specific ref --------------------------------
+
+  describe('createBranch from ref', () => {
+    it('should create a branch from a specific commit hash', () => {
+      const log = git.log({ count: 1 });
+      const headHash = log[0].hash;
+      git.createBranch('from-ref-branch', { from: headHash });
+      const branches = git.listBranches();
+      expect(branches.some(b => b.name === 'from-ref-branch')).toBe(true);
+    });
+
+    it('should create a branch from a short commit hash', () => {
+      const log = git.log({ count: 1 });
+      const shortHash = log[0].shortHash;
+      git.createBranch('from-short-ref', { from: shortHash });
+      const branches = git.listBranches();
+      expect(branches.some(b => b.name === 'from-short-ref')).toBe(true);
+    });
+
+    it('should throw GitToolError when from ref does not exist', () => {
+      expect(() =>
+        git.createBranch('bad-ref-branch', { from: 'deadbeefdeadbeef' })
+      ).toThrow(GitToolError);
+    });
+  });
 });
