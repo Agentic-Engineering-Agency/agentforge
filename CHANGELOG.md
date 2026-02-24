@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.3] - 2026-02-24
+
+### Refactored
+- **Core Dependencies**: Moved `playwright` to optional peer dependency and `@e2b/code-interpreter` to `@agentforge-ai/sandbox`. The sandbox package now properly owns all heavy execution dependencies, significantly reducing the base install size of `@agentforge-ai/core`.
+- **Voice Tools**: Merged TTS and STT functionality from `@agentforge-ai/tools-voice` directly into `@agentforge-ai/core`.
+  - The `@agentforge-ai/tools-voice` package is now deprecated and serves only as a backward-compatibility re-export wrapper.
+  - Meaningful package count reduced from 6 to 5.
+
 ## [0.7.2] - 2026-02-24
 
 ### Changed

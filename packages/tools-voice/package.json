@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/tools-voice",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Deprecated: voice tools merged into @agentforge-ai/core. This package is a backward-compat re-export wrapper.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
