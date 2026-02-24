@@ -1,4 +1,12 @@
-import { Sandbox } from '@e2b/code-interpreter';
+/**
+ * E2B Cloud Sandbox integration for AgentForge.
+ *
+ * @e2b/code-interpreter is an OPTIONAL dependency.
+ * Install it only when you need cloud sandboxing:
+ *   npm install @e2b/code-interpreter
+ *
+ * For local/Docker sandboxing, use @agentforge-ai/sandbox instead.
+ */
 
 /**
  * Configuration for the SandboxManager.
@@ -61,11 +69,10 @@ export class SandboxExecutionError extends Error {
 }
 
 /**
- * Manages the lifecycle of E2B sandboxes for secure code execution.
+ * Manages the lifecycle of E2B cloud sandboxes for secure code execution.
  *
- * All tool code execution in AgentForge MUST occur within an E2B sandbox
- * to ensure security isolation and prevent malicious code from affecting
- * the host system.
+ * Requires @e2b/code-interpreter to be installed (optional dependency).
+ * For local/Docker sandboxing, use @agentforge-ai/sandbox instead.
  *
  * @example
  * ```typescript
@@ -75,31 +82,45 @@ export class SandboxExecutionError extends Error {
  * ```
  */
 export class SandboxManager {
-  private sandbox: Sandbox | null = null;
+  private sandbox: unknown = null;
   private defaultTimeout: number;
 
-  /**
-   * Creates a new SandboxManager.
-   * @param config - The configuration for the sandbox manager.
-   */
   constructor(config: SandboxConfig = {}) {
     this.defaultTimeout = config.timeout ?? 30000;
   }
 
   /**
-   * Executes a snippet of code within a secure E2B sandbox.
+   * Executes a snippet of code within a secure E2B cloud sandbox.
    *
-   * @param code - The code to execute.
-   * @param options - Options for this specific run.
-   * @returns A promise that resolves to the result of the code execution.
+   * @throws Error if @e2b/code-interpreter is not installed
    * @throws {SandboxExecutionError} If the code throws an error.
    */
   async runCode(code: string, options?: SandboxRunOptions): Promise<SandboxResult> {
     const timeoutMs = options?.timeout ?? this.defaultTimeout;
 
+    let E2BSandbox: { create: () => Promise<unknown> };
     try {
-      this.sandbox = await Sandbox.create();
-      const execution = await this.sandbox.runCode(code, { timeoutMs });
+      const mod = await import('@e2b/code-interpreter');
+      E2BSandbox = mod.Sandbox as typeof E2BSandbox;
+    } catch {
+      throw new Error(
+        '@e2b/code-interpreter is not installed. ' +
+        'Run: npm install @e2b/code-interpreter\n' +
+        'For local/Docker sandboxing, use @agentforge-ai/sandbox instead.'
+      );
+    }
+
+    try {
+      this.sandbox = await E2BSandbox.create();
+      const sb = this.sandbox as {
+        runCode: (code: string, opts: { timeoutMs: number }) => Promise<{
+          error?: { name: string; value: string; traceback: string };
+          results: unknown;
+          logs: { stdout: string[]; stderr: string[] };
+        }>;
+        kill: () => Promise<void>;
+      };
+      const execution = await sb.runCode(code, { timeoutMs });
 
       if (execution.error) {
         throw new SandboxExecutionError(
@@ -116,7 +137,8 @@ export class SandboxManager {
       };
     } finally {
       if (this.sandbox) {
-        await this.sandbox.kill();
+        const sb = this.sandbox as { kill: () => Promise<void> };
+        await sb.kill();
         this.sandbox = null;
       }
     }
@@ -124,11 +146,11 @@ export class SandboxManager {
 
   /**
    * Terminates the sandbox and releases all associated resources.
-   * @returns A promise that resolves when the cleanup is complete.
    */
   async cleanup(): Promise<void> {
     if (this.sandbox) {
-      await this.sandbox.kill();
+      const sb = this.sandbox as { kill: () => Promise<void> };
+      await sb.kill();
       this.sandbox = null;
     }
   }

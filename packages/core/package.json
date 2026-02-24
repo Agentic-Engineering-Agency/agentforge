@@ -53,7 +53,6 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@e2b/code-interpreter": "^1.0.0",
     "@mastra/core": "^1.5.0",
     "zod": "^3.23.0"
   },
@@ -92,5 +91,8 @@
     "type": "git",
     "url": "https://github.com/Agentic-Engineering-Agency/agentforge.git",
     "directory": "packages/core"
+  },
+  "optionalDependencies": {
+    "@e2b/code-interpreter": "^1.0.0"
   }
 }

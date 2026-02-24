@@ -37,7 +37,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "dockerode": "^4.0.9"
+    "dockerode": "^4.0.9",
+    "@e2b/code-interpreter": "^1.0.0"
   },
   "devDependencies": {
     "@types/dockerode": "^3.3.47",
