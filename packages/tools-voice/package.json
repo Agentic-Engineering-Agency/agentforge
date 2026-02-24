@@ -1,7 +1,7 @@
 {
   "name": "@agentforge-ai/tools-voice",
   "version": "0.7.2",
-  "description": "Voice tools for AgentForge \u2014 ElevenLabs TTS + OpenAI Whisper STT",
+  "description": "Deprecated: voice tools merged into @agentforge-ai/core. This package is a backward-compat re-export wrapper.",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
@@ -21,8 +21,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@mastra/core": "^1.5.0",
-    "zod": "^3.23.0"
+    "@agentforge-ai/core": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.0.0",
