@@ -145,3 +145,7 @@ export {
   publishSkillInputSchema,
 } from './skills/marketplace-client.js';
 export type { MarketplaceSkill, PublishSkillInput } from './skills/marketplace-client.js';
+
+// ─── Voice Tools (TTS + STT) ─────────────────────────────────────────────────
+export { textToSpeech, speechToText, createVoiceTool, sanitizeTtsText, DEFAULT_VOICE_CONFIG, MAX_TTS_TEXT_LENGTH, MAX_STT_FILE_SIZE } from './voice/index.js';
+export type { TtsRequest, TtsResponse, SttRequest, SttResponse, VoiceConfig } from './voice/index.js';
