@@ -188,7 +188,7 @@ function FilesPage() {
                     <button onClick={(e) => { e.stopPropagation(); openRename(folder.id, folder.name, "folder"); }} className="p-1 hover:bg-accent rounded"><Edit2 className="h-3 w-3" /></button>
                     <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id); }} className="p-1 hover:bg-destructive/20 rounded text-destructive"><Trash2 className="h-3 w-3" /></button>
                   </div>
-                  <Folder className="h-10 w-10 text-blue-400 mb-2" /><p className="text-sm font-medium truncate">{folder.name}</p><p className="text-xs text-muted-foreground mt-1">{formatDate(folder.createdAt)}</p>
+                  <Folder className="h-10 w-10 text-ae-accent mb-2" /><p className="text-sm font-medium truncate">{folder.name}</p><p className="text-xs text-muted-foreground mt-1">{formatDate(folder.createdAt)}</p>
                 </div>
               ))}
               {filteredFiles.map((file: any) => { const Icon = getFileIcon(file.mimeType ?? file.type ?? ""); return (
@@ -209,7 +209,7 @@ function FilesPage() {
                 <tbody>
                   {filteredFolders.map((folder) => (
                     <tr key={folder.id} className="border-b hover:bg-accent/50 cursor-pointer" onDoubleClick={() => setCurrentFolderId(folder.id)}>
-                      <td className="px-4 py-3 flex items-center gap-2"><Folder className="h-4 w-4 text-blue-400" /><span className="font-medium">{folder.name}</span></td>
+                      <td className="px-4 py-3 flex items-center gap-2"><Folder className="h-4 w-4 text-ae-accent" /><span className="font-medium">{folder.name}</span></td>
                       <td className="px-4 py-3 text-muted-foreground">Folder</td><td className="px-4 py-3 text-muted-foreground">—</td><td className="px-4 py-3 text-muted-foreground">{formatDate(folder.createdAt)}</td>
                       <td className="px-4 py-3"><div className="flex items-center gap-1"><button onClick={() => openRename(folder.id, folder.name, "folder")} className="p-1 hover:bg-accent rounded"><Edit2 className="h-3 w-3" /></button><button onClick={() => handleDeleteFolder(folder.id)} className="p-1 hover:bg-destructive/20 rounded text-destructive"><Trash2 className="h-3 w-3" /></button></div></td>
                     </tr>

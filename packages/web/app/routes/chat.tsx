@@ -273,7 +273,7 @@ function ChatPageComponent() {
                     ? "bg-orange-500"
                     : currentAgent?.provider === "openrouter"
                     ? "bg-purple-500"
-                    : "bg-blue-500"
+                    : "bg-ae-accent"
                 }`}
               />
               <select
