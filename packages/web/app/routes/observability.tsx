@@ -150,7 +150,7 @@ function ObservabilityPage() {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {[
                   { label: "Total Spend", value: `$${totalSpend.toFixed(2)}`, icon: DollarSign, color: "text-green-400" },
-                  { label: "Avg Cost/Call", value: `$${avgCostPerCall.toFixed(4)}`, icon: DollarSign, color: "text-blue-400" },
+                  { label: "Avg Cost/Call", value: `$${avgCostPerCall.toFixed(4)}`, icon: DollarSign, color: "text-ae-accent" },
                   { label: "Total Tokens", value: formatTokens(totalTokens), icon: Zap, color: "text-purple-400" },
                 ].map((stat) => (
                   <div key={stat.label} className="bg-card border rounded-lg p-5">

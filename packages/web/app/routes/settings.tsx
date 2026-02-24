@@ -387,7 +387,7 @@ function VaultTab() {
   };
 
   const categoryColors: Record<string, string> = {
-    api_key: 'bg-blue-900/30 text-blue-400 border-blue-700/40',
+    api_key: 'bg-ae-primary/10 text-ae-accent border-ae-accent/40',
     token: 'bg-purple-900/30 text-purple-400 border-purple-700/40',
     secret: 'bg-yellow-900/30 text-yellow-400 border-yellow-700/40',
     credential: 'bg-orange-900/30 text-orange-400 border-orange-700/40',
@@ -395,7 +395,7 @@ function VaultTab() {
 
   const actionColors: Record<string, string> = {
     created: 'text-green-400',
-    accessed: 'text-blue-400',
+    accessed: 'text-ae-accent',
     updated: 'text-yellow-400',
     deleted: 'text-red-400',
     auto_captured: 'text-purple-400',

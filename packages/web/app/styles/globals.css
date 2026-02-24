@@ -2,57 +2,93 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+  Agentic Engineering Brand Palette
+  ─────────────────────────────────
+  Primary Blue  #1F337A  →  hsl(227 59% 30%)  — trust, logos, headings
+  Accent Blue   #6A81C7  →  hsl(225 45% 60%)  — interactive, highlights
+  Bone          #F5F5F5  →  hsl(0 0% 96%)     — backgrounds, white space
+  Charcoal      #1A1A1A  →  hsl(0 0% 10%)     — body text, grounding
+*/
+
 @layer base {
-  /* Default to dark theme (OpenClaw-style) */
+  /* ─── Dark Theme (default) ─────────────────────────────────────────── */
   :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --card: 240 10% 5.9%;
-    --card-foreground: 0 0% 98%;
-    --popover: 240 10% 5.9%;
-    --popover-foreground: 0 0% 98%;
-    --primary: 0 72.2% 50.6%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 3.7% 15.9%;
-    --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
-    --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
-    --accent-foreground: 0 0% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 3.7% 15.9%;
-    --ring: 0 72.2% 50.6%;
-    --radius: 0.5rem;
-    --sidebar: 240 10% 4.5%;
-    --sidebar-foreground: 240 5% 64.9%;
-    --sidebar-active: 0 72.2% 50.6%;
+    /* Deep navy background — primary blue family, very dark */
+    --background:          225 54%  9%;
+    --foreground:          0   0%  96%;   /* Bone */
+
+    --card:                225 47% 12%;
+    --card-foreground:     0   0%  96%;
+
+    --popover:             225 47% 12%;
+    --popover-foreground:  0   0%  96%;
+
+    /* Primary = Accent Blue (legible on dark backgrounds) */
+    --primary:             225 45% 60%;   /* #6A81C7 */
+    --primary-foreground:  0   0%  96%;   /* Bone */
+
+    --secondary:           225 40% 17%;
+    --secondary-foreground:0   0%  96%;
+
+    --muted:               225 38% 17%;
+    --muted-foreground:    225 20% 55%;
+
+    /* Accent = slightly brighter blue highlight */
+    --accent:              225 40% 20%;
+    --accent-foreground:   0   0%  96%;
+
+    --destructive:         0   62%  31%;
+    --destructive-foreground: 0 0% 96%;
+
+    --border:              225 35% 20%;
+    --input:               225 35% 20%;
+    --ring:                225 45% 60%;   /* Accent Blue */
+
+    --radius:              0.5rem;
+
+    /* Sidebar */
+    --sidebar:             225 56%  7%;
+    --sidebar-foreground:  225 20% 55%;
+    --sidebar-active:      225 45% 60%;   /* Accent Blue */
   }
 
+  /* ─── Light Theme ──────────────────────────────────────────────────── */
   .light {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
-    --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 0 72.2% 50.6%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    --background:          0   0%  96%;   /* Bone #F5F5F5 */
+    --foreground:          0   0%  10%;   /* Charcoal #1A1A1A */
+
+    --card:                0   0% 100%;
+    --card-foreground:     0   0%  10%;
+
+    --popover:             0   0% 100%;
+    --popover-foreground:  0   0%  10%;
+
+    /* Primary = Primary Blue */
+    --primary:             227 59% 30%;   /* #1F337A */
+    --primary-foreground:  0   0%  96%;   /* Bone */
+
+    --secondary:           225 50% 93%;
+    --secondary-foreground:227 59% 30%;   /* Primary Blue */
+
+    --muted:               225 30% 93%;
+    --muted-foreground:    225 20% 45%;
+
+    /* Accent = light tint of Accent Blue */
+    --accent:              225 45% 90%;
+    --accent-foreground:   227 59% 30%;   /* Primary Blue */
+
+    --destructive:         0   84%  60%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 0 72.2% 50.6%;
-    --sidebar: 0 0% 98%;
-    --sidebar-foreground: 240 3.8% 46.1%;
-    --sidebar-active: 0 72.2% 50.6%;
+
+    --border:              225 30% 87%;
+    --input:               225 30% 87%;
+    --ring:                225 45% 60%;   /* Accent Blue */
+
+    /* Sidebar */
+    --sidebar:             0   0% 100%;
+    --sidebar-foreground:  225 15% 40%;
+    --sidebar-active:      227 59% 30%;   /* Primary Blue */
   }
 }
 
@@ -81,7 +117,7 @@
     border-radius: 3px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
+    background: hsl(var(--primary) / 0.6);
   }
 }
 

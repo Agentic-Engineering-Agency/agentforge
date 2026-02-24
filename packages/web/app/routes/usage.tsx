@@ -34,7 +34,7 @@ function UsagePage() {
   const costByProvider: Record<string, number> = {};
   records.forEach((r) => { costByProvider[r.provider] = (costByProvider[r.provider] || 0) + r.cost; });
   const maxProviderCost = Math.max(...Object.values(costByProvider), 1);
-  const providerColors: Record<string, string> = { openai: "bg-green-500", anthropic: "bg-orange-500", openrouter: "bg-blue-500", google: "bg-yellow-500", xai: "bg-purple-500" };
+  const providerColors: Record<string, string> = { openai: "bg-green-500", anthropic: "bg-orange-500", openrouter: "bg-ae-accent", google: "bg-yellow-500", xai: "bg-purple-500" };
 
   // Top agents by usage
   const agentUsage: Record<string, { tokens: number; cost: number }> = {};
@@ -80,7 +80,7 @@ function UsagePage() {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Total Tokens", value: formatTokens(totalTokens), icon: Zap, color: "text-blue-400", sub: `${records.length} requests` },
+            { label: "Total Tokens", value: formatTokens(totalTokens), icon: Zap, color: "text-ae-accent", sub: `${records.length} requests` },
             { label: "Total Cost", value: `$${totalCost.toFixed(2)}`, icon: DollarSign, color: "text-green-400", sub: `Avg $${(totalCost / Math.max(records.length, 1)).toFixed(3)}/req` },
             { label: "Active Agents", value: uniqueAgents.toString(), icon: Bot, color: "text-purple-400", sub: "Using LLM providers" },
             { label: "Total Requests", value: totalSessions.toString(), icon: Activity, color: "text-orange-400", sub: "In selected period" },

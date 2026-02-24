@@ -52,7 +52,7 @@ interface RunSummary {
 // ============================================================
 
 const EVENT_CONFIG: Record<EventType, { icon: typeof Brain; color: string; bgColor: string; label: string }> = {
-  llm: { icon: Brain, color: "text-blue-400", bgColor: "bg-blue-500/20", label: "LLM Call" },
+  llm: { icon: Brain, color: "text-ae-accent", bgColor: "bg-ae-accent/20", label: "LLM Call" },
   tool: { icon: Wrench, color: "text-green-400", bgColor: "bg-green-500/20", label: "Tool Call" },
   memory: { icon: Database, color: "text-purple-400", bgColor: "bg-purple-500/20", label: "Memory Op" },
   error: { icon: AlertCircle, color: "text-red-400", bgColor: "bg-red-500/20", label: "Error" },
@@ -76,7 +76,7 @@ function formatTimestamp(ts: number): string {
 function statusBadgeClass(status: RunSummary["status"]): string {
   if (status === "completed") return "px-2 py-0.5 rounded text-xs bg-green-500/20 text-green-400";
   if (status === "error") return "px-2 py-0.5 rounded text-xs bg-red-500/20 text-red-400";
-  return "px-2 py-0.5 rounded text-xs bg-blue-500/20 text-blue-400";
+  return "px-2 py-0.5 rounded text-xs bg-ae-accent/20 text-ae-accent";
 }
 
 // ============================================================
@@ -131,7 +131,7 @@ function AgentRunPage() {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
           {[
-            { label: "Duration", value: formatDuration(summary.totalDurationMs), icon: Clock, color: "text-blue-400" },
+            { label: "Duration", value: formatDuration(summary.totalDurationMs), icon: Clock, color: "text-ae-accent" },
             { label: "Cost", value: `$${summary.totalCost.toFixed(4)}`, icon: DollarSign, color: "text-green-400" },
             { label: "Model", value: summary.model, icon: Brain, color: "text-purple-400" },
             { label: "Events", value: String(summary.eventCount), icon: Activity, color: "text-orange-400" },
