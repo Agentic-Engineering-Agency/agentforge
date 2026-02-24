@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.2] - 2026-02-24
+
+### Changed
+- **UI**: Applied Agentic Engineering brand palette across the entire dashboard
+  - Dark theme: deep navy background with Accent Blue (#6A81C7) as interactive primary
+  - Light theme: Bone (#F5F5F5) background, Charcoal (#1A1A1A) text, Primary Blue (#1F337A) for headings/actions
+  - Tailwind tokens added: `bg-ae-primary`, `text-ae-accent`, `bg-ae-bone`, `text-ae-charcoal`
+
 ## [0.7.1] - 2026-02-23
 
 ### Fixed
