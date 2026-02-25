@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-02-24
+
+### BREAKING CHANGES
+Reduced from 5 published packages to 2 (`@agentforge-ai/core` + `@agentforge-ai/cli`).
+
+Deleted packages — import from `@agentforge-ai/core` instead:
+- `@agentforge-ai/sandbox` → `core/src/sandbox/`
+- `@agentforge-ai/channels-discord` → `core/src/channels/discord/`
+- `@agentforge-ai/channels-slack` → `core/src/channels/slack/`
+- `@agentforge-ai/tools-voice` → removed (was a deprecated shim)
+
 ## [0.7.3] - 2026-02-24
 
 ### Refactored
