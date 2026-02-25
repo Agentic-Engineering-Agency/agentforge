@@ -1,5 +1,3 @@
-"use node";
-
 /**
  * Chat Actions for AgentForge
  *
@@ -9,13 +7,13 @@
  * 3. Assistant response stored back in Convex
  * 4. Real-time subscription updates the UI automatically
  *
- * Uses Mastra-native model routing via Agent.generate() with "provider/model-name" format.
- * Mastra auto-reads provider API keys from environment variables.
+ * LLM calls are delegated to mastraIntegration.generateResponse (Node.js runtime).
+ * This file runs in the default Convex runtime and can contain queries,
+ * mutations, and actions.
  */
 import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { Agent } from "@mastra/core/agent";
 
 // ============================================================
 // Queries
@@ -182,35 +180,22 @@ export const sendMessage = action({
         content: msg.content,
       }));
 
-    // 4. Call the LLM via Mastra Agent
+    // 4. Call the LLM via mastraIntegration.generateResponse (Node.js action)
     let responseText: string;
     let usageData: { promptTokens: number; completionTokens: number; totalTokens: number } | null = null;
 
     try {
-      // Resolve the model provider and ID
       const provider = agent.provider || "openrouter";
       const modelId = agent.model || "openai/gpt-4o-mini";
-      const modelKey = `${provider}/${modelId}`;
 
-      // Generate via Mastra Agent
-      const mastraAgent = new Agent({
-        name: "agentforge-executor",
+      const result = await ctx.runAction(api.mastraIntegration.generateResponse, {
+        modelKey: `${provider}/${modelId}`,
         instructions: agent.instructions || "You are a helpful AI assistant built with AgentForge.",
-        model: modelKey,
+        messages: conversationMessages,
       });
 
-      const result = await mastraAgent.generate(conversationMessages);
-
       responseText = result.text;
-
-      // Extract usage if available
-      if (result.usage) {
-        usageData = {
-          promptTokens: result.usage.promptTokens || 0,
-          completionTokens: result.usage.completionTokens || 0,
-          totalTokens: (result.usage.promptTokens || 0) + (result.usage.completionTokens || 0),
-        };
-      }
+      usageData = result.usage ?? null;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
       console.error("[chat.sendMessage] Mastra error:", errorMessage);
