@@ -14,6 +14,23 @@
 import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+
+// Explicit return type shared by sendMessage and startNewChat.
+// Required to break circular type inference when Convex actions in the same
+// file call each other through the generated `api` object (TS7022/TS7023).
+type UsageData = {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+} | null;
+
+type SendMessageResult = {
+  success: boolean;
+  threadId: Id<"threads">;
+  response: string;
+  usage: UsageData;
+};
 
 // ============================================================
 // Queries
@@ -154,7 +171,7 @@ export const sendMessage = action({
     content: v.string(),
     userId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<SendMessageResult> => {
     // 1. Get agent configuration
     const agent = await ctx.runQuery(api.agents.get, { id: args.agentId });
     if (!agent) {
@@ -265,7 +282,7 @@ export const startNewChat = action({
     threadName: v.optional(v.string()),
     userId: v.optional(v.string()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<SendMessageResult> => {
     // Create a new thread
     const threadId = await ctx.runMutation(api.chat.createThread, {
       agentId: args.agentId,
