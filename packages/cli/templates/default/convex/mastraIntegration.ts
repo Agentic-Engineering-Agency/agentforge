@@ -228,3 +228,57 @@ export const executeWorkflow = action({
     };
   },
 });
+
+/**
+ * Thin LLM wrapper used by chat.sendMessage.
+ *
+ * Accepts a resolved modelKey, system instructions, and conversation messages.
+ * Returns the generated text and token usage. No message storage — callers
+ * handle persistence themselves.
+ *
+ * This action lives here (Node.js runtime) so that chat.ts can remain in the
+ * default Convex runtime and freely mix queries, mutations, and actions.
+ */
+export const generateResponse = action({
+  args: {
+    modelKey: v.string(),
+    instructions: v.string(),
+    messages: v.array(
+      v.object({ role: v.string(), content: v.string() })
+    ),
+  },
+  handler: async (
+    _ctx,
+    args
+  ): Promise<{
+    text: string;
+    usage: {
+      promptTokens: number;
+      completionTokens: number;
+      totalTokens: number;
+    } | null;
+  }> => {
+    const mastraAgent = new Agent({
+      name: "agentforge-executor",
+      instructions: args.instructions,
+      model: args.modelKey,
+    });
+
+    const result = await mastraAgent.generate(
+      args.messages as Array<{ role: "user" | "assistant" | "system"; content: string }>
+    );
+
+    return {
+      text: result.text,
+      usage: result.usage
+        ? {
+            promptTokens: result.usage.promptTokens || 0,
+            completionTokens: result.usage.completionTokens || 0,
+            totalTokens:
+              (result.usage.promptTokens || 0) +
+              (result.usage.completionTokens || 0),
+          }
+        : null,
+    };
+  },
+});
