@@ -1,3 +1,5 @@
+"use node";
+
 /**
  * Chat Actions for AgentForge
  *

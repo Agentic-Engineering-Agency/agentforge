@@ -1,3 +1,5 @@
+"use node";
+
 /**
  * Mastra Integration Actions for Convex
  *
