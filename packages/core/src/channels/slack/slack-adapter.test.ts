@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SlackAdapter } from './slack-adapter.js';
 import { slackConfigSchema } from './types.js';
-import type { ChannelConfig } from '@agentforge-ai/core';
+import type { ChannelConfig } from '../../channel-adapter.js';
 
 // =====================================================
 // Mock @slack/bolt
