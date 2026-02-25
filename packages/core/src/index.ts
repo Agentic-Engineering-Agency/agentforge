@@ -10,8 +10,7 @@
 export { Agent } from './agent.js';
 export type { AgentConfig, AgentModel, AgentResponse, StreamChunk } from './agent.js';
 
-export { SandboxManager, TimeoutError, SandboxExecutionError } from './sandbox.js';
-export type { SandboxConfig, SandboxRunOptions, SandboxResult } from './sandbox.js';
+export * from './sandbox/index.js';
 
 export { MCPServer } from './mcp-server.js';
 export type { MCPServerConfig, Tool, ToolSchema } from './mcp-server.js';
@@ -114,6 +113,10 @@ export type { TelegramChannelConfig } from './channels/telegram.js';
 
 export { WhatsAppChannel, startWhatsAppChannel } from './channels/whatsapp.js';
 export type { WhatsAppChannelConfig } from './channels/whatsapp.js';
+
+export * from './channels/discord/index.js';
+
+export * from './channels/slack/index.js';
 
 export * from './mcp/index.js';
 

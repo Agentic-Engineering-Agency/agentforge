@@ -49,7 +49,7 @@ import {
   type MediaAttachment,
   type ChatType,
   type CallbackAction,
-} from '@agentforge-ai/core';
+} from '../../channel-adapter.js';
 
 import type { DiscordAdapterConfig, DiscordSlashCommand } from './types.js';
 import { DISCORD_BOT_COMMANDS } from './types.js';
@@ -69,7 +69,7 @@ type SendableChannel = TextChannel | DMChannel | NewsChannel | ThreadChannel | V
  *
  * @example
  * ```typescript
- * import { ChannelRegistry } from '@agentforge-ai/core';
+ * import { ChannelRegistry } from '../../channel-adapter.js';
  * import { DiscordAdapter } from '@agentforge-ai/channels-discord';
  *
  * const registry = new ChannelRegistry();

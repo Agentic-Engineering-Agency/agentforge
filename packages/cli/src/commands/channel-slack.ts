@@ -161,12 +161,12 @@ export function registerChannelSlackCommand(program: Command) {
       // Dynamically import the SlackChannel from channels-slack
       let startSlackChannel: any;
       try {
-        const slackPkg = '@agentforge-ai/channels-slack';
+        const slackPkg = '@agentforge-ai/core';
         const mod = await import(/* @vite-ignore */ slackPkg);
         startSlackChannel = mod.startSlackChannel;
       } catch (importError: any) {
         // Fallback: use the built-in minimal runner
-        error('Could not import @agentforge-ai/channels-slack. Using built-in Slack runner.');
+        error('Could not import @agentforge-ai/core. Using built-in Slack runner.');
         dim(`  Error: ${importError.message}`);
         console.log();
 
@@ -392,7 +392,7 @@ export function registerChannelSlackCommand(program: Command) {
 // =====================================================
 
 /**
- * A minimal Slack bot runner that works without the @agentforge-ai/channels-slack
+ * A minimal Slack bot runner that works without the @agentforge-ai/core
  * package. Uses the Slack Web API and Convex HTTP API directly.
  *
  * This is a fallback for when the channels-slack package isn't available

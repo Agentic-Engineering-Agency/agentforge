@@ -17,7 +17,7 @@ import type {
   ChannelConfig,
   InboundMessage,
   ChannelEvent,
-} from '@agentforge-ai/core';
+} from '../../channel-adapter.js';
 
 // =====================================================
 // Types
