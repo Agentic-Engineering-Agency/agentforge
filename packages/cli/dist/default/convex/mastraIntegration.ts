@@ -94,12 +94,14 @@ export const executeAgent = action({
 
       // Execute via Mastra Agent
       const mastraAgent = new Agent({
+        id: "agentforge-executor",
         name: "agentforge-executor",
         instructions: agent.instructions || "You are a helpful AI assistant.",
         model: modelKey,
       });
 
-      const result = await mastraAgent.generate(conversationMessages);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result = await mastraAgent.generate(conversationMessages as any);
 
       const responseContent = result.text;
 
@@ -116,14 +118,14 @@ export const executeAgent = action({
         status: "completed",
       });
 
-      // Build usage data
+      // Build usage data (AI SDK v5: inputTokens/outputTokens)
       const usage = result.usage
         ? {
-            promptTokens: result.usage.promptTokens || 0,
-            completionTokens: result.usage.completionTokens || 0,
+            promptTokens: result.usage.inputTokens ?? 0,
+            completionTokens: result.usage.outputTokens ?? 0,
             totalTokens:
-              (result.usage.promptTokens || 0) +
-              (result.usage.completionTokens || 0),
+              (result.usage.inputTokens ?? 0) +
+              (result.usage.outputTokens ?? 0),
           }
         : undefined;
 
@@ -259,24 +261,25 @@ export const generateResponse = action({
     } | null;
   }> => {
     const mastraAgent = new Agent({
+      id: "agentforge-executor",
       name: "agentforge-executor",
       instructions: args.instructions,
       model: args.modelKey,
     });
 
-    const result = await mastraAgent.generate(
-      args.messages as Array<{ role: "user" | "assistant" | "system"; content: string }>
-    );
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const result = await mastraAgent.generate(args.messages as any);
 
+    // AI SDK v5 renamed promptTokens→inputTokens, completionTokens→outputTokens
     return {
       text: result.text,
       usage: result.usage
         ? {
-            promptTokens: result.usage.promptTokens || 0,
-            completionTokens: result.usage.completionTokens || 0,
+            promptTokens: result.usage.inputTokens ?? 0,
+            completionTokens: result.usage.outputTokens ?? 0,
             totalTokens:
-              (result.usage.promptTokens || 0) +
-              (result.usage.completionTokens || 0),
+              (result.usage.inputTokens ?? 0) +
+              (result.usage.outputTokens ?? 0),
           }
         : null,
     };
