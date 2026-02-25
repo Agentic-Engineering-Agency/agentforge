@@ -1,6 +1,6 @@
 {
   "name": "agentforge",
-  "version": "0.8.4",
+  "version": "0.8.5",
   "private": true,
   "description": "AgentForge: The Minimalist Framework for Collaborative AI Agents",
   "author": "Agentic Engineering <hello@agenticengineering.agency>",
