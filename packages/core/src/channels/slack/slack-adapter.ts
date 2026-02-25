@@ -26,7 +26,7 @@ import {
   type OutboundMessage,
   type SendResult,
   type ChatType,
-} from '@agentforge-ai/core';
+} from '../../channel-adapter.js';
 import { slackConfigSchema, type SlackConfig, type SlackBlock } from './types.js';
 
 // =====================================================

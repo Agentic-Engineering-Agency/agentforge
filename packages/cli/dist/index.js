@@ -5149,14 +5149,14 @@ function registerChannelSlackCommand(program2) {
     console.log();
     let startSlackChannel;
     try {
-      const slackPkg = "@agentforge-ai/channels-slack";
+      const slackPkg = "@agentforge-ai/core";
       const mod = await import(
         /* @vite-ignore */
         slackPkg
       );
       startSlackChannel = mod.startSlackChannel;
     } catch (importError) {
-      error("Could not import @agentforge-ai/channels-slack. Using built-in Slack runner.");
+      error("Could not import @agentforge-ai/core. Using built-in Slack runner.");
       dim(`  Error: ${importError.message}`);
       console.log();
       await runMinimalSlackBot({
