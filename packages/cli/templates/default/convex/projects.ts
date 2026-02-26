@@ -63,6 +63,86 @@ export const update = mutation({
   },
 });
 
+// Query: Get all available agents (for assignment UI)
+export const getAllAgents = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db.query("agents").collect();
+  },
+});
+
+// Query: Get agents assigned to a project
+export const getAgents = query({
+  args: { id: v.id("projects") },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project?.agentIds?.length) return [];
+
+    const agents: typeof import("./_generated/dataModel").Doc<"agents">[] = [];
+    for (const agentId of project.agentIds) {
+      const agent = await ctx.db
+        .query("agents")
+        .withIndex("byAgentId", (q) => q.eq("id", agentId))
+        .first();
+      if (agent) {
+        agents.push(agent);
+      }
+    }
+    return agents;
+  },
+});
+
+// Mutation: Assign agent to project
+export const assignAgent = mutation({
+  args: { id: v.id("projects"), agentId: v.string() },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    const agentIds = [...new Set([...(project.agentIds ?? []), args.agentId])];
+    await ctx.db.patch(args.id, {
+      agentIds,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// Mutation: Unassign agent from project
+export const unassignAgent = mutation({
+  args: { id: v.id("projects"), agentId: v.string() },
+  handler: async (ctx, args) => {
+    const project = await ctx.db.get(args.id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    const agentIds = (project.agentIds ?? []).filter((id) => id !== args.agentId);
+    await ctx.db.patch(args.id, {
+      agentIds,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
+// Mutation: Update project settings
+export const updateSettings = mutation({
+  args: {
+    id: v.id("projects"),
+    systemPrompt: v.optional(v.string()),
+    defaultModel: v.optional(v.string()),
+    defaultProvider: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...settings } = args;
+    await ctx.db.patch(id, {
+      ...settings,
+      updatedAt: Date.now(),
+    });
+  },
+});
+
 // Mutation: Delete project
 export const remove = mutation({
   args: { id: v.id("projects") },
