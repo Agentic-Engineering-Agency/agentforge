@@ -54,9 +54,27 @@ export function registerStatusCommand(program: Command) {
     .command('dashboard')
     .description('Launch the web dashboard')
     .option('-p, --port <port>', 'Port for the dashboard', '3000')
+    .option('-d, --dir <path>', 'Project directory (defaults to current directory)')
     .option('--install', 'Install dashboard dependencies before starting')
     .action(async (opts) => {
-      const cwd = process.cwd();
+      // Safely resolve CWD — process.cwd() throws ENOENT if the shell's working
+      // directory was deleted or is otherwise inaccessible (common with mise/nvm envs)
+      let cwd: string;
+      try {
+        cwd = opts.dir ? path.resolve(opts.dir) : process.cwd();
+      } catch {
+        error('Cannot determine the current directory.');
+        console.log();
+        info('Your shell\'s working directory may no longer exist.');
+        info('Run the command from inside your project directory:');
+        console.log();
+        console.log('  cd /path/to/your/agentforge-project');
+        console.log('  agentforge dashboard');
+        console.log();
+        info('Or specify the directory explicitly:');
+        console.log('  agentforge dashboard --dir /path/to/your/agentforge-project');
+        process.exit(1);
+      }
 
       // Search for the dashboard in multiple locations (in priority order)
       const searchPaths = [
