@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 @layer base {
-  /* Default to dark theme (OpenClaw-style) */
+  /* AgEn Brand Theme */
   :root {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
@@ -11,7 +11,7 @@
     --card-foreground: 0 0% 98%;
     --popover: 240 10% 5.9%;
     --popover-foreground: 0 0% 98%;
-    --primary: 0 72.2% 50.6%;
+    --primary: 225 42% 60%;
     --primary-foreground: 0 0% 98%;
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
@@ -23,11 +23,12 @@
     --destructive-foreground: 0 0% 98%;
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
-    --ring: 0 72.2% 50.6%;
+    --ring: 225 42% 60%;
+    --agen-orange: 33 89% 50%;
     --radius: 0.5rem;
-    --sidebar: 240 10% 4.5%;
+    --sidebar: 225 60% 30%;
     --sidebar-foreground: 240 5% 64.9%;
-    --sidebar-active: 0 72.2% 50.6%;
+    --sidebar-active: 33 89% 50%;
   }
 
   .light {
@@ -37,7 +38,7 @@
     --card-foreground: 240 10% 3.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
-    --primary: 0 72.2% 50.6%;
+    --primary: 225 42% 60%;
     --primary-foreground: 0 0% 98%;
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
@@ -49,10 +50,11 @@
     --destructive-foreground: 0 0% 98%;
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 0 72.2% 50.6%;
+    --ring: 225 42% 60%;
+    --agen-orange: 33 89% 50%;
     --sidebar: 0 0% 98%;
     --sidebar-foreground: 240 3.8% 46.1%;
-    --sidebar-active: 0 72.2% 50.6%;
+    --sidebar-active: 33 89% 50%;
   }
 }
 

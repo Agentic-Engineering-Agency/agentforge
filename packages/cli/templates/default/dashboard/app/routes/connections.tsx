@@ -104,6 +104,7 @@ function ConnectionsPage() {
   const [tab, setTab] = useState<'catalog' | 'connected'>('catalog');
   const [connectingItem, setConnectingItem] = useState<typeof MCP_CATALOG[0] | null>(null);
   const [authValues, setAuthValues] = useState<Record<string, string>>({});
+  const [confirmingDisconnectId, setConfirmingDisconnectId] = useState<string | null>(null);
 
   const connectedNames = new Set(connections.map((c: any) => c.name));
 
@@ -131,9 +132,14 @@ function ConnectionsPage() {
     setTab('connected');
   };
 
-  const handleDisconnect = async (id: any) => {
-    if (confirm('Disconnect this integration?')) {
-      await removeConnection({ id });
+  const handleDisconnectClick = (id: any) => {
+    if (confirmingDisconnectId === id) {
+      // Second click - actually disconnect
+      removeConnection({ id });
+      setConfirmingDisconnectId(null);
+    } else {
+      // First click - show confirm state
+      setConfirmingDisconnectId(id);
     }
   };
 
@@ -221,7 +227,17 @@ function ConnectionsPage() {
                   <p className="text-xs text-muted-foreground mb-4">Protocol: {conn.protocol}</p>
                   <div className="flex items-center justify-between pt-3 border-t border-border">
                     <button onClick={() => toggleConnection({ id: conn._id })} className="text-xs text-muted-foreground hover:text-foreground">{conn.isEnabled ? 'Disable' : 'Enable'}</button>
-                    <button onClick={() => handleDisconnect(conn._id)} className="p-1.5 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                    <button
+                      onClick={() => handleDisconnectClick(conn._id)}
+                      className={`p-1.5 rounded transition-colors ${
+                        confirmingDisconnectId === conn._id
+                          ? 'bg-destructive text-destructive-foreground'
+                          : 'hover:bg-destructive/10'
+                      }`}
+                      title={confirmingDisconnectId === conn._id ? 'Click to confirm disconnect' : 'Disconnect integration'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               ))}

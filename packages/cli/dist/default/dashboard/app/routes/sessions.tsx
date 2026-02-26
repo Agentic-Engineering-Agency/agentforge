@@ -12,6 +12,7 @@ function SessionsPage() {
   const removeSession = useMutation(api.sessions.remove);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [confirmingDeletingId, setConfirmingDeletingId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     let result = sessions;
@@ -25,9 +26,14 @@ function SessionsPage() {
     return result;
   }, [sessions, searchQuery, statusFilter]);
 
-  const handleDelete = async (id: any) => {
-    if (confirm('Delete this session?')) {
-      await removeSession({ id });
+  const handleDeleteClick = (id: string) => {
+    if (confirmingDeletingId === id) {
+      // Second click - actually delete
+      removeSession({ id });
+      setConfirmingDeletingId(null);
+    } else {
+      // First click - show confirm state
+      setConfirmingDeletingId(id);
     }
   };
 
@@ -92,7 +98,17 @@ function SessionsPage() {
                     <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(session.startedAt).toLocaleString()}</td>
                     <td className="px-4 py-3 text-muted-foreground text-xs">{new Date(session.lastActivityAt).toLocaleString()}</td>
                     <td className="px-4 py-3 text-right">
-                      <button onClick={() => handleDelete(session._id)} className="p-1.5 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                      <button
+                        onClick={() => handleDeleteClick(session._id)}
+                        className={`p-1.5 rounded transition-colors ${
+                          confirmingDeletingId === session._id
+                            ? 'bg-destructive text-destructive-foreground'
+                            : 'hover:bg-destructive/10'
+                        }`}
+                        title={confirmingDeletingId === session._id ? 'Click to confirm delete' : 'Delete session'}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </td>
                   </tr>
                 ))}

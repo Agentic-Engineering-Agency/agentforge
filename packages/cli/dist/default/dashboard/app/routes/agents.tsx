@@ -16,6 +16,15 @@ const modelsByProvider: Record<string, string[]> = {
   xai: ['grok-4', 'grok-3'],
 };
 
+// Validation constraints
+const VALIDATION = {
+  name: { maxLength: 100 },
+  description: { maxLength: 500 },
+  instructions: { maxLength: 10000 },
+  temperature: { min: 0.0, max: 2.0, step: 0.1 },
+  maxTokens: { min: 1, max: 32000 },
+};
+
 function AgentsPage() {
   const agents = useQuery(api.agents.list, {}) ?? [];
   const createAgent = useMutation(api.agents.create);
@@ -26,6 +35,7 @@ function AgentsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<any>(null);
+  const [confirmingDeletingId, setConfirmingDeletingId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (!searchQuery) return agents;
@@ -44,9 +54,14 @@ function AgentsPage() {
     setEditingAgent(null);
   };
 
-  const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this agent?')) {
-      await removeAgent({ id });
+  const handleDeleteClick = (id: string) => {
+    if (confirmingDeletingId === id) {
+      // Second click - actually delete
+      removeAgent({ id });
+      setConfirmingDeletingId(null);
+    } else {
+      // First click - show confirm state
+      setConfirmingDeletingId(id);
     }
   };
 
@@ -54,8 +69,15 @@ function AgentsPage() {
     await toggleActive({ id });
   };
 
+  // Reset confirm state when clicking elsewhere or after a delay
+  const handleCardInteraction = () => {
+    if (confirmingDeletingId) {
+      setConfirmingDeletingId(null);
+    }
+  };
+
   return (
-    <DashboardLayout>
+    <DashboardLayout onClickOutside={handleCardInteraction}>
       <div className="space-y-6">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
@@ -107,7 +129,17 @@ function AgentsPage() {
                   </button>
                   <div className="flex items-center gap-2">
                     <button onClick={() => { setEditingAgent(agent); setIsModalOpen(true); }} className="p-1.5 rounded hover:bg-muted"><Edit className="w-4 h-4 text-muted-foreground" /></button>
-                    <button onClick={() => handleDelete(agent.id)} className="p-1.5 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                    <button
+                      onClick={() => handleDeleteClick(agent.id)}
+                      className={`p-1.5 rounded transition-colors ${
+                        confirmingDeletingId === agent.id
+                          ? 'bg-destructive text-destructive-foreground'
+                          : 'hover:bg-destructive/10'
+                      }`}
+                      title={confirmingDeletingId === agent.id ? 'Click to confirm delete' : 'Delete agent'}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -132,14 +164,46 @@ function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any
     maxTokens: agent?.maxTokens ?? 4096,
   });
 
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
   const handleChange = (e: any) => {
     const { name, value } = e.target;
+    setErrors(prev => {
+      const newErrors = { ...prev };
+      delete newErrors[name];
+      return newErrors;
+    });
     setFormData(prev => ({ ...prev, [name]: name === 'maxTokens' ? parseInt(value) || 0 : value }));
+  };
+
+  const validateForm = () => {
+    const newErrors: Record<string, string> = {};
+
+    if (formData.name.length > VALIDATION.name.maxLength) {
+      newErrors.name = `Name must be ${VALIDATION.name.maxLength} characters or less`;
+    }
+    if (formData.description.length > VALIDATION.description.maxLength) {
+      newErrors.description = `Description must be ${VALIDATION.description.maxLength} characters or less`;
+    }
+    if (formData.instructions.length > VALIDATION.instructions.maxLength) {
+      newErrors.instructions = `Instructions must be ${VALIDATION.instructions.maxLength} characters or less`;
+    }
+    if (formData.temperature < VALIDATION.temperature.min || formData.temperature > VALIDATION.temperature.max) {
+      newErrors.temperature = `Temperature must be between ${VALIDATION.temperature.min} and ${VALIDATION.temperature.max}`;
+    }
+    if (formData.maxTokens < VALIDATION.maxTokens.min || formData.maxTokens > VALIDATION.maxTokens.max) {
+      newErrors.maxTokens = `Max tokens must be between ${VALIDATION.maxTokens.min} and ${VALIDATION.maxTokens.max}`;
+    }
+
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
   const handleSubmit = (e: any) => {
     e.preventDefault();
-    onSave({ ...formData, temperature: parseFloat(String(formData.temperature)) });
+    if (validateForm()) {
+      onSave({ ...formData, temperature: parseFloat(String(formData.temperature)) });
+    }
   };
 
   return (
@@ -151,16 +215,42 @@ function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any
         </div>
         <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium mb-1">Name</label>
-            <input type="text" name="name" value={formData.name} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary" required />
+            <label className="block text-sm font-medium mb-1">Name {formData.name.length}/{VALIDATION.name.maxLength}</label>
+            <input
+              type="text"
+              name="name"
+              value={formData.name}
+              onChange={handleChange}
+              maxLength={VALIDATION.name.maxLength}
+              className={`w-full bg-background border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${errors.name ? 'border-destructive focus:ring-destructive' : 'border-border focus:ring-primary'}`}
+              required
+            />
+            {errors.name && <p className="text-xs text-destructive mt-1">{errors.name}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
-            <input type="text" name="description" value={formData.description} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary" />
+            <label className="block text-sm font-medium mb-1">Description {formData.description.length}/{VALIDATION.description.maxLength}</label>
+            <input
+              type="text"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              maxLength={VALIDATION.description.maxLength}
+              className={`w-full bg-background border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${errors.description ? 'border-destructive focus:ring-destructive' : 'border-border focus:ring-primary'}`}
+            />
+            {errors.description && <p className="text-xs text-destructive mt-1">{errors.description}</p>}
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Instructions</label>
-            <textarea name="instructions" value={formData.instructions} onChange={handleChange} rows={6} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary" required />
+            <label className="block text-sm font-medium mb-1">Instructions {formData.instructions.length}/{VALIDATION.instructions.maxLength}</label>
+            <textarea
+              name="instructions"
+              value={formData.instructions}
+              onChange={handleChange}
+              rows={6}
+              maxLength={VALIDATION.instructions.maxLength}
+              className={`w-full bg-background border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${errors.instructions ? 'border-destructive focus:ring-destructive' : 'border-border focus:ring-primary'}`}
+              required
+            />
+            {errors.instructions && <p className="text-xs text-destructive mt-1">{errors.instructions}</p>}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -178,18 +268,36 @@ function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Temperature: {formData.temperature}</label>
-              <input type="range" min="0" max="1" step="0.1" value={formData.temperature} onChange={(e) => setFormData(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))} className="w-full h-2 bg-background rounded-lg appearance-none cursor-pointer" />
+              <label className="block text-sm font-medium mb-1">Temperature: {formData.temperature} ({VALIDATION.temperature.min}-{VALIDATION.temperature.max})</label>
+              <input
+                type="range"
+                min={VALIDATION.temperature.min}
+                max={VALIDATION.temperature.max}
+                step={VALIDATION.temperature.step}
+                value={formData.temperature}
+                onChange={(e) => setFormData(prev => ({ ...prev, temperature: parseFloat(e.target.value) }))}
+                className="w-full h-2 bg-background rounded-lg appearance-none cursor-pointer"
+              />
+              {errors.temperature && <p className="text-xs text-destructive mt-1">{errors.temperature}</p>}
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Max Tokens</label>
-              <input type="number" name="maxTokens" value={formData.maxTokens} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary" />
+              <label className="block text-sm font-medium mb-1">Max Tokens ({VALIDATION.maxTokens.min}-{VALIDATION.maxTokens.max})</label>
+              <input
+                type="number"
+                name="maxTokens"
+                value={formData.maxTokens}
+                onChange={handleChange}
+                min={VALIDATION.maxTokens.min}
+                max={VALIDATION.maxTokens.max}
+                className={`w-full bg-background border rounded-md px-3 py-2 focus:outline-none focus:ring-2 ${errors.maxTokens ? 'border-destructive focus:ring-destructive' : 'border-border focus:ring-primary'}`}
+              />
+              {errors.maxTokens && <p className="text-xs text-destructive mt-1">{errors.maxTokens}</p>}
             </div>
           </div>
         </form>
         <div className="flex justify-end p-4 border-t border-border gap-2">
-          <button onClick={onClose} className="bg-background border border-border px-4 py-2 rounded-lg hover:bg-muted">Cancel</button>
-          <button onClick={handleSubmit} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90">Save Agent</button>
+          <button type="button" onClick={onClose} className="bg-background border border-border px-4 py-2 rounded-lg hover:bg-muted">Cancel</button>
+          <button type="submit" onClick={handleSubmit} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90">Save Agent</button>
         </div>
       </div>
     </div>

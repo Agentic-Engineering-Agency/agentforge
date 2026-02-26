@@ -305,9 +305,14 @@ function SkillsPage() {
     });
   };
 
-  const handleUninstall = async (id: any) => {
-    if (confirm('Uninstall this skill?')) {
+  const [confirmingUninstallId, setConfirmingUninstallId] = useState<string | null>(null);
+
+  const handleUninstall = async (id: string) => {
+    if (confirmingUninstallId === id) {
       await removeSkill({ id });
+      setConfirmingUninstallId(null);
+    } else {
+      setConfirmingUninstallId(id);
     }
   };
 

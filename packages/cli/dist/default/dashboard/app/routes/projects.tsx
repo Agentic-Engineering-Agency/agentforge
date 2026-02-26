@@ -16,6 +16,7 @@ function ProjectsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
+  const [confirmingDeletingId, setConfirmingDeletingId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     if (!searchQuery) return projects;
@@ -33,9 +34,14 @@ function ProjectsPage() {
     setEditingProject(null);
   };
 
-  const handleDelete = async (id: any) => {
-    if (confirm('Delete this project?')) {
-      await removeProject({ id });
+  const handleDeleteClick = (id: any) => {
+    if (confirmingDeletingId === id) {
+      // Second click - actually delete
+      removeProject({ id });
+      setConfirmingDeletingId(null);
+    } else {
+      // First click - show confirm state
+      setConfirmingDeletingId(id);
     }
   };
 
@@ -82,7 +88,17 @@ function ProjectsPage() {
                 <div className="text-xs text-muted-foreground mb-4">Created {new Date(project.createdAt).toLocaleDateString()}</div>
                 <div className="flex items-center justify-between pt-3 border-t border-border">
                   <button onClick={() => { setEditingProject(project); setIsModalOpen(true); }} className="p-1.5 rounded hover:bg-muted flex items-center gap-1 text-xs text-muted-foreground"><Edit className="w-4 h-4" /> Edit</button>
-                  <button onClick={() => handleDelete(project._id)} className="p-1.5 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                  <button
+                    onClick={() => handleDeleteClick(project._id)}
+                    className={`p-1.5 rounded transition-colors ${
+                      confirmingDeletingId === project._id
+                        ? 'bg-destructive text-destructive-foreground'
+                        : 'hover:bg-destructive/10'
+                    }`}
+                    title={confirmingDeletingId === project._id ? 'Click to confirm delete' : 'Delete project'}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
