@@ -358,6 +358,28 @@ export const sendMessage = action({
       throw new Error(`Agent "${args.agentId}" not found. Please create an agent first.`);
     }
 
+    // 2. Load project settings to apply overrides (if agent belongs to a project)
+    let projectSystemPrompt: string | undefined;
+    let projectDefaultModel: string | undefined;
+    let projectDefaultProvider: string | undefined;
+
+    if (agent.projectId) {
+      const project = await ctx.runQuery(api.projects.get, { id: agent.projectId });
+      if (project?.settings) {
+        const settings = project.settings as {
+          systemPrompt?: string;
+          defaultModel?: string;
+          defaultProvider?: string;
+          instructionPrefix?: string;
+          defaultTemperature?: number;
+          defaultMaxTokens?: number;
+        };
+        projectSystemPrompt = settings.systemPrompt || settings.instructionPrefix;
+        projectDefaultModel = settings.defaultModel;
+        projectDefaultProvider = settings.defaultProvider;
+      }
+    }
+
     // 2. Store the user message
     await ctx.runMutation(api.chat.addUserMessage, {
       threadId: args.threadId,
@@ -377,18 +399,29 @@ export const sendMessage = action({
         content: msg.content,
       }));
 
-    // 4. Build failover chain from agent config
-    const failoverChain = buildFailoverChain(agent as {
+    // 4. Build failover chain from agent config (with project overrides)
+    const agentWithOverrides = {
+      provider: projectDefaultProvider || agent.provider,
+      model: projectDefaultModel || agent.model,
+      failoverModels: agent.failoverModels,
+    };
+    const failoverChain = buildFailoverChain(agentWithOverrides as {
       provider?: string;
       model?: string;
       failoverModels?: Array<{ provider: string; model: string }>;
     });
 
-    // 5. Execute with failover
+    // 5. Build system prompt with project override (project settings override agent instructions)
+    const baseInstructions = agent.instructions || "You are a helpful AI assistant built with AgentForge.";
+    const systemPrompt = projectSystemPrompt
+      ? `${projectSystemPrompt}\n\n${baseInstructions}`
+      : baseInstructions;
+
+    // 6. Execute with failover
     let responseText: string;
     let usageData: { promptTokens: number; completionTokens: number; totalTokens: number } | null = null;
-    let actualProvider: string = agent.provider || "openrouter";
-    let actualModel: string = agent.model || "unknown";
+    let actualProvider: string = projectDefaultProvider || agent.provider || "openrouter";
+    let actualModel: string = projectDefaultModel || agent.model || "unknown";
     let didFailover = false;
     let failoverEvents: Array<{ from: string; to: string; error: string; category: string }> = [];
     let latencyMs = 0;
@@ -396,7 +429,7 @@ export const sendMessage = action({
     try {
       const result = await executeWithFailover(
         failoverChain,
-        agent.instructions || "You are a helpful AI assistant built with AgentForge.",
+        systemPrompt,
         conversationMessages,
         {
           temperature: agent.temperature ?? undefined,
@@ -419,7 +452,7 @@ export const sendMessage = action({
       responseText = `I encountered an error while processing your request: ${errorMessage}`;
     }
 
-    // 6. Store the assistant response with provider metadata
+    // 7. Store the assistant response with provider metadata
     const metadata: Record<string, unknown> = {};
     if (usageData) {
       metadata.usage = usageData;
@@ -438,7 +471,7 @@ export const sendMessage = action({
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     });
 
-    // 7. Record usage metrics (non-blocking, best-effort)
+    // 8. Record usage metrics (non-blocking, best-effort)
     if (usageData) {
       try {
         // Estimate cost based on provider/model pricing
@@ -476,7 +509,7 @@ export const sendMessage = action({
       }
     }
 
-    // 8. Log the interaction
+    // 9. Log the interaction
     try {
       await ctx.runMutation(api.logs.add, {
         level: "info",
