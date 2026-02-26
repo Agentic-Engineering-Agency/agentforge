@@ -9,12 +9,16 @@
  * Architecture:
  * - For chat: use `chat.sendMessage` (preferred entry point)
  * - For programmatic agent execution: use `mastraIntegration.executeAgent`
- * - Model resolution: fetches API keys from database, creates AI SDK model instances
+ * - Model resolution: fetches API keys from database, creates Mastra model config
  *
- * AGE-137: API keys are stored in Convex 'apiKeys' table and fetched at inference time
- * instead of relying on process.env which doesn't exist in Convex Node.js runtime.
- *
+ * AGE-137: API keys are stored in Convex 'apiKeys' table and fetched at inference time.
  * AGE-141: MCP connections are queried and tool context is injected into agent instructions.
+ *
+ * Fix (v0.10.0): Use OpenAICompatibleConfig { providerId, modelId, apiKey } instead of
+ * process.env injection + magic model string. This avoids:
+ *   1. "openai/gpt-4.1 does not exist" — Mastra 1.8.0 passes the full string to the API
+ *      instead of stripping the provider prefix.
+ *   2. "openrouter/openrouter/auto" — double prefix when model already contains provider.
  */
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
@@ -22,18 +26,49 @@ import { api, internal } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
 import type { MessageListInput } from "@mastra/core/agent/message-list";
 
-// Map provider name to the env var name Mastra's router expects
-function getProviderEnvKey(provider: string): string {
-  const map: Record<string, string> = {
-    openai:    "OPENAI_API_KEY",
-    anthropic: "ANTHROPIC_API_KEY",
-    google:    "GOOGLE_GENERATIVE_AI_API_KEY",
-    xai:       "XAI_API_KEY",
-    mistral:   "MISTRAL_API_KEY",
-    deepseek:  "DEEPSEEK_API_KEY",
-    openrouter: "OPENROUTER_API_KEY",
+/**
+ * Strip provider prefix from modelId to prevent double-prefixing.
+ * e.g. provider="openrouter", modelId="openrouter/auto" → "auto"
+ *      provider="openai",     modelId="gpt-4.1"          → "gpt-4.1" (no change)
+ */
+function getBaseModelId(provider: string, modelId: string): string {
+  const prefix = `${provider}/`;
+  return modelId.startsWith(prefix) ? modelId.slice(prefix.length) : modelId;
+}
+
+/**
+ * Return custom base URL for providers that aren't natively supported by Mastra.
+ * Standard providers (openai, anthropic, google) use their built-in defaults.
+ */
+function getProviderBaseUrl(provider: string): string | undefined {
+  const urls: Record<string, string> = {
+    openrouter: "https://openrouter.ai/api/v1",
+    mistral:    "https://api.mistral.ai/v1",
+    deepseek:   "https://api.deepseek.com",
+    xai:        "https://api.x.ai/v1",
+    cohere:     "https://api.cohere.ai/v1",
   };
-  return map[provider] ?? `${provider.toUpperCase().replace(/-/g, "_")}_API_KEY`;
+  return urls[provider];
+}
+
+/**
+ * Build the Mastra OpenAICompatibleConfig for BYOK.
+ * Using { providerId, modelId, apiKey } bypasses Mastra's magic-string router
+ * so the exact modelId is passed to the API (no provider prefix collision).
+ */
+function buildModelConfig(
+  provider: string,
+  modelId: string,
+  apiKey: string
+): { providerId: string; modelId: string; apiKey: string; url?: string } {
+  const baseModelId = getBaseModelId(provider, modelId);
+  const baseUrl = getProviderBaseUrl(provider);
+  return {
+    providerId: provider,
+    modelId: baseModelId,
+    apiKey,
+    ...(baseUrl ? { url: baseUrl } : {}),
+  };
 }
 
 /**
@@ -41,21 +76,14 @@ function getProviderEnvKey(provider: string): string {
  *
  * AGE-141: Queries active MCP connections and builds a context string
  * that informs the agent about available MCP tools.
- *
- * @param connections - Array of active MCP connections
- * @returns A string describing available MCP tools, or empty string if none
  */
 function buildMcpToolContext(
   connections: Array<{ name: string; capabilities?: string[] }>
 ): string {
-  if (connections.length === 0) {
-    return "";
-  }
-
+  if (connections.length === 0) return "";
   const toolsList = connections
     .map((c) => `${c.name} (${(c.capabilities || []).join(", ")})`)
     .join(", ");
-
   return `You have access to these MCP tools: ${toolsList}. Use them when relevant.`;
 }
 
@@ -89,10 +117,7 @@ export const executeAgent = action({
   handler: async (ctx, args): Promise<ExecuteAgentResult> => {
     // Get agent configuration from database
     const agent = await ctx.runQuery(api.agents.get, { id: args.agentId });
-
-    if (!agent) {
-      throw new Error(`Agent ${args.agentId} not found`);
-    }
+    if (!agent) throw new Error(`Agent ${args.agentId} not found`);
 
     // Create or get thread
     let threadId = args.threadId;
@@ -121,33 +146,28 @@ export const executeAgent = action({
     });
 
     try {
-      // Resolve the model
       const provider = agent.provider || "openrouter";
-      const modelId = agent.model || "openai/gpt-4o-mini";
-      const modelKey = `${provider}/${modelId}`;
+      const modelId  = agent.model   || "auto";
 
       // AGE-137: Fetch API key from database for BYOK
       const apiKey = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
       if (!apiKey) {
-        throw new Error(`No active API key found for provider: ${provider}. Please add an API key in Settings.`);
+        throw new Error(
+          `No active API key found for provider: ${provider}. Please add an API key in Settings.`
+        );
       }
-
-      // Inject API key into process.env for Mastra's router
-      process.env[getProviderEnvKey(provider)] = apiKey;
-      const mastraModel = `${provider}/${modelId}`;
 
       // AGE-141: Query active MCP connections for tool context
       const mcpConnections = await ctx.runQuery(api.mcpConnections.list, { isEnabled: true });
-      const mcpToolContext = buildMcpToolContext(mcpConnections as Array<{ name: string; capabilities?: string[] }>);
+      const mcpToolContext = buildMcpToolContext(
+        mcpConnections as Array<{ name: string; capabilities?: string[] }>
+      );
 
       // Get conversation history for context
       const messages = await ctx.runQuery(api.messages.list, { threadId });
       const conversationMessages = (messages as Array<{ role: string; content: string }>)
         .slice(-20)
-        .map((m) => ({
-          role: m.role as "user" | "assistant" | "system",
-          content: m.content,
-        }));
+        .map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
 
       // Build full instructions with MCP tool context
       const baseInstructions = agent.instructions || "You are a helpful AI assistant.";
@@ -155,90 +175,70 @@ export const executeAgent = action({
         ? `${baseInstructions}\n\n${mcpToolContext}`
         : baseInstructions;
 
-      // Execute via Mastra Agent with Mastra-native model string
+      // Build model config using OpenAICompatibleConfig (avoids magic-string bugs)
+      const modelConfig = buildModelConfig(provider, modelId, apiKey);
+
+      // Execute via Mastra Agent
       const mastraAgent = new Agent({
         id: "agentforge-executor",
         name: "agentforge-executor",
         instructions: fullInstructions,
-        model: mastraModel,
+        model: modelConfig,
       });
 
-      const result = await mastraAgent.generate(conversationMessages as unknown as MessageListInput);
+      const result = await mastraAgent.generate(
+        conversationMessages as unknown as MessageListInput
+      );
 
       const responseContent = result.text;
 
-      // Add assistant message to thread
+      // Persist assistant response
       await ctx.runMutation(api.messages.add, {
         threadId,
         role: "assistant",
         content: responseContent,
       });
-
-      // Update session status
-      await ctx.runMutation(api.sessions.updateStatus, {
-        sessionId,
-        status: "completed",
-      });
+      await ctx.runMutation(api.sessions.updateStatus, { sessionId, status: "completed" });
 
       // Build usage data (AI SDK v5: inputTokens/outputTokens)
       const usage = result.usage
         ? {
-            promptTokens: result.usage.inputTokens ?? 0,
-            completionTokens: result.usage.outputTokens ?? 0,
+            promptTokens:     result.usage.inputTokens    ?? 0,
+            completionTokens: result.usage.outputTokens   ?? 0,
             totalTokens:
-              (result.usage.inputTokens ?? 0) +
+              (result.usage.inputTokens  ?? 0) +
               (result.usage.outputTokens ?? 0),
           }
         : undefined;
 
-      // Record usage
       if (usage) {
         await ctx.runMutation(api.usage.record, {
           agentId: args.agentId,
           sessionId,
           provider: agent.provider || "openrouter",
-          model: agent.model || "unknown",
-          promptTokens: usage.promptTokens,
+          model:    agent.model    || "unknown",
+          promptTokens:     usage.promptTokens,
           completionTokens: usage.completionTokens,
-          totalTokens: usage.totalTokens,
+          totalTokens:      usage.totalTokens,
           userId: args.userId,
         });
       }
 
-      return {
-        success: true,
-        threadId: threadId as string,
-        sessionId,
-        response: responseContent,
-        usage,
-      };
+      return { success: true, threadId: threadId as string, sessionId, response: responseContent, usage };
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : String(error);
+      const errorMessage = error instanceof Error ? error.message : String(error);
 
-      // Update session status to error
-      await ctx.runMutation(api.sessions.updateStatus, {
-        sessionId,
-        status: "error",
-      });
-
-      // Add error message to thread
+      await ctx.runMutation(api.sessions.updateStatus, { sessionId, status: "error" });
       await ctx.runMutation(api.messages.add, {
         threadId,
         role: "assistant",
-        content: `Error: ${errorMessage}`,
+        content: `I encountered an error while processing your request: ${errorMessage}`,
       });
-
-      // Log the error
       await ctx.runMutation(api.logs.add, {
         level: "error",
         source: "mastraIntegration",
         message: `Agent execution failed: ${errorMessage}`,
-        metadata: {
-          agentId: args.agentId,
-          threadId,
-          sessionId,
-        },
+        metadata: { agentId: args.agentId, threadId, sessionId },
         userId: args.userId,
       });
 
@@ -249,9 +249,7 @@ export const executeAgent = action({
 
 /**
  * Stream agent response (placeholder — streaming requires SSE/WebSocket).
- *
- * For now, this falls back to non-streaming execution.
- * Full streaming support will be added via Convex HTTP actions + SSE.
+ * Falls back to non-streaming execution.
  */
 export const streamAgent = action({
   args: {
@@ -261,18 +259,13 @@ export const streamAgent = action({
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args): Promise<{ success: boolean; message: string }> => {
-    // Fall back to non-streaming execution
     const result = await ctx.runAction(api.mastraIntegration.executeAgent, {
-      agentId: args.agentId,
-      prompt: args.prompt,
+      agentId:  args.agentId,
+      prompt:   args.prompt,
       threadId: args.threadId,
-      userId: args.userId,
+      userId:   args.userId,
     });
-
-    return {
-      success: result.success,
-      message: result.response,
-    };
+    return { success: result.success, message: result.response };
   },
 });
 
@@ -282,38 +275,29 @@ export const streamAgent = action({
 export const executeWorkflow = action({
   args: {
     workflowId: v.string(),
-    input: v.any(),
-    userId: v.optional(v.string()),
+    input:      v.any(),
+    userId:     v.optional(v.string()),
   },
   handler: async (_ctx, _args): Promise<{ success: boolean; message: string }> => {
-    return {
-      success: true,
-      message: "Workflow execution coming soon",
-    };
+    return { success: true, message: "Workflow execution coming soon" };
   },
 });
 
 /**
  * Thin LLM wrapper used by chat.sendMessage.
  *
- * AGE-137: Now accepts provider argument for BYOK (Bring Your Own Key).
- * Fetches the API key from the database and creates a model instance with it.
+ * AGE-137: BYOK — fetches API key from DB and uses OpenAICompatibleConfig.
+ * AGE-141: MCP tool context injected into instructions.
  *
- * Accepts a provider, modelKey, system instructions, and conversation messages.
- * Returns the generated text and token usage. No message storage — callers
- * handle persistence themselves.
- *
- * This action lives here (Node.js runtime) so that chat.ts can remain in the
- * default Convex runtime and freely mix queries, mutations, and actions.
+ * This action lives in Node.js runtime so chat.ts can stay in default runtime
+ * and freely mix queries, mutations, and actions.
  */
 export const generateResponse = internalAction({
   args: {
-    provider: v.string(), // AGE-137: Added provider argument
-    modelKey: v.string(),
+    provider: v.string(),
+    modelKey:     v.string(),
     instructions: v.string(),
-    messages: v.array(
-      v.object({ role: v.string(), content: v.string() })
-    ),
+    messages: v.array(v.object({ role: v.string(), content: v.string() })),
   },
   handler: async (
     ctx,
@@ -326,43 +310,47 @@ export const generateResponse = internalAction({
       totalTokens: number;
     } | null;
   }> => {
-    // AGE-137: Fetch API key from database for BYOK
-    const apiKey = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider: args.provider });
+    // AGE-137: Fetch API key from database
+    const apiKey = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
+      provider: args.provider,
+    });
     if (!apiKey) {
-      throw new Error(`No active API key found for provider: ${args.provider}. Please add an API key in Settings.`);
+      throw new Error(
+        `No active API key found for provider: ${args.provider}. Please add an API key in Settings.`
+      );
     }
 
-    // Inject API key into process.env for Mastra's router
-    process.env[getProviderEnvKey(args.provider)] = apiKey;
-    const mastraModel = `${args.provider}/${args.modelKey}`;
-
-    // AGE-141: Query active MCP connections for tool context
+    // AGE-141: MCP tool context
     const mcpConnections = await ctx.runQuery(api.mcpConnections.list, { isEnabled: true });
-    const mcpToolContext = buildMcpToolContext(mcpConnections as Array<{ name: string; capabilities?: string[] }>);
-
-    // Build full instructions with MCP tool context
+    const mcpToolContext = buildMcpToolContext(
+      mcpConnections as Array<{ name: string; capabilities?: string[] }>
+    );
     const fullInstructions = mcpToolContext
       ? `${args.instructions}\n\n${mcpToolContext}`
       : args.instructions;
 
+    // Build model config using OpenAICompatibleConfig (fixes model ID format)
+    const modelConfig = buildModelConfig(args.provider, args.modelKey, apiKey);
+
     const mastraAgent = new Agent({
-      id: "agentforge-executor",
-      name: "agentforge-executor",
+      id:           "agentforge-executor",
+      name:         "agentforge-executor",
       instructions: fullInstructions,
-      model: mastraModel,
+      model:        modelConfig,
     });
 
-    const result = await mastraAgent.generate(args.messages as unknown as MessageListInput);
+    const result = await mastraAgent.generate(
+      args.messages as unknown as MessageListInput
+    );
 
-    // AI SDK v5 renamed promptTokens→inputTokens, completionTokens→outputTokens
     return {
       text: result.text,
       usage: result.usage
         ? {
-            promptTokens: result.usage.inputTokens ?? 0,
-            completionTokens: result.usage.outputTokens ?? 0,
+            promptTokens:     result.usage.inputTokens    ?? 0,
+            completionTokens: result.usage.outputTokens   ?? 0,
             totalTokens:
-              (result.usage.inputTokens ?? 0) +
+              (result.usage.inputTokens  ?? 0) +
               (result.usage.outputTokens ?? 0),
           }
         : null,
