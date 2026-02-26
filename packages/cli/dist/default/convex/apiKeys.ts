@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 
 // Query: List API keys
 export const list = query({
@@ -129,5 +129,20 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
     return { success: true };
+  },
+});
+
+// Internal Query: Get decrypted (raw) API key for a provider
+// This is used by mastraIntegration to pass the key to LLM providers
+export const getDecryptedForProvider = internalQuery({
+  args: { provider: v.string() },
+  handler: async (ctx, args) => {
+    const keys = await ctx.db
+      .query("apiKeys")
+      .withIndex("byProvider", (q) => q.eq("provider", args.provider))
+      .collect();
+    const active = keys.find((k) => k.isActive);
+    // Note: encryptedKey stores the raw key (not actually encrypted in current implementation)
+    return active?.encryptedKey ?? null;
   },
 });
