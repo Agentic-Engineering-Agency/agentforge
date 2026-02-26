@@ -13,7 +13,7 @@
  */
 import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 // Explicit return type shared by sendMessage and startNewChat.
