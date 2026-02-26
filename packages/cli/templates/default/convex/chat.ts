@@ -178,6 +178,28 @@ export const sendMessage = action({
       throw new Error(`Agent "${args.agentId}" not found. Please create an agent first.`);
     }
 
+    // 1.5. Load project settings to apply overrides (if agent belongs to a project)
+    let projectSystemPrompt: string | undefined;
+    let projectDefaultModel: string | undefined;
+    let projectDefaultProvider: string | undefined;
+
+    if (agent.projectId) {
+      const project = await ctx.runQuery(api.projects.get, { id: agent.projectId });
+      if (project?.settings) {
+        const settings = project.settings as {
+          systemPrompt?: string;
+          defaultModel?: string;
+          defaultProvider?: string;
+          instructionPrefix?: string;
+          defaultTemperature?: number;
+          defaultMaxTokens?: number;
+        };
+        projectSystemPrompt = settings.systemPrompt || settings.instructionPrefix;
+        projectDefaultModel = settings.defaultModel;
+        projectDefaultProvider = settings.defaultProvider;
+      }
+    }
+
     // 2. Store the user message
     await ctx.runMutation(api.chat.addUserMessage, {
       threadId: args.threadId,
@@ -202,13 +224,19 @@ export const sendMessage = action({
     let usageData: { promptTokens: number; completionTokens: number; totalTokens: number } | null = null;
 
     try {
-      const provider = agent.provider || "openrouter";
-      const modelId = agent.model || "openai/gpt-4o-mini";
+      const provider = projectDefaultProvider || agent.provider || "openrouter";
+      const modelId = projectDefaultModel || agent.model || "openai/gpt-4o-mini";
+
+      // Build system prompt with project override (project settings prepend to agent instructions)
+      const baseInstructions = agent.instructions || "You are a helpful AI assistant built with AgentForge.";
+      const instructions = projectSystemPrompt
+        ? `${projectSystemPrompt}\n\n${baseInstructions}`
+        : baseInstructions;
 
       const result = await ctx.runAction(api.mastraIntegration.generateResponse, {
         provider, // AGE-137: Pass provider for BYOK
         modelKey: `${provider}/${modelId}`,
-        instructions: agent.instructions || "You are a helpful AI assistant built with AgentForge.",
+        instructions,
         messages: conversationMessages,
       });
 
@@ -232,10 +260,12 @@ export const sendMessage = action({
     // 6. Record usage metrics (non-blocking, best-effort)
     if (usageData) {
       try {
+        const actualProvider = projectDefaultProvider || agent.provider || "openrouter";
+        const actualModel = projectDefaultModel || agent.model || "unknown";
         await ctx.runMutation(api.usage.record, {
           agentId: args.agentId,
-          provider: agent.provider || "openrouter",
-          model: agent.model || "unknown",
+          provider: actualProvider,
+          model: actualModel,
           promptTokens: usageData.promptTokens,
           completionTokens: usageData.completionTokens,
           totalTokens: usageData.totalTokens,
