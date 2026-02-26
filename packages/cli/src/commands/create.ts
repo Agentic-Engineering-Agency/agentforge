@@ -115,16 +115,32 @@ export async function createProject(
 
   // Initialize Convex
   console.log(`\n⚡ Initializing Convex...\n`);
+  let convexReady = false;
   try {
     execSync('npx convex dev --once', {
       cwd: targetDir,
       stdio: 'inherit',
     });
     console.log(`\n  ✅ Convex initialized`);
+    convexReady = true;
   } catch {
     console.warn(
       `\n  ⚠️  Convex initialization skipped. Run "npx convex dev" to set up your backend.`
     );
+  }
+
+  if (!convexReady) {
+    console.log(`
+⚠️  Project "${projectName}" created with warnings.
+
+Your project files are ready, but Convex could not be initialized automatically.
+This is usually because the TypeScript typecheck failed or Convex auth is required.
+
+Fix the errors above, then run:
+  cd ${projectName}
+  npx convex dev
+`);
+    process.exit(1);
   }
 
   console.log(`

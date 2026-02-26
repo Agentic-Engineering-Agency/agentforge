@@ -98,6 +98,7 @@ async function createProject(projectName, options) {
   console.log(`
 \u26A1 Initializing Convex...
 `);
+  let convexReady = false;
   try {
     execSync("npx convex dev --once", {
       cwd: targetDir,
@@ -105,11 +106,25 @@ async function createProject(projectName, options) {
     });
     console.log(`
   \u2705 Convex initialized`);
+    convexReady = true;
   } catch {
     console.warn(
       `
   \u26A0\uFE0F  Convex initialization skipped. Run "npx convex dev" to set up your backend.`
     );
+  }
+  if (!convexReady) {
+    console.log(`
+\u26A0\uFE0F  Project "${projectName}" created with warnings.
+
+Your project files are ready, but Convex could not be initialized automatically.
+This is usually because the TypeScript typecheck failed or Convex auth is required.
+
+Fix the errors above, then run:
+  cd ${projectName}
+  npx convex dev
+`);
+    process.exit(1);
   }
   console.log(`
 \u{1F389} AgentForge project "${projectName}" created successfully!
