@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/core",
-  "version": "0.9.3",
+  "version": "0.9.4",
   "description": "Core agent primitives, sandbox integration, and MCP server for AgentForge",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

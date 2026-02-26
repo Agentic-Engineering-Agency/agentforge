@@ -1,5 +1,20 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
+import { parseExpression } from "cron-parser";
+
+/**
+ * Calculate the next run timestamp (ms) from a cron expression.
+ * Falls back to now + 1 hour if the expression is invalid.
+ */
+export function calculateNextRun(schedule: string): number {
+  try {
+    const interval = parseExpression(schedule, { utc: true });
+    return interval.next().getTime();
+  } catch {
+    // Invalid expression — fall back to 1 hour from now
+    return Date.now() + 60 * 60 * 1000;
+  }
+}
 
 // Query: List cron jobs
 export const list = query({
@@ -76,12 +91,9 @@ export const create = mutation({
     metadata: v.optional(v.any()),
   },
   handler: async (ctx, args) => {
+    const nextRun = calculateNextRun(args.schedule);
     const now = Date.now();
-    
-    // TODO: Parse cron expression to calculate nextRun
-    // For now, set it to 1 hour from now
-    const nextRun = now + 60 * 60 * 1000;
-    
+
     const jobId = await ctx.db.insert("cronJobs", {
       ...args,
       isEnabled: true,
@@ -109,7 +121,7 @@ export const update = mutation({
 
     await ctx.db.patch(id, {
       ...updates,
-      ...(updates.schedule ? { nextRun: Date.now() + 60 * 60 * 1000 } : {}),
+      ...(updates.schedule ? { nextRun: calculateNextRun(updates.schedule) } : {}),
       updatedAt: Date.now(),
     });
     return id;
