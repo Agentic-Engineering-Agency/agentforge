@@ -20,48 +20,19 @@ import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
-import type { MessageListInput } from "@mastra/core/agent";
 
-// AI SDK factory functions for BYOK (Bring Your Own Key)
-// These allow us to pass API keys directly instead of relying on process.env
-import { createOpenAI } from "@ai-sdk/openai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { createXai } from "@ai-sdk/xai";
-
-/**
- * Create an AI SDK model instance with the provided API key (BYOK).
- *
- * This function maps provider names to their AI SDK factory functions,
- * allowing us to pass API keys directly instead of relying on process.env.
- *
- * @param provider - The LLM provider (e.g., 'openai', 'anthropic', 'google')
- * @param apiKey - The API key fetched from the database
- * @param modelId - The model identifier (e.g., 'gpt-4o-mini', 'claude-opus-4-6')
- * @returns An AI SDK LanguageModel instance
- */
-function createModelWithApiKey(provider: string, apiKey: string, modelId: string) {
-  // Strip provider prefix if present (e.g., "openai/gpt-4o" -> "gpt-4o")
-  const baseModelId = modelId.includes("/") ? modelId.split("/").slice(1).join("/") : modelId;
-
-  switch (provider) {
-    case "openai":
-      return createOpenAI({ apiKey })(baseModelId);
-    case "anthropic":
-      return createAnthropic({ apiKey })(baseModelId);
-    case "google":
-      return createGoogleGenerativeAI({ apiKey })(baseModelId);
-    case "xai":
-      return createXai({ apiKey })(baseModelId);
-    case "mistral":
-      return createOpenAI({ apiKey, baseURL: "https://api.mistral.ai/v1" })(baseModelId);
-    case "deepseek":
-      return createOpenAI({ apiKey, baseURL: "https://api.deepseek.com" })(baseModelId);
-    case "openrouter":
-      return createOpenAI({ apiKey, baseURL: "https://openrouter.ai/api/v1" })(baseModelId);
-    default:
-      throw new Error(`Unsupported provider: ${provider}`);
-  }
+// Map provider name to the env var name Mastra's router expects
+function getProviderEnvKey(provider: string): string {
+  const map: Record<string, string> = {
+    openai:    "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    google:    "GOOGLE_GENERATIVE_AI_API_KEY",
+    xai:       "XAI_API_KEY",
+    mistral:   "MISTRAL_API_KEY",
+    deepseek:  "DEEPSEEK_API_KEY",
+    openrouter: "OPENROUTER_API_KEY",
+  };
+  return map[provider] ?? `${provider.toUpperCase().replace(/-/g, "_")}_API_KEY`;
 }
 
 /**
@@ -160,8 +131,9 @@ export const executeAgent = action({
         throw new Error(`No active API key found for provider: ${provider}. Please add an API key in Settings.`);
       }
 
-      // Create AI SDK model instance with fetched API key
-      const resolvedModel = createModelWithApiKey(provider, apiKey, modelId);
+      // Inject API key into process.env for Mastra's router
+      process.env[getProviderEnvKey(provider)] = apiKey;
+      const mastraModel = `${provider}/${modelId}`;
 
       // AGE-141: Query active MCP connections for tool context
       const mcpConnections = await ctx.runQuery(api.mcpConnections.list, { isEnabled: true });
@@ -182,15 +154,15 @@ export const executeAgent = action({
         ? `${baseInstructions}\n\n${mcpToolContext}`
         : baseInstructions;
 
-      // Execute via Mastra Agent with resolved model
+      // Execute via Mastra Agent with Mastra-native model string
       const mastraAgent = new Agent({
         id: "agentforge-executor",
         name: "agentforge-executor",
         instructions: fullInstructions,
-        model: resolvedModel,
+        model: mastraModel,
       });
 
-      const result = await mastraAgent.generate(conversationMessages as MessageListInput);
+      const result = await mastraAgent.generate(conversationMessages);
 
       const responseContent = result.text;
 
@@ -359,8 +331,9 @@ export const generateResponse = action({
       throw new Error(`No active API key found for provider: ${args.provider}. Please add an API key in Settings.`);
     }
 
-    // Create AI SDK model instance with fetched API key
-    const resolvedModel = createModelWithApiKey(args.provider, apiKey, args.modelKey);
+    // Inject API key into process.env for Mastra's router
+    process.env[getProviderEnvKey(args.provider)] = apiKey;
+    const mastraModel = `${args.provider}/${args.modelKey}`;
 
     // AGE-141: Query active MCP connections for tool context
     const mcpConnections = await ctx.runQuery(api.mcpConnections.list, { isEnabled: true });
@@ -375,10 +348,10 @@ export const generateResponse = action({
       id: "agentforge-executor",
       name: "agentforge-executor",
       instructions: fullInstructions,
-      model: resolvedModel,
+      model: mastraModel,
     });
 
-    const result = await mastraAgent.generate(args.messages as MessageListInput);
+    const result = await mastraAgent.generate(args.messages);
 
     // AI SDK v5 renamed promptTokens→inputTokens, completionTokens→outputTokens
     return {
