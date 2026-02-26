@@ -87,14 +87,25 @@ export const updateStatus = mutation({
   args: {
     id: v.id("mcpConnections"),
     isConnected: v.boolean(),
+    lastConnectedAt: v.optional(v.number()),
+    toolCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
-      isConnected: args.isConnected,
-      lastConnectedAt: args.isConnected ? Date.now() : undefined,
+    const { id, isConnected, lastConnectedAt, toolCount } = args;
+    const updates: Record<string, any> = {
+      isConnected,
       updatedAt: Date.now(),
-    });
-    return args.id;
+    };
+    if (lastConnectedAt !== undefined) {
+      updates.lastConnectedAt = lastConnectedAt;
+    } else if (isConnected) {
+      updates.lastConnectedAt = Date.now();
+    }
+    if (toolCount !== undefined) {
+      updates.toolCount = toolCount;
+    }
+    await ctx.db.patch(id, updates);
+    return id;
   },
 });
 
