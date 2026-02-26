@@ -233,7 +233,7 @@ export const sendMessage = action({
         ? `${projectSystemPrompt}\n\n${baseInstructions}`
         : baseInstructions;
 
-      const result = await ctx.runAction(api.mastraIntegration.generateResponse, {
+      const result = await ctx.runAction(internal.mastraIntegration.generateResponse, {
         provider, // AGE-137: Pass provider for BYOK
         modelKey: `${provider}/${modelId}`,
         instructions,

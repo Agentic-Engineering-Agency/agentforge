@@ -20,7 +20,7 @@ import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
-import type { MessageListInput } from "@mastra/core/agent";
+import type { MessageList } from "@mastra/core/agent";
 
 // Map provider name to the env var name Mastra's router expects
 function getProviderEnvKey(provider: string): string {
@@ -163,7 +163,7 @@ export const executeAgent = action({
         model: mastraModel,
       });
 
-      const result = await mastraAgent.generate(conversationMessages as MessageListInput);
+      const result = await mastraAgent.generate(conversationMessages as MessageList);
 
       const responseContent = result.text;
 
@@ -352,7 +352,7 @@ export const generateResponse = internalAction({
       model: mastraModel,
     });
 
-    const result = await mastraAgent.generate(args.messages as MessageListInput);
+    const result = await mastraAgent.generate(args.messages as MessageList);
 
     // AI SDK v5 renamed promptTokens→inputTokens, completionTokens→outputTokens
     return {
