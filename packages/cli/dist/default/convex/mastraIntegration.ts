@@ -20,6 +20,7 @@ import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
+import type { MessageListInput } from "@mastra/core/agent";
 
 // AI SDK factory functions for BYOK (Bring Your Own Key)
 // These allow us to pass API keys directly instead of relying on process.env
@@ -189,8 +190,7 @@ export const executeAgent = action({
         model: resolvedModel,
       });
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const result = await mastraAgent.generate(conversationMessages as any);
+      const result = await mastraAgent.generate(conversationMessages as MessageListInput);
 
       const responseContent = result.text;
 
@@ -378,8 +378,7 @@ export const generateResponse = action({
       model: resolvedModel,
     });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await mastraAgent.generate(args.messages as any);
+    const result = await mastraAgent.generate(args.messages as MessageListInput);
 
     // AI SDK v5 renamed promptTokens→inputTokens, completionTokens→outputTokens
     return {

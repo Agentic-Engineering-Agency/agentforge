@@ -106,15 +106,10 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
-    
-    // If schedule changed, recalculate nextRun
-    if (updates.schedule) {
-      const now = Date.now();
-      (updates as any).nextRun = now + 60 * 60 * 1000; // TODO: Parse cron
-    }
-    
+
     await ctx.db.patch(id, {
       ...updates,
+      ...(updates.schedule ? { nextRun: Date.now() + 60 * 60 * 1000 } : {}),
       updatedAt: Date.now(),
     });
     return id;
