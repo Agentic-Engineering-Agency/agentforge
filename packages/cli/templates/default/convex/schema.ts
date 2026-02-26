@@ -113,6 +113,12 @@ export default defineSchema({
     description: v.optional(v.string()),
     userId: v.optional(v.string()),
     settings: v.optional(v.any()),
+    // Agent assignment
+    agentIds: v.optional(v.array(v.string())),
+    // Project-scoped configuration
+    systemPrompt: v.optional(v.string()),
+    defaultModel: v.optional(v.string()),
+    defaultProvider: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   }).index("byUserId", ["userId"]),
@@ -198,6 +204,7 @@ export default defineSchema({
     provider: v.string(), // "openai", "openrouter", "anthropic", etc.
     keyName: v.string(),
     encryptedKey: v.string(),
+    iv: v.optional(v.string()), // XOR encoding IV
     isActive: v.boolean(),
     userId: v.optional(v.string()),
     createdAt: v.number(),
