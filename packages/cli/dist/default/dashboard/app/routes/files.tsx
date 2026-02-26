@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
+import type { Id } from '@convex/_generated/dataModel';
 import { api } from '@convex/_generated/api';
 import { Folder, File, Upload, Trash2, FolderPlus, Search, Grid, List, Home, FileText, FileImage, FileCode, FileArchive, X, ChevronRight } from 'lucide-react';
 
@@ -37,6 +38,8 @@ function FilesPage() {
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [newFolderName, setNewFolderName] = useState('');
   const [showNewFolder, setShowNewFolder] = useState(false);
+  const [confirmingDeletingFileId, setConfirmingDeletingFileId] = useState<string | null>(null);
+  const [confirmingDeletingFolderId, setConfirmingDeletingFolderId] = useState<string | null>(null);
 
   const currentFolders = useMemo(() => {
     const result = folders.filter((f: any) => {
@@ -81,17 +84,31 @@ function FilesPage() {
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
-    await createFolder({ name: newFolderName.trim(), parentId: currentFolderId as any });
+    await createFolder({ name: newFolderName.trim(), parentId: currentFolderId as Id<'folders'> | null });
     setNewFolderName('');
     setShowNewFolder(false);
   };
 
-  const handleDeleteFile = async (id: any) => {
-    if (confirm('Delete this file?')) await removeFile({ id });
+  const handleDeleteFileClick = (id: string) => {
+    if (confirmingDeletingFileId === id) {
+      // Second click - actually delete
+      removeFile({ id });
+      setConfirmingDeletingFileId(null);
+    } else {
+      // First click - show confirm state
+      setConfirmingDeletingFileId(id);
+    }
   };
 
-  const handleDeleteFolder = async (id: any) => {
-    if (confirm('Delete this folder and all its contents?')) await removeFolder({ id });
+  const handleDeleteFolderClick = (id: string) => {
+    if (confirmingDeletingFolderId === id) {
+      // Second click - actually delete
+      removeFolder({ id });
+      setConfirmingDeletingFolderId(null);
+    } else {
+      // First click - show confirm state
+      setConfirmingDeletingFolderId(id);
+    }
   };
 
   return (
@@ -156,7 +173,17 @@ function FilesPage() {
               <div key={folder._id} className="bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow cursor-pointer group" onDoubleClick={() => setCurrentFolderId(folder._id)}>
                 <div className="flex items-center justify-between mb-2">
                   <Folder className="w-8 h-8 text-primary" />
-                  <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder._id); }} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDeleteFolderClick(folder._id); }}
+                    className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-colors ${
+                      confirmingDeletingFolderId === folder._id
+                        ? 'bg-destructive text-destructive-foreground'
+                        : 'hover:bg-destructive/10'
+                    }`}
+                    title={confirmingDeletingFolderId === folder._id ? 'Click to confirm delete' : 'Delete folder'}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
                 </div>
                 <p className="text-sm font-medium truncate">{folder.name}</p>
                 <p className="text-xs text-muted-foreground">{formatDate(folder.createdAt)}</p>
@@ -168,7 +195,17 @@ function FilesPage() {
                 <div key={file._id} className="bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow group">
                   <div className="flex items-center justify-between mb-2">
                     <Icon className="w-8 h-8 text-muted-foreground" />
-                    <button onClick={() => handleDeleteFile(file._id)} className="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10"><Trash2 className="w-3.5 h-3.5 text-destructive" /></button>
+                    <button
+                      onClick={() => handleDeleteFileClick(file._id)}
+                      className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-colors ${
+                        confirmingDeletingFileId === file._id
+                          ? 'bg-destructive text-destructive-foreground'
+                          : 'hover:bg-destructive/10'
+                      }`}
+                      title={confirmingDeletingFileId === file._id ? 'Click to confirm delete' : 'Delete file'}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                   <p className="text-sm font-medium truncate">{file.name}</p>
                   <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
@@ -195,7 +232,7 @@ function FilesPage() {
                     <td className="px-4 py-3 text-muted-foreground">Folder</td>
                     <td className="px-4 py-3 text-muted-foreground">—</td>
                     <td className="px-4 py-3 text-muted-foreground">{formatDate(folder.createdAt)}</td>
-                    <td className="px-4 py-3 text-right"><button onClick={() => handleDeleteFolder(folder._id)} className="p-1.5 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button></td>
+                    <td className="px-4 py-3 text-right"><button onClick={() => handleDeleteFolderClick(folder._id)} className={`p-1.5 rounded transition-colors ${confirmingDeletingFolderId === folder._id ? 'bg-destructive text-destructive-foreground' : 'hover:bg-destructive/10'}`} title={confirmingDeletingFolderId === folder._id ? 'Click to confirm delete' : 'Delete folder'}><Trash2 className="w-4 h-4" /></button></td>
                   </tr>
                 ))}
                 {currentFiles.map((file: any) => {
@@ -206,7 +243,7 @@ function FilesPage() {
                       <td className="px-4 py-3 text-muted-foreground">{file.mimeType}</td>
                       <td className="px-4 py-3 text-muted-foreground">{formatFileSize(file.size)}</td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDate(file.uploadedAt)}</td>
-                      <td className="px-4 py-3 text-right"><button onClick={() => handleDeleteFile(file._id)} className="p-1.5 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button></td>
+                      <td className="px-4 py-3 text-right"><button onClick={() => handleDeleteFileClick(file._id)} className={`p-1.5 rounded transition-colors ${confirmingDeletingFileId === file._id ? 'bg-destructive text-destructive-foreground' : 'hover:bg-destructive/10'}`} title={confirmingDeletingFileId === file._id ? 'Click to confirm delete' : 'Delete file'}><Trash2 className="w-4 h-4" /></button></td>
                     </tr>
                   );
                 })}
