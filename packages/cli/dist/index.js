@@ -3938,8 +3938,23 @@ function registerStatusCommand(program2) {
     checks["LLM Provider"] = provider !== "Not configured" ? `\u2714 ${provider}` : "\u2716 Not configured";
     details(checks);
   });
-  program2.command("dashboard").description("Launch the web dashboard").option("-p, --port <port>", "Port for the dashboard", "3000").option("--install", "Install dashboard dependencies before starting").action(async (opts) => {
-    const cwd = process.cwd();
+  program2.command("dashboard").description("Launch the web dashboard").option("-p, --port <port>", "Port for the dashboard", "3000").option("-d, --dir <path>", "Project directory (defaults to current directory)").option("--install", "Install dashboard dependencies before starting").action(async (opts) => {
+    let cwd;
+    try {
+      cwd = opts.dir ? path10.resolve(opts.dir) : process.cwd();
+    } catch {
+      error("Cannot determine the current directory.");
+      console.log();
+      info("Your shell's working directory may no longer exist.");
+      info("Run the command from inside your project directory:");
+      console.log();
+      console.log("  cd /path/to/your/agentforge-project");
+      console.log("  agentforge dashboard");
+      console.log();
+      info("Or specify the directory explicitly:");
+      console.log("  agentforge dashboard --dir /path/to/your/agentforge-project");
+      process.exit(1);
+    }
     const searchPaths = [
       path10.join(cwd, "dashboard"),
       // 1. Bundled in project (agentforge create)
