@@ -7,13 +7,15 @@ import { Bot, Plus, Edit, Trash2, Search, X, Star } from 'lucide-react';
 
 export const Route = createFileRoute('/agents')({ component: AgentsPage });
 
-const providers = ['openai', 'anthropic', 'openrouter', 'google', 'xai'];
+const providers = ['openai', 'anthropic', 'google', 'xai', 'mistral', 'deepseek', 'openrouter'];
 const modelsByProvider: Record<string, string[]> = {
-  openai: ['gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini'],
-  google: ['gemini-2.5-flash', 'gemini-1.5-pro'],
-  anthropic: ['claude-3.5-sonnet', 'claude-3-haiku'],
-  openrouter: ['openrouter/auto'],
-  xai: ['grok-4', 'grok-3'],
+  openai: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'o3', 'o4-mini'],
+  anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
+  xai: ['grok-3', 'grok-3-mini'],
+  mistral: ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
+  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  openrouter: ['openrouter/auto', 'openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash'],
 };
 
 // Validation constraints

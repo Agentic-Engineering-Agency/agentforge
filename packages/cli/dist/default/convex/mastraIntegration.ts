@@ -4,17 +4,62 @@
  * Mastra Integration Actions for Convex
  *
  * These actions run in the Convex Node.js runtime and execute LLM calls
- * using Mastra-native model routing with OpenRouter as the default provider.
+ * using Mastra with BYOK (Bring Your Own Key) from the Convex database.
  *
  * Architecture:
  * - For chat: use `chat.sendMessage` (preferred entry point)
  * - For programmatic agent execution: use `mastraIntegration.executeAgent`
- * - Model resolution: uses Mastra Agent with "provider/model-name" format
+ * - Model resolution: fetches API keys from database, creates AI SDK model instances
+ *
+ * AGE-137: API keys are stored in Convex 'apiKeys' table and fetched at inference time
+ * instead of relying on process.env which doesn't exist in Convex Node.js runtime.
  */
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
+
+// AI SDK factory functions for BYOK (Bring Your Own Key)
+// These allow us to pass API keys directly instead of relying on process.env
+import { createOpenAI } from "@ai-sdk/openai";
+import { createAnthropic } from "@ai-sdk/anthropic";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createXai } from "@ai-sdk/xai";
+
+/**
+ * Create an AI SDK model instance with the provided API key (BYOK).
+ *
+ * This function maps provider names to their AI SDK factory functions,
+ * allowing us to pass API keys directly instead of relying on process.env.
+ *
+ * @param provider - The LLM provider (e.g., 'openai', 'anthropic', 'google')
+ * @param apiKey - The API key fetched from the database
+ * @param modelId - The model identifier (e.g., 'gpt-4o-mini', 'claude-opus-4-6')
+ * @returns An AI SDK LanguageModel instance
+ */
+function createModelWithApiKey(provider: string, apiKey: string, modelId: string) {
+  // Strip provider prefix if present (e.g., "openai/gpt-4o" -> "gpt-4o")
+  const baseModelId = modelId.includes("/") ? modelId.split("/").slice(1).join("/") : modelId;
+
+  switch (provider) {
+    case "openai":
+      return createOpenAI({ apiKey })(baseModelId);
+    case "anthropic":
+      return createAnthropic({ apiKey })(baseModelId);
+    case "google":
+      return createGoogleGenerativeAI({ apiKey })(baseModelId);
+    case "xai":
+      return createXai({ apiKey })(baseModelId);
+    case "mistral":
+      return createOpenAI({ apiKey, baseURL: "https://api.mistral.ai/v1" })(baseModelId);
+    case "deepseek":
+      return createOpenAI({ apiKey, baseURL: "https://api.deepseek.com" })(baseModelId);
+    case "openrouter":
+      return createOpenAI({ apiKey, baseURL: "https://openrouter.ai/api/v1" })(baseModelId);
+    default:
+      throw new Error(`Unsupported provider: ${provider}`);
+  }
+}
 
 // Return type for executeAgent
 type ExecuteAgentResult = {
@@ -83,6 +128,15 @@ export const executeAgent = action({
       const modelId = agent.model || "openai/gpt-4o-mini";
       const modelKey = `${provider}/${modelId}`;
 
+      // AGE-137: Fetch API key from database for BYOK
+      const apiKey = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+      if (!apiKey) {
+        throw new Error(`No active API key found for provider: ${provider}. Please add an API key in Settings.`);
+      }
+
+      // Create AI SDK model instance with fetched API key
+      const resolvedModel = createModelWithApiKey(provider, apiKey, modelId);
+
       // Get conversation history for context
       const messages = await ctx.runQuery(api.messages.list, { threadId });
       const conversationMessages = (messages as Array<{ role: string; content: string }>)
@@ -92,12 +146,12 @@ export const executeAgent = action({
           content: m.content,
         }));
 
-      // Execute via Mastra Agent
+      // Execute via Mastra Agent with resolved model
       const mastraAgent = new Agent({
         id: "agentforge-executor",
         name: "agentforge-executor",
         instructions: agent.instructions || "You are a helpful AI assistant.",
-        model: modelKey,
+        model: resolvedModel,
       });
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -234,7 +288,10 @@ export const executeWorkflow = action({
 /**
  * Thin LLM wrapper used by chat.sendMessage.
  *
- * Accepts a resolved modelKey, system instructions, and conversation messages.
+ * AGE-137: Now accepts provider argument for BYOK (Bring Your Own Key).
+ * Fetches the API key from the database and creates a model instance with it.
+ *
+ * Accepts a provider, modelKey, system instructions, and conversation messages.
  * Returns the generated text and token usage. No message storage — callers
  * handle persistence themselves.
  *
@@ -243,6 +300,7 @@ export const executeWorkflow = action({
  */
 export const generateResponse = action({
   args: {
+    provider: v.string(), // AGE-137: Added provider argument
     modelKey: v.string(),
     instructions: v.string(),
     messages: v.array(
@@ -250,7 +308,7 @@ export const generateResponse = action({
     ),
   },
   handler: async (
-    _ctx,
+    ctx,
     args
   ): Promise<{
     text: string;
@@ -260,11 +318,20 @@ export const generateResponse = action({
       totalTokens: number;
     } | null;
   }> => {
+    // AGE-137: Fetch API key from database for BYOK
+    const apiKey = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider: args.provider });
+    if (!apiKey) {
+      throw new Error(`No active API key found for provider: ${args.provider}. Please add an API key in Settings.`);
+    }
+
+    // Create AI SDK model instance with fetched API key
+    const resolvedModel = createModelWithApiKey(args.provider, apiKey, args.modelKey);
+
     const mastraAgent = new Agent({
       id: "agentforge-executor",
       name: "agentforge-executor",
       instructions: args.instructions,
-      model: args.modelKey,
+      model: resolvedModel,
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
