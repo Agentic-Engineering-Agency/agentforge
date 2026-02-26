@@ -20,6 +20,7 @@ import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
+import type { MessageListInput } from "@mastra/core/agent";
 
 // Map provider name to the env var name Mastra's router expects
 function getProviderEnvKey(provider: string): string {
@@ -162,7 +163,7 @@ export const executeAgent = action({
         model: mastraModel,
       });
 
-      const result = await mastraAgent.generate(conversationMessages);
+      const result = await mastraAgent.generate(conversationMessages as MessageListInput);
 
       const responseContent = result.text;
 
@@ -305,7 +306,7 @@ export const executeWorkflow = action({
  * This action lives here (Node.js runtime) so that chat.ts can remain in the
  * default Convex runtime and freely mix queries, mutations, and actions.
  */
-export const generateResponse = action({
+export const generateResponse = internalAction({
   args: {
     provider: v.string(), // AGE-137: Added provider argument
     modelKey: v.string(),
@@ -351,7 +352,7 @@ export const generateResponse = action({
       model: mastraModel,
     });
 
-    const result = await mastraAgent.generate(args.messages);
+    const result = await mastraAgent.generate(args.messages as MessageListInput);
 
     // AI SDK v5 renamed promptTokens→inputTokens, completionTokens→outputTokens
     return {
