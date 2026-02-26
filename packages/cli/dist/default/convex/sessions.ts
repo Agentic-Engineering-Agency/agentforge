@@ -1,18 +1,27 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+type SessionStatus = "active" | "paused" | "completed" | "error";
+
 // Query: Get all sessions
 export const list = query({
   args: {
     userId: v.optional(v.string()),
     agentId: v.optional(v.string()),
-    status: v.optional(v.string()),
+    status: v.optional(
+      v.union(
+        v.literal("active"),
+        v.literal("paused"),
+        v.literal("completed"),
+        v.literal("error")
+      )
+    ),
   },
   handler: async (ctx, args) => {
     if (args.status) {
       const sessions = await ctx.db
         .query("sessions")
-        .withIndex("byStatus", (q) => q.eq("status", args.status! as any))
+        .withIndex("byStatus", (q) => q.eq("status", args.status as SessionStatus))
         .collect();
       
       if (args.userId) {
@@ -140,11 +149,15 @@ export const updateStatus = mutation({
       throw new Error(`Session ${args.sessionId} not found`);
     }
     
-    const updates: any = {
+    const updates: {
+      status: string;
+      lastActivityAt: number;
+      completedAt?: number;
+    } = {
       status: args.status,
       lastActivityAt: Date.now(),
     };
-    
+
     if (args.status === "completed" || args.status === "error") {
       updates.completedAt = Date.now();
     }
