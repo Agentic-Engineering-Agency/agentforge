@@ -150,11 +150,11 @@ export const updateStatus = mutation({
     }
     
     const updates: {
-      status: string;
+      status: "active" | "paused" | "completed" | "error";
       lastActivityAt: number;
       completedAt?: number;
     } = {
-      status: args.status,
+      status: args.status as "active" | "paused" | "completed" | "error",
       lastActivityAt: Date.now(),
     };
 

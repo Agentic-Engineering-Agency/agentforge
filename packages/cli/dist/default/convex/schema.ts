@@ -18,10 +18,12 @@ export default defineSchema({
     createdAt: v.number(),
     updatedAt: v.number(),
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byAgentId", ["id"])
     .index("byUserId", ["userId"])
-    .index("byIsActive", ["isActive"]),
+    .index("byIsActive", ["isActive"])
+    .index("byProjectId", ["projectId"]),
 
   // Conversation threads
   threads: defineTable({

@@ -78,7 +78,7 @@ export const getAgents = query({
     const project = await ctx.db.get(args.id);
     if (!project?.agentIds?.length) return [];
 
-    const agents: typeof import("./_generated/dataModel").Doc<"agents">[] = [];
+    const agents: Array<{ _id: string; id: string; name: string; [key: string]: unknown }> = [];
     for (const agentId of project.agentIds) {
       const agent = await ctx.db
         .query("agents")
