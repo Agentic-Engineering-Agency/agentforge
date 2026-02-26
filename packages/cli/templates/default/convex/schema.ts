@@ -193,6 +193,7 @@ export default defineSchema({
     capabilities: v.optional(v.any()),
     userId: v.optional(v.string()),
     lastConnectedAt: v.optional(v.number()),
+    toolCount: v.optional(v.number()), // Number of tools available from this MCP server
     createdAt: v.number(),
     updatedAt: v.number(),
   })

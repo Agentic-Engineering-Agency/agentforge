@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Plug, Plus, Trash2, Search, X, Check, ExternalLink, Globe, Database, Mail, MessageSquare, FileText, Code, Zap, Shield } from 'lucide-react';
+import { Plug, Plus, Trash2, Search, X, Check, ExternalLink, Globe, Database, Mail, MessageSquare, FileText, Code, Zap, Shield, Loader2 } from 'lucide-react';
 
 export const Route = createFileRoute('/connections')({ component: ConnectionsPage });
 
@@ -98,6 +98,7 @@ function ConnectionsPage() {
   const createConnection = useMutation(api.mcpConnections.create);
   const removeConnection = useMutation(api.mcpConnections.remove);
   const toggleConnection = useMutation(api.mcpConnections.toggleEnabled);
+  const testConnection = useAction(api.mcpConnectionActions.testConnection);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('All');
@@ -105,6 +106,8 @@ function ConnectionsPage() {
   const [connectingItem, setConnectingItem] = useState<typeof MCP_CATALOG[0] | null>(null);
   const [authValues, setAuthValues] = useState<Record<string, string>>({});
   const [confirmingDisconnectId, setConfirmingDisconnectId] = useState<string | null>(null);
+  const [testingId, setTestingId] = useState<string | null>(null);
+  const [testResults, setTestResults] = useState<Record<string, { ok: boolean; tools: string[]; error?: string }>>({});
 
   const connectedNames = new Set(connections.map((c: any) => c.name));
 
@@ -140,6 +143,18 @@ function ConnectionsPage() {
     } else {
       // First click - show confirm state
       setConfirmingDisconnectId(id);
+    }
+  };
+
+  const handleTestConnection = async (id: string) => {
+    setTestingId(id);
+    try {
+      const result = await testConnection({ id });
+      setTestResults((prev) => ({ ...prev, [id]: result }));
+    } catch {
+      setTestResults((prev) => ({ ...prev, [id]: { ok: false, tools: [], error: 'Test failed' } }));
+    } finally {
+      setTestingId(null);
     }
   };
 
@@ -217,30 +232,61 @@ function ConnectionsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {connections.map((conn: any) => (
-                <div key={conn._id} className="bg-card border border-border rounded-lg p-5 shadow-sm">
-                  <div className="flex items-start justify-between mb-3">
-                    <h3 className="font-semibold text-foreground">{conn.name}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${conn.isEnabled ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}`}>{conn.isEnabled ? 'Active' : 'Disabled'}</span>
+              {connections.map((conn: any) => {
+                const testResult = testResults[conn._id];
+                const isTesting = testingId === conn._id;
+                return (
+                  <div key={conn._id} className="bg-card border border-border rounded-lg p-5 shadow-sm">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-foreground">{conn.name}</h3>
+                        {conn.toolCount !== undefined && conn.toolCount > 0 && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 border border-green-500/20">
+                            {conn.toolCount} tools
+                          </span>
+                        )}
+                        {testResult?.ok && testResult.tools.length > 0 && (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-600 border border-green-500/20">
+                            ✓ {testResult.tools.includes('stdio-protocol') ? 'connected' : `${testResult.tools.length} tools`}
+                          </span>
+                        )}
+                      </div>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${conn.isEnabled ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}`}>{conn.isEnabled ? 'Active' : 'Disabled'}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-1 font-mono truncate">{conn.serverUrl}</p>
+                    <p className="text-xs text-muted-foreground mb-3">Protocol: {conn.protocol}</p>
+                    {testResult && !testResult.ok && (
+                      <div className="mb-3 text-xs text-destructive bg-destructive/10 px-2 py-1 rounded">
+                        {testResult.error || 'Connection failed'}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pt-3 border-t border-border">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleTestConnection(conn._id)}
+                          disabled={isTesting || !conn.isEnabled}
+                          className="text-xs px-2 py-1 rounded bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
+                        >
+                          {isTesting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                          {isTesting ? 'Testing...' : 'Test'}
+                        </button>
+                        <button onClick={() => toggleConnection({ id: conn._id })} className="text-xs text-muted-foreground hover:text-foreground">{conn.isEnabled ? 'Disable' : 'Enable'}</button>
+                      </div>
+                      <button
+                        onClick={() => handleDisconnectClick(conn._id)}
+                        className={`p-1.5 rounded transition-colors ${
+                          confirmingDisconnectId === conn._id
+                            ? 'bg-destructive text-destructive-foreground'
+                            : 'hover:bg-destructive/10'
+                        }`}
+                        title={confirmingDisconnectId === conn._id ? 'Click to confirm disconnect' : 'Disconnect integration'}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mb-1 font-mono truncate">{conn.serverUrl}</p>
-                  <p className="text-xs text-muted-foreground mb-4">Protocol: {conn.protocol}</p>
-                  <div className="flex items-center justify-between pt-3 border-t border-border">
-                    <button onClick={() => toggleConnection({ id: conn._id })} className="text-xs text-muted-foreground hover:text-foreground">{conn.isEnabled ? 'Disable' : 'Enable'}</button>
-                    <button
-                      onClick={() => handleDisconnectClick(conn._id)}
-                      className={`p-1.5 rounded transition-colors ${
-                        confirmingDisconnectId === conn._id
-                          ? 'bg-destructive text-destructive-foreground'
-                          : 'hover:bg-destructive/10'
-                      }`}
-                      title={confirmingDisconnectId === conn._id ? 'Click to confirm disconnect' : 'Disconnect integration'}
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )
         )}
