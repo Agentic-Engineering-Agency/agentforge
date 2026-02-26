@@ -160,3 +160,79 @@ pnpm typecheck         # TypeScript check
 specsafe status        # Show SpecSafe project status
 specsafe list          # List all specs
 ```
+
+---
+
+## 🛡️ MANDATORY DEVELOPMENT PROCESS
+
+> These rules apply to ALL agents, ALL sprints, ALL sessions. No exceptions.
+
+### SpecSafe-First (NON-NEGOTIABLE)
+
+**Order of operations — every time, no shortcuts:**
+
+| Step | Action |
+|------|--------|
+| 1 | **Write tests first** — before any implementation |
+| 2 | **Implement** — only after tests exist |
+| 3 | **Run `pnpm test`** — all tests must pass |
+| 4 | **Fix failures** — if tests fail, fix before proceeding |
+
+```bash
+# TDD workflow
+specsafe new <feature>   # Create spec
+# write test expectations
+pnpm test                # Watch fail (red)
+# implement
+pnpm test                # Must be green before PR
+```
+
+### Research Official Docs First
+
+Before implementing ANYTHING involving Mastra, Convex, or any external dependency:
+
+1. **Read the current docs** — APIs break between minor versions
+2. **Check for breaking changes** — especially Mastra (updates weekly)
+3. **Never assume from prior context** — always verify
+
+- Mastra: https://mastra.ai/docs
+- Convex: https://docs.convex.dev
+- @mastra/s3 (R2): https://mastra.ai/reference/workspace/s3-filesystem
+
+### CLI-First Development
+
+Every feature: **CLI first → dashboard second**
+
+```bash
+agentforge <command>   # 1. Implement + test here
+# then replicate in dashboard/app/routes/...
+```
+
+### Mastra 1.8.0 BYOK — OpenAICompatibleConfig
+
+```typescript
+// ✅ Use OpenAICompatibleConfig (official API)
+new Agent({
+  model: {
+    providerId: provider,                    // 'openai' | 'anthropic' | 'openrouter'
+    modelId:    getBaseModelId(provider, id), // ALWAYS strip provider prefix!
+    apiKey,
+    url: getProviderBaseUrl(provider),       // needed for OpenRouter, Mistral, etc.
+  }
+})
+
+// ❌ Never use magic strings — Mastra 1.8.0 does not strip the prefix
+// 'openai/gpt-4.1' → OpenAI API receives 'openai/gpt-4.1' → 404
+// 'openrouter/auto' + provider 'openrouter' → 'openrouter/openrouter/auto' → 400
+```
+
+### Convex Runtime Rules
+
+```typescript
+// "use node" files: ONLY actions/internalActions
+// Default runtime: queries + mutations + regular actions
+
+// ✅ Correct split
+// chat.ts (default) — queries, mutations, actions
+// chatActions.ts ("use node") — Node.js-dependent internalActions
+```
