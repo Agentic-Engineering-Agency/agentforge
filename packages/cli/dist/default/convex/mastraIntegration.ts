@@ -13,6 +13,8 @@
  *
  * AGE-137: API keys are stored in Convex 'apiKeys' table and fetched at inference time
  * instead of relying on process.env which doesn't exist in Convex Node.js runtime.
+ *
+ * AGE-141: MCP connections are queried and tool context is injected into agent instructions.
  */
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
@@ -59,6 +61,29 @@ function createModelWithApiKey(provider: string, apiKey: string, modelId: string
     default:
       throw new Error(`Unsupported provider: ${provider}`);
   }
+}
+
+/**
+ * Build MCP tool context string from active connections.
+ *
+ * AGE-141: Queries active MCP connections and builds a context string
+ * that informs the agent about available MCP tools.
+ *
+ * @param connections - Array of active MCP connections
+ * @returns A string describing available MCP tools, or empty string if none
+ */
+function buildMcpToolContext(
+  connections: Array<{ name: string; capabilities?: string[] }>
+): string {
+  if (connections.length === 0) {
+    return "";
+  }
+
+  const toolsList = connections
+    .map((c) => `${c.name} (${(c.capabilities || []).join(", ")})`)
+    .join(", ");
+
+  return `You have access to these MCP tools: ${toolsList}. Use them when relevant.`;
 }
 
 // Return type for executeAgent
@@ -137,6 +162,10 @@ export const executeAgent = action({
       // Create AI SDK model instance with fetched API key
       const resolvedModel = createModelWithApiKey(provider, apiKey, modelId);
 
+      // AGE-141: Query active MCP connections for tool context
+      const mcpConnections = await ctx.runQuery(api.mcpConnections.list, { isEnabled: true });
+      const mcpToolContext = buildMcpToolContext(mcpConnections as Array<{ name: string; capabilities?: string[] }>);
+
       // Get conversation history for context
       const messages = await ctx.runQuery(api.messages.list, { threadId });
       const conversationMessages = (messages as Array<{ role: string; content: string }>)
@@ -146,11 +175,17 @@ export const executeAgent = action({
           content: m.content,
         }));
 
+      // Build full instructions with MCP tool context
+      const baseInstructions = agent.instructions || "You are a helpful AI assistant.";
+      const fullInstructions = mcpToolContext
+        ? `${baseInstructions}\n\n${mcpToolContext}`
+        : baseInstructions;
+
       // Execute via Mastra Agent with resolved model
       const mastraAgent = new Agent({
         id: "agentforge-executor",
         name: "agentforge-executor",
-        instructions: agent.instructions || "You are a helpful AI assistant.",
+        instructions: fullInstructions,
         model: resolvedModel,
       });
 
@@ -327,10 +362,19 @@ export const generateResponse = action({
     // Create AI SDK model instance with fetched API key
     const resolvedModel = createModelWithApiKey(args.provider, apiKey, args.modelKey);
 
+    // AGE-141: Query active MCP connections for tool context
+    const mcpConnections = await ctx.runQuery(api.mcpConnections.list, { isEnabled: true });
+    const mcpToolContext = buildMcpToolContext(mcpConnections as Array<{ name: string; capabilities?: string[] }>);
+
+    // Build full instructions with MCP tool context
+    const fullInstructions = mcpToolContext
+      ? `${args.instructions}\n\n${mcpToolContext}`
+      : args.instructions;
+
     const mastraAgent = new Agent({
       id: "agentforge-executor",
       name: "agentforge-executor",
-      instructions: args.instructions,
+      instructions: fullInstructions,
       model: resolvedModel,
     });
 
