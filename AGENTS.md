@@ -208,3 +208,53 @@ fix/AGE-{number}-{short-description}    →  main
 - **Concurrent Dev Plan:** `CONCURRENT_PLAN.md` (this repo)
 - **Project State:** `PROJECT_STATE.md` (this repo)
 - **GitHub:** https://github.com/Agentic-Engineering-Agency/agentforge
+
+---
+
+## 🛡️ MANDATORY DEVELOPMENT PROCESS
+
+### Rule 1: SpecSafe-First (NON-NEGOTIABLE)
+**Every implementation must follow this exact order:**
+
+1. **Write tests FIRST** — before any code exists, before planning implementation details
+2. **Implement** — write the feature/fix only after tests are written
+3. **Run tests** — `pnpm test`
+4. **Fix failures** — if any test fails, dev agents must fix before proceeding
+5. **Never skip** — no exceptions, no "I'll add tests later"
+
+```bash
+# Correct order
+specsafe new my-feature    # 1. Create spec
+# ... write tests in spec ...
+pnpm test                  # 2. Watch tests fail (TDD)
+# ... implement ...
+pnpm test                  # 3. Tests must pass
+```
+
+### Rule 2: Research Official Docs (ALWAYS)
+APIs change fast. Before implementing ANYTHING:
+- **Mastra**: https://mastra.ai/docs (check current version — breaking changes are common)
+- **Convex**: https://docs.convex.dev (runtime rules change)
+- **Never** rely on memory or prior sessions — always fetch current docs
+
+### Rule 3: CLI-First Development
+Every new feature must be implemented in this order:
+1. **CLI first** — `agentforge <command>` (testable, no UI dependency)
+2. **Dashboard second** — replicate the same logic in the local web UI
+
+The CLI is the source of truth. The dashboard is a view layer.
+
+### Rule 4: Convex Runtime Boundaries
+- `"use node"` files: ONLY `action` / `internalAction` functions (no queries, no mutations)
+- Default runtime: queries + mutations + non-Node actions
+- Never mix runtimes in the same file
+
+### Rule 5: Mastra 1.8.0 Model Config (BYOK)
+Use `OpenAICompatibleConfig` — never magic model strings:
+```typescript
+// ✅ Correct
+new Agent({ model: { providerId: 'openai', modelId: 'gpt-4.1', apiKey } })
+
+// ❌ Wrong — Mastra 1.8.0 does NOT strip provider prefix before calling API
+new Agent({ model: 'openai/gpt-4.1' })
+```
