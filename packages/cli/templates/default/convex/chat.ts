@@ -206,6 +206,7 @@ export const sendMessage = action({
       const modelId = agent.model || "openai/gpt-4o-mini";
 
       const result = await ctx.runAction(api.mastraIntegration.generateResponse, {
+        provider, // AGE-137: Pass provider for BYOK
         modelKey: `${provider}/${modelId}`,
         instructions: agent.instructions || "You are a helpful AI assistant built with AgentForge.",
         messages: conversationMessages,
