@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 /**
  * HEARTBEAT System
@@ -322,12 +322,27 @@ export const processCheck = action({
     }
     
     // Check if there are pending tasks
-    if (heartbeat.pendingTasks.length > 0) {
-      // TODO: Integrate with Mastra to execute pending tasks
-      // For now, just log
-      console.log(`Agent ${args.agentId} has ${heartbeat.pendingTasks.length} pending tasks`);
+    let executedCount = 0;
+    for (const task of heartbeat.pendingTasks) {
+      const result = await ctx.runAction(internal.heartbeatActions.executeTask, {
+        agentId: args.agentId,
+        task,
+        threadId: args.threadId,
+      });
+
+      if (result.success) {
+        // Remove completed task from pending list
+        await ctx.runMutation(api.heartbeat.removePendingTask, {
+          agentId: args.agentId,
+          threadId: args.threadId,
+          task,
+        });
+        executedCount++;
+      } else {
+        console.error(`[heartbeat] Task execution failed for agent ${args.agentId}: ${result.error}`);
+      }
     }
-    
+
     // Update last check time
     await ctx.runMutation(api.heartbeat.updateStatus, {
       agentId: args.agentId,
@@ -335,11 +350,20 @@ export const processCheck = action({
       status: heartbeat.status,
       currentTask: heartbeat.currentTask,
     });
-    
+
+    if (executedCount > 0) {
+      await ctx.runMutation(api.heartbeat.updateStatus, {
+        agentId: args.agentId,
+        threadId: args.threadId,
+        status: "idle",
+        currentTask: undefined,
+      });
+    }
+
     return {
       success: true,
-      pendingTasks: heartbeat.pendingTasks.length,
-      status: heartbeat.status,
+      pendingTasks: heartbeat.pendingTasks.length - executedCount,
+      status: executedCount > 0 ? "idle" : heartbeat.status,
     };
   },
 });
