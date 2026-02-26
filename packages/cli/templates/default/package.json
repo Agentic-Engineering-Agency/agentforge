@@ -14,10 +14,6 @@
     "dashboard:build": "cd dashboard && pnpm build"
   },
   "dependencies": {
-    "@ai-sdk/anthropic": "^1.0.0",
-    "@ai-sdk/google": "^1.0.0",
-    "@ai-sdk/openai": "^1.0.0",
-    "@ai-sdk/xai": "^1.0.0",
     "@agentforge-ai/core": "^0.4.0",
     "@mastra/core": "^1.7.0",
     "convex": "^1.17.0",
