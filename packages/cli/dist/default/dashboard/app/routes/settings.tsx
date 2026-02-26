@@ -91,6 +91,8 @@ function SettingsPage() {
   const [showKey, setShowKey] = useState<Record<string, boolean>>({});
   const [addingVaultSecret, setAddingVaultSecret] = useState(false);
   const [vaultForm, setVaultForm] = useState({ name: '', category: 'api_key', provider: '', value: '' });
+  const [confirmingDeleteKeyId, setConfirmingDeleteKeyId] = useState<string | null>(null);
+  const [confirmingDeleteSecretId, setConfirmingDeleteSecretId] = useState<string | null>(null);
 
   const keysByProvider = apiKeys.reduce((acc: Record<string, any[]>, key: any) => {
     if (!acc[key.provider]) acc[key.provider] = [];
@@ -110,9 +112,12 @@ function SettingsPage() {
     setNewKeyValue('');
   };
 
-  const handleDeleteKey = async (id: any) => {
-    if (confirm('Delete this API key? This cannot be undone.')) {
+  const handleDeleteKey = async (id: string) => {
+    if (confirmingDeleteKeyId === id) {
       await removeApiKey({ id });
+      setConfirmingDeleteKeyId(null);
+    } else {
+      setConfirmingDeleteKeyId(id);
     }
   };
 
@@ -248,7 +253,20 @@ function SettingsPage() {
                         <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{secret.maskedValue}</td>
                         <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(secret.createdAt).toLocaleDateString()}</td>
                         <td className="px-4 py-3 text-right">
-                          <button onClick={() => { if (confirm('Delete this secret?')) removeVaultSecret({ id: secret._id }); }} className="p-1.5 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                          <button
+                          onClick={() => {
+                            if (confirmingDeleteSecretId === secret._id) {
+                              removeVaultSecret({ id: secret._id });
+                              setConfirmingDeleteSecretId(null);
+                            } else {
+                              setConfirmingDeleteSecretId(secret._id);
+                            }
+                          }}
+                          className={`p-1.5 rounded transition-colors ${confirmingDeleteSecretId === secret._id ? 'bg-destructive/20 text-destructive' : 'hover:bg-destructive/10 text-muted-foreground'}`}
+                          title={confirmingDeleteSecretId === secret._id ? 'Click to confirm delete' : 'Delete secret'}
+                        >
+                          {confirmingDeleteSecretId === secret._id ? <span className="text-xs font-medium px-1">Confirm?</span> : <Trash2 className="w-4 h-4 text-destructive" />}
+                        </button>
                         </td>
                       </tr>
                     ))}

@@ -16,15 +16,21 @@ function CronPage() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [historyJobId, setHistoryJobId] = useState<string | null>(null);
+  const [confirmingDeletingId, setConfirmingDeletingId] = useState<string | null>(null);
 
   const handleCreate = async (data: any) => {
     await createCron(data);
     setIsModalOpen(false);
   };
 
-  const handleDelete = async (id: any) => {
-    if (confirm('Delete this cron job?')) {
-      await removeCron({ id });
+  const handleDeleteClick = (id: any) => {
+    if (confirmingDeletingId === id) {
+      // Second click - actually delete
+      removeCron({ id });
+      setConfirmingDeletingId(null);
+    } else {
+      // First click - show confirm state
+      setConfirmingDeletingId(id);
     }
   };
 
@@ -85,7 +91,17 @@ function CronPage() {
                         <button onClick={() => toggleCron({ id: job._id })} className="p-1.5 rounded hover:bg-muted" title={job.isEnabled ? 'Pause' : 'Resume'}>
                           {job.isEnabled ? <Pause className="w-4 h-4 text-muted-foreground" /> : <Play className="w-4 h-4 text-green-500" />}
                         </button>
-                        <button onClick={() => handleDelete(job._id)} className="p-1.5 rounded hover:bg-destructive/10"><Trash2 className="w-4 h-4 text-destructive" /></button>
+                        <button
+                          onClick={() => handleDeleteClick(job._id)}
+                          className={`p-1.5 rounded transition-colors ${
+                            confirmingDeletingId === job._id
+                              ? 'bg-destructive text-destructive-foreground'
+                              : 'hover:bg-destructive/10'
+                          }`}
+                          title={confirmingDeletingId === job._id ? 'Click to confirm delete' : 'Delete cron job'}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
                     </td>
                   </tr>

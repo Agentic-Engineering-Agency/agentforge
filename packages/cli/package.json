@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/cli",
-  "version": "0.8.6",
+  "version": "0.9.0",
   "description": "CLI tool for creating, running, and managing AgentForge projects",
   "type": "module",
   "bin": {

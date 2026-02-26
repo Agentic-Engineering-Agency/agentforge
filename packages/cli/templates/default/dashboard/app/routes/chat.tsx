@@ -3,6 +3,7 @@ import { DashboardLayout } from "../components/DashboardLayout";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import {
   Send,
   Plus,
@@ -104,7 +105,7 @@ function ChatPageComponent() {
   // when new ones are inserted by the Convex action.
   const messages = useQuery(
     api.chat.getThreadMessages,
-    currentThreadId ? { threadId: currentThreadId as any } : "skip"
+    currentThreadId ? { threadId: currentThreadId as Id<"threads"> } : "skip"
   ) ?? [];
 
   // ── Auto-select first agent ─────────────────────────────────
@@ -203,7 +204,7 @@ function ChatPageComponent() {
       // will automatically pick up both new messages in real-time.
       await sendMessageAction({
         agentId: currentAgentId,
-        threadId: threadId as any,
+        threadId: threadId as Id<"threads">,
         content: messageText,
       });
     } catch (e) {
