@@ -6,12 +6,22 @@ import React, { useState, useMemo } from 'react';
 import { FolderKanban, Plus, Settings, Users, FileText, Trash2, Edit, X, Search, MoreVertical } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tabs from '@radix-ui/react-tabs';
+import { LLM_PROVIDERS, getModelsByProvider } from '../../../../convex/llmProviders';
 
 // --- MOCK DATA & TYPES ---
+type ProjectSettings = {
+  systemPrompt?: string;
+  defaultModel?: string;
+  defaultProvider?: string;
+  defaultTemperature?: number;
+  defaultMaxTokens?: number;
+};
+
 type Project = {
   id: string;
   name: string;
   description: string;
+  settings?: ProjectSettings;
   agentCount: number;
   fileCount: number;
   createdAt: string;
@@ -51,12 +61,19 @@ const ProjectCard = ({ project, onEdit, onDelete, onSelect }: { project: Project
 const ProjectForm = ({ project, onSave, onCancel }: { project?: Project | null, onSave: (p: Omit<Project, 'id' | 'agentCount' | 'fileCount' | 'createdAt'>) => void, onCancel: () => void }) => {
   const [name, setName] = useState(project?.name || '');
   const [description, setDescription] = useState(project?.description || '');
+  const [settings, setSettings] = useState<ProjectSettings>(project?.settings || {});
+  const [showSettings, setShowSettings] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name) return;
-    onSave({ name, description });
+    onSave({ name, description, settings });
   };
+
+  const providers = LLM_PROVIDERS;
+  const modelsForProvider = settings.defaultProvider
+    ? getModelsByProvider(settings.defaultProvider)
+    : [];
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -68,6 +85,77 @@ const ProjectForm = ({ project, onSave, onCancel }: { project?: Project | null, 
         <label htmlFor="description" className="block text-sm font-medium text-muted-foreground mb-1">Description</label>
         <textarea id="description" value={description} onChange={e => setDescription(e.target.value)} rows={4} className="w-full bg-background border border-border rounded-md px-3 py-2 text-foreground focus:ring-2 focus:ring-primary" />
       </div>
+
+      <div className="border border-border rounded-md">
+        <button
+          type="button"
+          onClick={() => setShowSettings(!showSettings)}
+          className="w-full px-4 py-2 flex items-center justify-between text-sm font-medium hover:bg-card transition-colors"
+        >
+          <span className="flex items-center gap-2">
+            <Settings className="w-4 h-4" />
+            Agent Settings (overrides)
+          </span>
+          <X className={`w-4 h-4 transition-transform ${showSettings ? 'rotate-45' : ''}`} />
+        </button>
+        {showSettings && (
+          <div className="px-4 pb-4 space-y-4 border-t border-border">
+            <p className="text-xs text-muted-foreground mt-2">
+              These settings override agent-level defaults for all agents in this project.
+            </p>
+            <div>
+              <label htmlFor="systemPrompt" className="block text-sm font-medium text-muted-foreground mb-1">System Prompt Override</label>
+              <textarea
+                id="systemPrompt"
+                value={settings.systemPrompt || ''}
+                onChange={e => setSettings(prev => ({ ...prev, systemPrompt: e.target.value }))}
+                rows={4}
+                placeholder="Enter a project-level system prompt that will be prepended to all agent instructions..."
+                className="w-full bg-background border border-border rounded-md px-3 py-2 text-foreground focus:ring-2 focus:ring-primary"
+              />
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="defaultProvider" className="block text-sm font-medium text-muted-foreground mb-1">Default Provider</label>
+                <select
+                  id="defaultProvider"
+                  value={settings.defaultProvider || ''}
+                  onChange={e => {
+                    const newProvider = e.target.value;
+                    setSettings(prev => ({
+                      ...prev,
+                      defaultProvider: newProvider,
+                      defaultModel: undefined,
+                    }));
+                  }}
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-foreground focus:ring-2 focus:ring-primary"
+                >
+                  <option value="">Use agent default</option>
+                  {providers.map(p => <option key={p.key} value={p.key}>{p.displayName}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="defaultModel" className="block text-sm font-medium text-muted-foreground mb-1">Default Model</label>
+                <select
+                  id="defaultModel"
+                  value={settings.defaultModel || ''}
+                  onChange={e => setSettings(prev => ({ ...prev, defaultModel: e.target.value }))}
+                  disabled={!settings.defaultProvider}
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 text-foreground focus:ring-2 focus:ring-primary disabled:opacity-50"
+                >
+                  <option value="">Use agent default</option>
+                  {modelsForProvider.map(m => (
+                    <option key={m.id} value={m.id}>
+                      {m.displayName}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="flex justify-end gap-2 mt-4">
         <button type="button" onClick={onCancel} className="px-4 py-2 rounded-md border border-border text-foreground hover:bg-card">Cancel</button>
         <button type="submit" className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90">Save Project</button>
@@ -76,7 +164,9 @@ const ProjectForm = ({ project, onSave, onCancel }: { project?: Project | null, 
   );
 };
 
-const ProjectDetailView = ({ project, onBack }: { project: Project, onBack: () => void }) => (
+const ProjectDetailView = ({ project, onBack }: { project: Project, onBack: () => void }) => {
+  const providers = LLM_PROVIDERS;
+  return (
   <div className="bg-background p-6 rounded-lg">
     <div className="flex justify-between items-start mb-6">
       <div>
@@ -103,10 +193,79 @@ const ProjectDetailView = ({ project, onBack }: { project: Project, onBack: () =
       </Tabs.Content>
       <Tabs.Content value="agents" className="p-4 bg-card rounded-b-lg border border-t-0 border-border"><p className="text-muted-foreground">Agent management UI will be here.</p></Tabs.Content>
       <Tabs.Content value="files" className="p-4 bg-card rounded-b-lg border border-t-0 border-border"><p className="text-muted-foreground">File management UI will be here.</p></Tabs.Content>
-      <Tabs.Content value="settings" className="p-4 bg-card rounded-b-lg border border-t-0 border-border"><p className="text-muted-foreground">Project settings UI will be here.</p></Tabs.Content>
+      <Tabs.Content value="settings" className="p-4 bg-card rounded-b-lg border border-t-0 border-border">
+        <div className="space-y-6">
+          <div>
+            <h4 className="font-bold text-lg mb-2">Agent Settings Override</h4>
+            <p className="text-sm text-muted-foreground mb-4">
+              These settings apply to all agents in this project, overriding their individual defaults.
+            </p>
+          </div>
+
+          {project.settings ? (
+            <div className="space-y-4">
+              {project.settings.systemPrompt && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">System Prompt</label>
+                  <div className="bg-background border border-border rounded-md p-3 text-sm">
+                    <pre className="whitespace-pre-wrap break-words font-sans text-muted-foreground">{project.settings.systemPrompt}</pre>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {project.settings.defaultProvider && (
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Default Provider</label>
+                    <div className="bg-background border border-border rounded-md px-3 py-2 text-sm text-muted-foreground">
+                      {providers.find(p => p.key === project.settings?.defaultProvider)?.displayName || project.settings.defaultProvider}
+                    </div>
+                  </div>
+                )}
+
+                {project.settings.defaultModel && (
+                  <div>
+                    <label className="block text-sm font-medium text-foreground mb-1">Default Model</label>
+                    <div className="bg-background border border-border rounded-md px-3 py-2 text-sm text-muted-foreground">
+                      {project.settings.defaultModel}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {project.settings.defaultTemperature !== undefined && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Default Temperature</label>
+                  <div className="bg-background border border-border rounded-md px-3 py-2 text-sm text-muted-foreground">
+                    {project.settings.defaultTemperature}
+                  </div>
+                </div>
+              )}
+
+              {project.settings.defaultMaxTokens !== undefined && (
+                <div>
+                  <label className="block text-sm font-medium text-foreground mb-1">Default Max Tokens</label>
+                  <div className="bg-background border border-border rounded-md px-3 py-2 text-sm text-muted-foreground">
+                    {project.settings.defaultMaxTokens}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No custom settings configured. This project uses agent-level defaults.</p>
+          )}
+
+          <div className="pt-4 border-t border-border">
+            <button className="px-4 py-2 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 text-sm">
+              Edit Settings
+            </button>
+          </div>
+        </div>
+      </Tabs.Content>
     </Tabs.Root>
   </div>
-);
+  );
+};
 
 // --- MAIN PAGE COMPONENT ---
 
