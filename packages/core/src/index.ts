@@ -108,6 +108,11 @@ export type { WorkspaceProvider, WorkspaceConfig } from './workspace.js';
 export { LocalWorkspaceProvider } from './workspace.js';
 export { createWorkspaceProvider } from './workspace-factory.js';
 
+export { R2WorkspaceProvider } from './providers/r2-provider.js';
+export type { R2ProviderConfig, LifecycleRule } from './providers/r2-provider.js';
+
+export * from './connectors/index.js';
+
 export { TelegramChannel, startTelegramChannel } from './channels/telegram.js';
 export type { TelegramChannelConfig } from './channels/telegram.js';
 
