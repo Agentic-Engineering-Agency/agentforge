@@ -115,14 +115,15 @@ describe('createProject', () => {
     await fs.writeJson(path.join(templateDir, 'package.json'), { name: 'template', version: '0.0.0' }, { spaces: 2 });
 
     try {
-      // Mock execSync to fail
-      mockExecSync.mockImplementation(() => {
+      // Mock execSync: fail pnpm install, succeed on convex
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (typeof cmd === 'string' && cmd.includes('convex')) return; // convex succeeds
         throw new Error('pnpm not found');
       });
 
       await createProject('test-project-fail', { template: 'test-template2' });
 
-      // Should still complete, just with a warning
+      // Should still complete (pnpm failure is graceful), just with a warning
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining('Could not install dependencies')
       );
