@@ -1119,8 +1119,18 @@ function registerAgentsCommand(program2) {
 
 // src/commands/chat.ts
 import readline2 from "readline";
+var MAX_MESSAGE_LENGTH = 1e4;
+function validateMessage(msg) {
+  if (!msg) return { valid: false, error: "Message is required" };
+  const trimmed = msg.trim();
+  if (trimmed.length === 0) return { valid: false, error: "Message cannot be empty" };
+  if (trimmed.length > MAX_MESSAGE_LENGTH) {
+    return { valid: false, error: `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters` };
+  }
+  return { valid: true };
+}
 function registerChatCommand(program2) {
-  program2.command("chat").argument("[agent-id]", "Agent ID to chat with").option("-s, --session <id>", "Resume an existing session").description("Start an interactive chat session with an agent").action(async (agentId, opts) => {
+  program2.command("chat").argument("[agent-id]", "Agent ID to chat with").option("-s, --session <id>", "Resume an existing session").option("--message <text>", "Send a single message and exit (non-interactive)").description("Start an interactive chat session with an agent").action(async (agentId, opts) => {
     const client = await createClient();
     if (!agentId && !opts.session) {
       const agents = await safeCall(() => client.query("agents:list", {}), "Failed to list agents");
@@ -1147,6 +1157,30 @@ function registerChatCommand(program2) {
       process.exit(1);
     }
     const a = agent;
+    if (opts.message) {
+      const validation = validateMessage(opts.message);
+      if (!validation.valid) {
+        error(validation.error || "Invalid message");
+        process.exit(1);
+      }
+      const input = opts.message.trim();
+      let threadId2 = await safeCall(
+        () => client.mutation("threads:create", { agentId: a.id }),
+        "Failed to create thread"
+      );
+      await safeCall(() => client.mutation("messages:add", { threadId: threadId2, role: "user", content: input }), "Failed to send");
+      try {
+        const response = await safeCall(
+          () => client.action("mastraIntegration:executeAgent", { agentId: a.id, prompt: input, threadId: threadId2 }),
+          "Failed to get response"
+        );
+        const text = response?.response || response?.text || response?.content || String(response);
+        console.log(text);
+      } catch {
+        console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
+      }
+      process.exit(0);
+    }
     header(`Chat with ${a.name}`);
     dim(`  Model: ${a.model} | Provider: ${a.provider || "openai"}`);
     dim(`  Type "exit" or "quit" to end. "/new" for new thread. "/history" for messages.`);
@@ -1156,12 +1190,23 @@ function registerChatCommand(program2) {
       "Failed to create thread"
     );
     const history = [];
-    const rl = readline2.createInterface({ input: process.stdin, output: process.stdout, prompt: `${colors.green}You${colors.reset} > ` });
-    rl.prompt();
+    const isTTY = process.stdin.isTTY ?? false;
+    const rl = readline2.createInterface({
+      input: process.stdin,
+      output: isTTY ? process.stdout : void 0,
+      terminal: isTTY,
+      prompt: isTTY ? `${colors.green}You${colors.reset} > ` : void 0
+    });
+    if (isTTY) rl.prompt();
     rl.on("line", async (line) => {
       const input = line.trim();
       if (!input) {
-        rl.prompt();
+        if (isTTY) rl.prompt();
+        return;
+      }
+      if (input.length > MAX_MESSAGE_LENGTH) {
+        error(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`);
+        if (isTTY) rl.prompt();
         return;
       }
       if (input === "exit" || input === "quit") {
@@ -1172,7 +1217,7 @@ function registerChatCommand(program2) {
         threadId = await safeCall(() => client.mutation("threads:create", { agentId: a.id }), "Failed");
         history.length = 0;
         info("New thread started.");
-        rl.prompt();
+        if (isTTY) rl.prompt();
         return;
       }
       if (input === "/history") {
@@ -1182,12 +1227,14 @@ function registerChatCommand(program2) {
         });
         if (history.length === 0) dim("  (no messages yet)");
         console.log();
-        rl.prompt();
+        if (isTTY) rl.prompt();
         return;
       }
       history.push({ role: "user", content: input });
       await safeCall(() => client.mutation("messages:add", { threadId, role: "user", content: input }), "Failed to send");
-      process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
+      if (isTTY) {
+        process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
+      }
       try {
         const response = await safeCall(
           () => client.action("mastraIntegration:executeAgent", { agentId: a.id, prompt: input, threadId }),
@@ -1200,11 +1247,13 @@ function registerChatCommand(program2) {
         console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
       }
       console.log();
-      rl.prompt();
+      if (isTTY) rl.prompt();
     });
     rl.on("close", () => {
-      console.log();
-      info("Session ended.");
+      if (isTTY) {
+        console.log();
+        info("Session ended.");
+      }
       process.exit(0);
     });
   });
