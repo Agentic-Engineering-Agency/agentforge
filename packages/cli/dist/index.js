@@ -1242,7 +1242,6 @@ function registerChatCommand(program2) {
       if (isTTY) {
         process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
       }
-      process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
       if (enableStreaming && siteUrl) {
         try {
           const response = await fetch(`${siteUrl}/stream-agent`, {
