@@ -157,7 +157,7 @@ http.route({
     }
 
     // Get agent from DB
-    const agent = await ctx.runQuery(internal.agents.get, { id: agentId });
+    const agent = await ctx.runQuery(api.agents.get, { id: agentId });
     if (!agent) {
       return new Response(JSON.stringify({ error: "Agent not found" }), {
         status: 404,
@@ -185,7 +185,7 @@ http.route({
     }
 
     // Get MCP tool context
-    const mcpConnections = await ctx.runQuery(internal.mcpConnections.list, { isEnabled: true });
+    const mcpConnections = await ctx.runQuery(api.mcpConnections.list, { isEnabled: true });
     const mcpToolContext = buildMcpToolContext(
       mcpConnections as Array<{ name: string; capabilities?: string[] }>
     );
@@ -193,7 +193,7 @@ http.route({
     // Get conversation history if threadId provided
     let conversationMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [];
     if (threadId) {
-      const history = await ctx.runQuery(internal.messages.list, { threadId: threadId as any });
+      const history = await ctx.runQuery(api.messages.list, { threadId: threadId as any });
       conversationMessages = (history as Array<{ role: string; content: string }>)
         .slice(-20)
         .map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
