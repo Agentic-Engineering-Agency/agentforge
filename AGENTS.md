@@ -127,3 +127,43 @@ agentforge chat <agent-id>   # Test chat CLI
 **Dashboard:** http://localhost:3000 (run `agentforge dashboard --dir /tmp/agentforge-test/agentforge-test`)
 
 Test every feature against this deployment before shipping.
+
+---
+
+## ⚠️ CONVEX MUST BE INITIALIZED BEFORE ANY TESTING
+
+**You cannot test anything without a live Convex deployment.** Unit tests mock Convex — they do NOT verify real behavior. Every feature must be tested against a real deployment.
+
+### Setup (required before first test)
+```bash
+cd <your-project>
+npx convex dev --once        # Deploy schema + functions to Convex cloud
+# Requires: Convex account + auth (~/.convex/config.json)
+```
+
+### Current Test Deployment
+```
+Dir:        /tmp/agentforge-test/agentforge-test
+Deployment: watchful-chipmunk-946.convex.cloud
+Dashboard:  agentforge dashboard --dir /tmp/agentforge-test/agentforge-test
+```
+
+### What "Working" Actually Means
+Do NOT mark a feature as working unless you have:
+1. Run `npx convex dev --once` (or equivalent)
+2. Called the actual CLI command or Convex function
+3. Received a real (non-mock) response
+4. Documented the exact command + output
+
+**Confirmed working (real Convex calls, 2026-02-27):**
+- `executeAgent` → received real LLM response ✅
+- `chat.sendMessage` → received real LLM response ✅
+- `apiKeys.create` → key stored, used successfully by executeAgent ✅
+- `agents.list` → returned real DB record ✅
+
+**NOT confirmed (connected but CRUD not fully tested):**
+- cron create/run, mcp add/test, skills install/create
+- agents edit/delete/enable/disable (CLI interactive paths)
+- agentforge agents create (interactive CLI — not tested)
+- All dashboard pages (code has useQuery hooks, browser never opened)
+- projects, sessions, threads (never tested end-to-end)
