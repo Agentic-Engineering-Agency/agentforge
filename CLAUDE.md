@@ -191,3 +191,44 @@ Dashboard:   http://localhost:3000
 ```
 
 **Every feature must be tested against this deployment before PR.**
+
+---
+
+## ⚠️ CONVEX INIT IS MANDATORY — NO EXCEPTIONS
+
+You cannot test any feature without a running Convex deployment. Mocked unit tests do NOT count as verification.
+
+```bash
+# Required before any testing
+npx convex dev --once
+
+# Then test the feature for real:
+npx convex run agents:list
+agentforge chat <agent-id>
+# etc.
+```
+
+### Honesty Standard for "Working" Status
+A feature is only marked ✅ working if ALL of these are true:
+1. `npx convex dev --once` ran successfully
+2. The actual CLI command or Convex function was called against the live deployment
+3. A real (non-mock, non-empty) response was returned
+4. The command + output is documented
+
+### Confirmed Working (2026-02-27, real Convex)
+| Feature | Command | Result |
+|---------|---------|--------|
+| Agent execution | `npx convex run mastraIntegration:executeAgent` | Real OpenAI response ✅ |
+| Chat | `npx convex run chat:sendMessage` | Real OpenAI response ✅ |
+| API key storage | `npx convex run apiKeys:create` | Key stored + used ✅ |
+| Agents list | `agentforge agents list` | Real DB record ✅ |
+| File upload | `agentforge files upload` | BROKEN — metadata only ❌ |
+| Chat CLI interactive | `agentforge chat <id>` | BROKEN — exits immediately ❌ |
+
+### NOT Confirmed (Do Not Assume Working)
+- cron CRUD beyond `list`
+- mcp add / connection test
+- skills install / create
+- agents create (interactive CLI), edit, delete, enable, disable
+- All dashboard pages in browser (code exists, never opened)
+- projects, sessions, threads end-to-end
