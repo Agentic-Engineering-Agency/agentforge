@@ -16,6 +16,9 @@ import { registerVaultCommand } from './commands/vault.js';
 import { registerKeysCommand } from './commands/keys.js';
 import { registerStatusCommand } from './commands/status.js';
 import { registerLoginCommand } from './commands/login.js';
+import { registerModelsCommand } from './commands/models.js';
+import { registerWorkspaceCommand } from './commands/workspace.js';
+import { registerTokensCommand } from './commands/tokens.js';
 import { registerChannelTelegramCommand } from './commands/channel-telegram.js';
 import { registerChannelWhatsAppCommand } from './commands/channel-whatsapp.js';
 import { registerChannelSlackCommand } from './commands/channel-slack.js';
@@ -77,6 +80,9 @@ program
 
 // ─── Cloud Authentication ────────────────────────────────────────
 registerLoginCommand(program);
+  registerModelsCommand(program);
+  registerWorkspaceCommand(program);
+  registerTokensCommand(program);
 
 // ─── Agent Management ────────────────────────────────────────────
 registerAgentsCommand(program);

@@ -247,7 +247,7 @@ async function readCredentials() {
       creds.cloudUrl = DEFAULT_CLOUD_URL;
     }
     return creds;
-  } catch (error2) {
+  } catch (error4) {
     return null;
   }
 }
@@ -363,9 +363,9 @@ var CloudClient = class {
     let response;
     try {
       response = await fetch(url, options);
-    } catch (error2) {
+    } catch (error4) {
       throw new CloudClientError(
-        `Network error: ${error2.message || "Failed to connect to AgentForge Cloud"}`,
+        `Network error: ${error4.message || "Failed to connect to AgentForge Cloud"}`,
         "NETWORK_ERROR"
       );
     }
@@ -403,15 +403,15 @@ var CloudClient = class {
     try {
       const user = await this.request("GET", "/api/auth/me");
       return user;
-    } catch (error2) {
-      if (error2.status === 401) {
+    } catch (error4) {
+      if (error4.status === 401) {
         throw new CloudClientError(
           'Invalid API key. Run "agentforge login" to re-authenticate.',
           "UNAUTHORIZED",
           401
         );
       }
-      throw error2;
+      throw error4;
     }
   }
   /**
@@ -665,7 +665,7 @@ async function deployToCloud(options, projectDir) {
         console.error();
         process.exit(1);
       }
-      await new Promise((resolve2) => setTimeout(resolve2, 3e3));
+      await new Promise((resolve3) => setTimeout(resolve3, 3e3));
       continue;
     }
     if (status.status === "completed") {
@@ -693,7 +693,7 @@ async function deployToCloud(options, projectDir) {
       };
       pollSpinner.text = statuses[status.status] || `Status: ${status.status}`;
     }
-    await new Promise((resolve2) => setTimeout(resolve2, 3e3));
+    await new Promise((resolve3) => setTimeout(resolve3, 3e3));
   }
   pollSpinner.fail("Deployment timed out");
   process.exit(1);
@@ -851,21 +851,21 @@ async function createClient() {
 async function safeCall(fn, errorMessage) {
   try {
     return await fn();
-  } catch (error2) {
-    if (error2.message?.includes("CONVEX_URL not found")) {
+  } catch (error4) {
+    if (error4.message?.includes("CONVEX_URL not found")) {
       console.error("\n\u274C Not connected to Convex.");
       console.error("   Run `npx convex dev` in your project directory first.\n");
-    } else if (error2.message?.includes("Current directory does not exist")) {
+    } else if (error4.message?.includes("Current directory does not exist")) {
       console.error(`
-\u274C ${error2.message}
+\u274C ${error4.message}
 `);
-    } else if (error2.message?.includes("fetch failed") || error2.message?.includes("ECONNREFUSED")) {
+    } else if (error4.message?.includes("fetch failed") || error4.message?.includes("ECONNREFUSED")) {
       console.error("\n\u274C Cannot reach Convex deployment.");
       console.error("   Make sure `npx convex dev` is running.\n");
     } else {
       console.error(`
 \u274C ${errorMessage}`);
-      console.error(`   ${error2.message}
+      console.error(`   ${error4.message}
 `);
     }
     process.exit(1);
@@ -948,9 +948,9 @@ function truncate(str, max) {
 import readline from "readline";
 function prompt(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve2) => rl.question(question, (ans) => {
+  return new Promise((resolve3) => rl.question(question, (ans) => {
     rl.close();
-    resolve2(ans.trim());
+    resolve3(ans.trim());
   }));
 }
 function registerAgentsCommand(program2) {
@@ -1119,8 +1119,18 @@ function registerAgentsCommand(program2) {
 
 // src/commands/chat.ts
 import readline2 from "readline";
+var MAX_MESSAGE_LENGTH = 1e4;
+function validateMessage(msg) {
+  if (!msg) return { valid: false, error: "Message is required" };
+  const trimmed = msg.trim();
+  if (trimmed.length === 0) return { valid: false, error: "Message cannot be empty" };
+  if (trimmed.length > MAX_MESSAGE_LENGTH) {
+    return { valid: false, error: `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters` };
+  }
+  return { valid: true };
+}
 function registerChatCommand(program2) {
-  program2.command("chat").argument("[agent-id]", "Agent ID to chat with").option("-s, --session <id>", "Resume an existing session").option("--no-stream", "Disable streaming (wait for full response)").description("Start an interactive chat session with an agent").action(async (agentId, opts) => {
+  program2.command("chat").argument("[agent-id]", "Agent ID to chat with").option("-s, --session <id>", "Resume an existing session").option("--message <text>", "Send a single message and exit (non-interactive)").option("--no-stream", "Disable streaming (wait for full response)").description("Start an interactive chat session with an agent").action(async (agentId, opts) => {
     const client = await createClient();
     const siteUrl = process.env.CONVEX_SITE_URL || process.env.CONVEX_URL?.replace(".cloud", ".site");
     const enableStreaming = !!siteUrl && opts.stream !== false;
@@ -1149,6 +1159,30 @@ function registerChatCommand(program2) {
       process.exit(1);
     }
     const a = agent;
+    if (opts.message) {
+      const validation = validateMessage(opts.message);
+      if (!validation.valid) {
+        error(validation.error || "Invalid message");
+        process.exit(1);
+      }
+      const input = opts.message.trim();
+      let threadId2 = await safeCall(
+        () => client.mutation("threads:create", { agentId: a.id }),
+        "Failed to create thread"
+      );
+      await safeCall(() => client.mutation("messages:add", { threadId: threadId2, role: "user", content: input }), "Failed to send");
+      try {
+        const response = await safeCall(
+          () => client.action("mastraIntegration:executeAgent", { agentId: a.id, prompt: input, threadId: threadId2 }),
+          "Failed to get response"
+        );
+        const text = response?.response || response?.text || response?.content || String(response);
+        console.log(text);
+      } catch {
+        console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
+      }
+      process.exit(0);
+    }
     header(`Chat with ${a.name}`);
     dim(`  Model: ${a.model} | Provider: ${a.provider || "openai"}`);
     if (enableStreaming) {
@@ -1163,12 +1197,23 @@ function registerChatCommand(program2) {
       "Failed to create thread"
     );
     const history = [];
-    const rl = readline2.createInterface({ input: process.stdin, output: process.stdout, prompt: `${colors.green}You${colors.reset} > ` });
-    rl.prompt();
+    const isTTY = process.stdin.isTTY ?? false;
+    const rl = readline2.createInterface({
+      input: process.stdin,
+      output: isTTY ? process.stdout : void 0,
+      terminal: isTTY,
+      prompt: isTTY ? `${colors.green}You${colors.reset} > ` : void 0
+    });
+    if (isTTY) rl.prompt();
     rl.on("line", async (line) => {
       const input = line.trim();
       if (!input) {
-        rl.prompt();
+        if (isTTY) rl.prompt();
+        return;
+      }
+      if (input.length > MAX_MESSAGE_LENGTH) {
+        error(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`);
+        if (isTTY) rl.prompt();
         return;
       }
       if (input === "exit" || input === "quit") {
@@ -1179,7 +1224,7 @@ function registerChatCommand(program2) {
         threadId = await safeCall(() => client.mutation("threads:create", { agentId: a.id }), "Failed");
         history.length = 0;
         info("New thread started.");
-        rl.prompt();
+        if (isTTY) rl.prompt();
         return;
       }
       if (input === "/history") {
@@ -1189,11 +1234,14 @@ function registerChatCommand(program2) {
         });
         if (history.length === 0) dim("  (no messages yet)");
         console.log();
-        rl.prompt();
+        if (isTTY) rl.prompt();
         return;
       }
       history.push({ role: "user", content: input });
       await safeCall(() => client.mutation("messages:add", { threadId, role: "user", content: input }), "Failed to send");
+      if (isTTY) {
+        process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
+      }
       process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
       if (enableStreaming && siteUrl) {
         try {
@@ -1262,11 +1310,13 @@ ${colors.yellow}[Error: ${data.error}]${colors.reset}`);
         }
       }
       console.log();
-      rl.prompt();
+      if (isTTY) rl.prompt();
     });
     rl.on("close", () => {
-      console.log();
-      info("Session ended.");
+      if (isTTY) {
+        console.log();
+        info("Session ended.");
+      }
       process.exit(0);
     });
   });
@@ -2712,6 +2762,7 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
     }
     fs6.mkdirSync(path6.join(skillDir, "references"), { recursive: true });
     fs6.mkdirSync(path6.join(skillDir, "scripts"), { recursive: true });
+    fs6.mkdirSync(path6.join(skillDir, "assets"), { recursive: true });
     const tagsYaml = tags.length > 0 ? `tags:
 ${tags.map((t) => `  - ${t}`).join("\n")}` : "tags: []";
     fs6.writeFileSync(path6.join(skillDir, "SKILL.md"), `---
@@ -2775,6 +2826,7 @@ console.log('Hello from ${name}!');
     dim(`  ${skillDir}/SKILL.md`);
     dim(`  ${skillDir}/references/README.md`);
     dim(`  ${skillDir}/scripts/example.ts`);
+    dim(`  ${skillDir}/assets/`);
     console.log();
     info(`Edit ${colors.cyan}SKILL.md${colors.reset} to add instructions for your agent.`);
     info("The skill will be auto-discovered by the Mastra Workspace.");
@@ -2802,8 +2854,8 @@ console.log('Hello from ${name}!');
         const entries = fs6.readdirSync(dir);
         for (const entry2 of entries) {
           const fullPath = path6.join(dir, entry2);
-          const stat = fs6.statSync(fullPath);
-          if (stat.isDirectory()) {
+          const stat2 = fs6.statSync(fullPath);
+          if (stat2.isDirectory()) {
             dim(`  ${prefix}${entry2}/`);
             listFiles(fullPath, prefix + "  ");
           } else {
@@ -2896,8 +2948,8 @@ async function listInstalledSkills(skillsDir) {
   const skills = [];
   for (const entry of entries) {
     const entryPath = path7.join(skillsDir, entry);
-    const stat = await fs7.stat(entryPath);
-    if (!stat.isDirectory()) continue;
+    const stat2 = await fs7.stat(entryPath);
+    if (!stat2.isDirectory()) continue;
     const skillMdPath = path7.join(entryPath, "SKILL.md");
     if (!await fs7.pathExists(skillMdPath)) continue;
     const content = await fs7.readFile(skillMdPath, "utf-8");
@@ -3305,7 +3357,7 @@ function registerFilesCommand(program2) {
       error(`File not found: ${absPath}`);
       process.exit(1);
     }
-    const stat = fs8.statSync(absPath);
+    const stat2 = fs8.statSync(absPath);
     const name = path8.basename(absPath);
     const ext = path8.extname(absPath).toLowerCase();
     const mimeTypes = {
@@ -3347,7 +3399,7 @@ function registerFilesCommand(program2) {
           name,
           originalName: name,
           mimeType,
-          size: stat.size,
+          size: stat2.size,
           url: uploadUrl,
           storageId,
           folderId: opts.folder,
@@ -3355,7 +3407,7 @@ function registerFilesCommand(program2) {
         }),
         "Failed to save file metadata"
       );
-      success(`File "${name}" uploaded successfully (${formatSize(stat.size)}, ${mimeType}).`);
+      success(`File "${name}" uploaded successfully (${formatSize(stat2.size)}, ${mimeType}).`);
       info(`File ID: ${fileId}`);
     } catch (err) {
       error(`Upload failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -3669,7 +3721,7 @@ function prompt7(q) {
   }));
 }
 function promptSecret(q) {
-  return new Promise((resolve2) => {
+  return new Promise((resolve3) => {
     const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
     if (process.stdin.isTTY) {
       process.stdout.write(q);
@@ -3684,7 +3736,7 @@ function promptSecret(q) {
           process.stdin.removeListener("data", onData);
           console.log();
           rl.close();
-          resolve2(input);
+          resolve3(input);
         } else if (char === "") {
           process.exit();
         } else if (char === "\x7F") {
@@ -3701,7 +3753,7 @@ function promptSecret(q) {
     } else {
       rl.question(q, (ans) => {
         rl.close();
-        resolve2(ans.trim());
+        resolve3(ans.trim());
       });
     }
   });
@@ -3820,7 +3872,7 @@ function maskKey(key) {
   return key.substring(0, 8) + "..." + key.substring(key.length - 4);
 }
 function promptSecret2(question) {
-  return new Promise((resolve2) => {
+  return new Promise((resolve3) => {
     const readline13 = __require("readline");
     if (process.stdin.isTTY) {
       process.stdout.write(question);
@@ -3834,7 +3886,7 @@ function promptSecret2(question) {
           process.stdin.pause();
           process.stdin.removeListener("data", onData);
           process.stdout.write("\n");
-          resolve2(input);
+          resolve3(input);
         } else if (char === "") {
           process.exit(0);
         } else if (char === "\x7F" || char === "\b") {
@@ -3852,7 +3904,7 @@ function promptSecret2(question) {
       const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
       rl.question(question, (ans) => {
         rl.close();
-        resolve2(ans.trim());
+        resolve3(ans.trim());
       });
     }
   });
@@ -3942,10 +3994,10 @@ function registerKeysCommand(program2) {
     if (!opts.force) {
       const readline13 = __require("readline");
       const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
-      const answer = await new Promise((resolve2) => {
+      const answer = await new Promise((resolve3) => {
         rl.question(`Delete "${target.keyName}" for ${provider}? (y/N): `, (ans) => {
           rl.close();
-          resolve2(ans.trim());
+          resolve3(ans.trim());
         });
       });
       if (answer.toLowerCase() !== "y") {
@@ -4116,9 +4168,9 @@ function registerStatusCommand(program2) {
         stdio: "inherit",
         shell: true
       });
-      await new Promise((resolve2, reject) => {
+      await new Promise((resolve3, reject) => {
         installChild.on("close", (code) => {
-          if (code === 0) resolve2();
+          if (code === 0) resolve3();
           else reject(new Error(`pnpm install exited with code ${code}`));
         });
         installChild.on("error", reject);
@@ -4351,6 +4403,150 @@ function registerLoginCommand(program2) {
         info("Your credentials are stored but the server could not be reached.");
       }
     }
+  });
+}
+
+// src/commands/models.ts
+var PROVIDERS2 = ["openai", "anthropic", "openrouter", "mistral", "google", "groq", "xai"];
+function registerModelsCommand(program2) {
+  const models = program2.command("models").description("Manage AI model lists");
+  models.command("list").option("--provider <provider>", "Filter by provider").option("--refresh", "Force-refresh cached models from provider API").option("--json", "Output as JSON").description("List available AI models (fetched from provider APIs)").action(async (opts) => {
+    const client = await createClient();
+    const providers = opts.provider ? [opts.provider] : PROVIDERS2;
+    const allModels = {};
+    for (const provider of providers) {
+      const cached = await client.query("models:getCachedModels", { provider }).catch(() => null);
+      if (cached && !opts.refresh) {
+        allModels[provider] = cached.models;
+      } else {
+        info(`Fetching ${provider} models...`);
+        const result = await client.action("models:fetchAndCacheModels", { provider, apiKey: "" }).catch(() => null);
+        if (result) allModels[provider] = result;
+      }
+    }
+    if (opts.json) {
+      console.log(JSON.stringify(allModels, null, 2));
+      return;
+    }
+    header("Available Models");
+    for (const [provider, list] of Object.entries(allModels)) {
+      if (!list?.length) {
+        dim(`  ${provider}: no models cached (add API key first)`);
+        continue;
+      }
+      info(`${provider} (${list.length} models):`);
+      list.slice(0, 10).forEach((m) => dim(`  ${m}`));
+      if (list.length > 10) dim(`  ... and ${list.length - 10} more`);
+    }
+  });
+  models.command("refresh").argument("[provider]", "Provider to refresh (default: all)").description("Refresh model list from provider API").action(async (provider) => {
+    const client = await createClient();
+    const providers = provider ? [provider] : PROVIDERS2;
+    for (const p of providers) {
+      await client.action("models:fetchAndCacheModels", { provider: p, apiKey: "" }).catch(() => {
+      });
+      success(`Refreshed ${p} models`);
+    }
+  });
+}
+
+// src/commands/workspace.ts
+import { mkdir, readdir } from "fs/promises";
+import { existsSync } from "fs";
+import { resolve, join } from "path";
+function registerWorkspaceCommand(program2) {
+  const ws = program2.command("workspace").description("Manage agent workspace and skills");
+  ws.command("init").option("--dir <dir>", "Project directory", ".").description("Initialize workspace directories (workspace/ and skills/)").action(async (opts) => {
+    const base = resolve(opts.dir);
+    const workspaceDir = join(base, "workspace");
+    const skillsDir = join(base, "skills");
+    await mkdir(workspaceDir, { recursive: true });
+    await mkdir(skillsDir, { recursive: true });
+    success(`Workspace initialized:`);
+    info(`  workspace/  \u2014 agent file storage`);
+    info(`  skills/     \u2014 SKILL.md skills (agentskills.io format)`);
+    dim(`
+Place SKILL.md folders in skills/ for agents to discover them.`);
+  });
+  ws.command("status").option("--dir <dir>", "Project directory", ".").description("Show workspace status and discovered skills").action(async (opts) => {
+    const base = resolve(opts.dir);
+    const workspaceDir = join(base, "workspace");
+    const skillsDir = join(base, "skills");
+    header("Workspace Status");
+    if (existsSync(workspaceDir)) {
+      const files = await readdir(workspaceDir).catch(() => []);
+      info(`Filesystem: ${workspaceDir}`);
+      dim(`  ${files.length} item(s)`);
+    } else {
+      info(`Filesystem: not initialized`);
+      dim(`  Run: agentforge workspace init`);
+    }
+    if (existsSync(skillsDir)) {
+      const entries = await readdir(skillsDir, { withFileTypes: true }).catch(() => []);
+      const skills = entries.filter((e) => e.isDirectory());
+      info(`
+Skills: ${skillsDir}`);
+      if (skills.length === 0) {
+        dim(`  No skills installed.`);
+        dim(`  Run: agentforge skills create <name>`);
+      } else {
+        for (const skill of skills) {
+          const skillMd = join(skillsDir, skill.name, "SKILL.md");
+          dim(`  \u2713 ${skill.name}${existsSync(skillMd) ? "" : " (missing SKILL.md)"}`);
+        }
+      }
+    } else {
+      info(`
+Skills: not initialized`);
+    }
+  });
+}
+
+// src/commands/tokens.ts
+function registerTokensCommand(program2) {
+  const tokens = program2.command("tokens").description("Manage API access tokens (for /v1/chat/completions)");
+  tokens.command("generate").option("--name <name>", "Token name (required)").option("--agent <agentId>", "Scope to specific agent").description("Generate a new API access token (shown once only)").action(async (opts) => {
+    if (!opts.name) {
+      error("--name is required");
+      process.exit(1);
+    }
+    const client = await createClient();
+    const result = await client.action("apiAccessTokens:generate", {
+      name: opts.name,
+      ...opts.agent ? { agentId: opts.agent } : {}
+    });
+    success(`Token "${result.name}" created.`);
+    info(`
+  Token: ${result.plaintext}`);
+    info(`
+  \u26A0\uFE0F  This token will NOT be shown again. Store it securely.`);
+    if (result.agentId) info(`  Scoped to agent: ${result.agentId}`);
+    dim(`
+Use it as: Authorization: Bearer ${result.plaintext}`);
+  });
+  tokens.command("list").option("--json", "Output as JSON").description("List all active API access tokens").action(async (opts) => {
+    const client = await createClient();
+    const items = await client.query("apiAccessTokens:list", {});
+    if (opts.json) {
+      console.log(JSON.stringify(items, null, 2));
+      return;
+    }
+    header("API Access Tokens");
+    if (!items.length) {
+      dim('No tokens. Create one: agentforge tokens generate --name "my-app"');
+      return;
+    }
+    table(items.map((t) => ({
+      Name: t.name,
+      Agent: t.agentId || "all agents",
+      Created: new Date(t.createdAt).toLocaleDateString(),
+      "Last Used": t.lastUsedAt ? new Date(t.lastUsedAt).toLocaleDateString() : "Never"
+    })));
+  });
+  tokens.command("revoke <id>").description("Revoke an API access token").action(async (id) => {
+    const client = await createClient();
+    await client.mutation("apiAccessTokens:revoke", { id });
+    success(`Token revoked.`);
   });
 }
 
@@ -5735,10 +5931,10 @@ async function runMinimalSlackBot(config) {
 // src/index.ts
 import { readFileSync } from "fs";
 import { fileURLToPath as fileURLToPath2 } from "url";
-import { dirname, resolve } from "path";
+import { dirname, resolve as resolve2 } from "path";
 var __filename2 = fileURLToPath2(import.meta.url);
 var __dirname2 = dirname(__filename2);
-var pkg = JSON.parse(readFileSync(resolve(__dirname2, "..", "package.json"), "utf-8"));
+var pkg = JSON.parse(readFileSync(resolve2(__dirname2, "..", "package.json"), "utf-8"));
 var program = new Command();
 program.name("agentforge").description("AgentForge \u2014 NanoClaw: A minimalist agent framework powered by Mastra + Convex").version(pkg.version);
 program.command("create").argument("<project-name>", "Name of the project to create").description("Create a new AgentForge project").option("-t, --template <template>", "Project template to use", "default").action(async (projectName, options) => {
@@ -5751,6 +5947,9 @@ program.command("deploy").description("Deploy the project to production").option
   await deployProject(options);
 });
 registerLoginCommand(program);
+registerModelsCommand(program);
+registerWorkspaceCommand(program);
+registerTokensCommand(program);
 registerAgentsCommand(program);
 registerChatCommand(program);
 registerSessionsCommand(program);
