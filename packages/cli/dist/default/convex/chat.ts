@@ -106,17 +106,20 @@ export const createThread = mutation({
 
 /**
  * Store a user message in a thread (called before triggering LLM).
+ * AGE-144: Supports optional fileIds for file context.
  */
 export const addUserMessage = mutation({
   args: {
     threadId: v.id("threads"),
     content: v.string(),
+    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
   },
   handler: async (ctx, args) => {
     const messageId = await ctx.db.insert("messages", {
       threadId: args.threadId,
       role: "user",
       content: args.content,
+      fileIds: args.fileIds,
       createdAt: Date.now(),
     });
     await ctx.db.patch(args.threadId, { updatedAt: Date.now() });
@@ -170,6 +173,7 @@ export const sendMessage = action({
     threadId: v.id("threads"),
     content: v.string(),
     userId: v.optional(v.string()),
+    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
   },
   handler: async (ctx, args): Promise<SendMessageResult> => {
     // 1. Get agent configuration
@@ -200,10 +204,29 @@ export const sendMessage = action({
       }
     }
 
-    // 2. Store the user message
+    // 1.6. AGE-144: Fetch file content for context if files are attached
+    let fileContext = "";
+    if (args.fileIds && args.fileIds.length > 0) {
+      const fileContents: string[] = [];
+      for (const fileId of args.fileIds) {
+        const file = await ctx.runQuery(api.files.get, { id: fileId });
+        if (file && file.storageId) {
+          // For file context, we include metadata. Actual content fetching
+          // would require an internal HTTP call which we'll skip for now.
+          // The agent can be told about the file and can request specific content.
+          fileContents.push(`- File: ${file.name} (${file.mimeType}, ${file.size} bytes)`);
+        }
+      }
+      if (fileContents.length > 0) {
+        fileContext = `\n\n[Attached Files]\n${fileContents.join("\n")}\n`;
+      }
+    }
+
+    // 2. Store the user message with fileIds
     await ctx.runMutation(api.chat.addUserMessage, {
       threadId: args.threadId,
       content: args.content,
+      fileIds: args.fileIds,
     });
 
     // 3. Get conversation history for context
@@ -218,6 +241,14 @@ export const sendMessage = action({
         role: msg.role as "user" | "assistant" | "system",
         content: msg.content,
       }));
+
+    // AGE-144: If file context exists, append it to the current user message
+    if (fileContext && conversationMessages.length > 0) {
+      const lastMessage = conversationMessages[conversationMessages.length - 1];
+      if (lastMessage.role === "user") {
+        lastMessage.content += fileContext;
+      }
+    }
 
     // 4. Call the LLM via mastraIntegration.generateResponse (Node.js action)
     let responseText: string;
@@ -305,6 +336,7 @@ export const sendMessage = action({
 /**
  * Create a new thread and send the first message in one action.
  * Convenience action for starting a new conversation.
+ * AGE-144: Supports optional fileIds for file context.
  */
 export const startNewChat = action({
   args: {
@@ -312,6 +344,7 @@ export const startNewChat = action({
     content: v.string(),
     threadName: v.optional(v.string()),
     userId: v.optional(v.string()),
+    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
   },
   handler: async (ctx, args): Promise<SendMessageResult> => {
     // Create a new thread
@@ -327,6 +360,7 @@ export const startNewChat = action({
       threadId,
       content: args.content,
       userId: args.userId,
+      fileIds: args.fileIds,
     });
 
     return {

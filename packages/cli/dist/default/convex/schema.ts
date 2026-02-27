@@ -14,6 +14,8 @@ export default defineSchema({
     temperature: v.optional(v.number()),
     maxTokens: v.optional(v.number()),
     topP: v.optional(v.number()),
+    contextStrategy: v.optional(v.union(v.literal("sliding"), v.literal("truncate"), v.literal("summarize"))), // AGE-158, AGE-177
+    contextWindow: v.optional(v.number()), // AGE-158, AGE-177: override default token limit
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
@@ -51,6 +53,7 @@ export default defineSchema({
     content: v.string(),
     tool_calls: v.optional(v.any()),
     tool_results: v.optional(v.any()),
+    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files for context
     metadata: v.optional(v.any()),
     createdAt: v.number(),
   }).index("byThread", ["threadId"]),

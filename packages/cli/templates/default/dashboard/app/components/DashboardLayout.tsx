@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
+import { useConvexConnectionState } from "convex/react";
 import {
   MessageSquare, LayoutDashboard, Radio, Server, Activity, Clock,
   Bot, Sparkles, Network, Settings, Bug, FileText, Menu, X,
@@ -46,30 +47,40 @@ const navItems = [
 ];
 
 const HealthStatus = () => {
-  const [isOnline, setIsOnline] = useState(true);
+  const connectionState = useConvexConnectionState();
+  const isOnline = connectionState?.isWebSocketConnected ?? false;
+  const hasEverConnected = connectionState?.hasEverConnected ?? false;
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      // In production, poll the Convex backend heartbeat
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  // Show reconnecting message if we've connected before but are currently disconnected
+  const isReconnecting = hasEverConnected && !isOnline;
 
   return (
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
       <span className="relative flex h-2 w-2">
-        <span
-          className={`animate-ping absolute inline-flex h-full w-full rounded-full ${
-            isOnline ? "bg-green-400" : "bg-red-400"
-          } opacity-75`}
-        ></span>
-        <span
-          className={`relative inline-flex rounded-full h-2 w-2 ${
-            isOnline ? "bg-green-500" : "bg-red-500"
-          }`}
-        ></span>
+        {isReconnecting ? (
+          // Reconnecting: yellow pulsing dot
+          <>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+          </>
+        ) : isOnline ? (
+          // Connected: green dot without ping (stable)
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+        ) : (
+          // Never connected: red pulsing dot
+          <>
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+          </>
+        )}
       </span>
-      {isOnline ? "Online" : "Offline"}
+      {isReconnecting ? (
+        <span className="text-yellow-500 font-medium">Reconnecting...</span>
+      ) : isOnline ? (
+        <span className="text-green-500 font-medium">Online</span>
+      ) : (
+        <span className="text-red-500 font-medium">Offline</span>
+      )}
     </div>
   );
 };
