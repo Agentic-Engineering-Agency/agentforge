@@ -8,11 +8,13 @@
  *
  * Architecture:
  * - For chat: use `chat.sendMessage` (preferred entry point)
+ * - For streaming: use HTTP action `POST /stream-agent` (see convex/http.ts)
  * - For programmatic agent execution: use `mastraIntegration.executeAgent`
  * - Model resolution: fetches API keys from database, creates Mastra model config
  *
  * AGE-137: API keys are stored in Convex 'apiKeys' table and fetched at inference time.
  * AGE-141: MCP connections are queried and tool context is injected into agent instructions.
+ * AGE-173: Real SSE streaming via HTTP action (convex/http.ts). Use POST /stream-agent.
  *
  * Fix (v0.10.0): Use OpenAICompatibleConfig { providerId, modelId, apiKey } instead of
  * process.env injection + magic model string. This avoids:
@@ -248,8 +250,15 @@ export const executeAgent = action({
 });
 
 /**
- * Stream agent response (placeholder — streaming requires SSE/WebSocket).
- * Falls back to non-streaming execution.
+ * Stream agent response.
+ *
+ * @deprecated AGE-173: Use HTTP action POST /stream-agent for real SSE streaming.
+ * This action now falls back to non-streaming execution.
+ * 
+ * For streaming, call:
+ *   POST https://<deployment>.convex.site/stream-agent
+ *   Body: { agentId, message, threadId }
+ *   Response: SSE stream with data: {"token":"..."} events
  */
 export const streamAgent = action({
   args: {
@@ -258,14 +267,14 @@ export const streamAgent = action({
     threadId: v.id("threads"),
     userId: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{ success: boolean; message: string }> => {
+  handler: async (ctx, args): Promise<{ success: boolean; message: string; deprecated: boolean }> => {
     const result = await ctx.runAction(api.mastraIntegration.executeAgent, {
       agentId:  args.agentId,
       prompt:   args.prompt,
       threadId: args.threadId,
       userId:   args.userId,
     });
-    return { success: result.success, message: result.response };
+    return { success: result.success, message: result.response, deprecated: true };
   },
 });
 
