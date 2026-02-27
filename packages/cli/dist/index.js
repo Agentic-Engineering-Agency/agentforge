@@ -2699,6 +2699,7 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
     }
     fs6.mkdirSync(path6.join(skillDir, "references"), { recursive: true });
     fs6.mkdirSync(path6.join(skillDir, "scripts"), { recursive: true });
+    fs6.mkdirSync(path6.join(skillDir, "assets"), { recursive: true });
     const tagsYaml = tags.length > 0 ? `tags:
 ${tags.map((t) => `  - ${t}`).join("\n")}` : "tags: []";
     fs6.writeFileSync(path6.join(skillDir, "SKILL.md"), `---
@@ -2762,6 +2763,7 @@ console.log('Hello from ${name}!');
     dim(`  ${skillDir}/SKILL.md`);
     dim(`  ${skillDir}/references/README.md`);
     dim(`  ${skillDir}/scripts/example.ts`);
+    dim(`  ${skillDir}/assets/`);
     console.log();
     info(`Edit ${colors.cyan}SKILL.md${colors.reset} to add instructions for your agent.`);
     info("The skill will be auto-discovered by the Mastra Workspace.");
