@@ -218,14 +218,79 @@ export const getRunHistory = query({
       .query("cronJobRuns")
       .withIndex("byCronJobId", (q) => q.eq("cronJobId", args.cronJobId!))
       .collect();
-    
+
     // Sort by startedAt descending
     runs.sort((a, b) => b.startedAt - a.startedAt);
-    
+
     if (args.limit) {
       return runs.slice(0, args.limit);
     }
-    
+
     return runs;
+  },
+});
+
+// Action: Trigger a cron job immediately (run now button)
+export const triggerNow = action({
+  args: {
+    id: v.id("cronJobs"),
+  },
+  handler: async (ctx, args) => {
+    const job = await ctx.runQuery(api.cronJobs.get, { id: args.id });
+
+    if (!job) {
+      throw new Error(`Cron job not found`);
+    }
+
+    if (!job.isEnabled) {
+      throw new Error(`Cron job is disabled`);
+    }
+
+    // Record run as "running" first
+    const runId = await ctx.runMutation(api.cronJobs.recordRun, {
+      cronJobId: args.id,
+      status: "running",
+    });
+
+    let output: string | undefined;
+    let error: string | undefined;
+    let finalStatus: "success" | "failed" = "success";
+
+    try {
+      // Execute the agent with the job's prompt
+      const result = await ctx.runAction(api.agents.run, {
+        agentId: job.agentId,
+        prompt: job.prompt,
+        userId: job.userId,
+      });
+
+      output = result.message;
+    } catch (err) {
+      finalStatus = "failed";
+      error = err instanceof Error ? err.message : String(err);
+    }
+
+    // Update run record with final status
+    await ctx.runMutation(api.cronJobs.recordRun, {
+      cronJobId: args.id,
+      status: finalStatus,
+      output,
+      error,
+    });
+
+    // Update cron job's last run and calculate next run
+    const nextRun = calculateNextRun(job.schedule);
+    await ctx.runMutation(api.cronJobs.updateLastRun, {
+      id: args.id,
+      nextRun,
+    });
+
+    return {
+      success: finalStatus === "success",
+      runId,
+      status: finalStatus,
+      output,
+      error,
+    };
   },
 });

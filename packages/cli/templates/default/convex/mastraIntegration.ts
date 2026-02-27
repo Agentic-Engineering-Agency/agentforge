@@ -28,6 +28,14 @@ import { api, internal } from "./_generated/api";
 import { Agent } from "@mastra/core/agent";
 import type { MessageListInput } from "@mastra/core/agent/message-list";
 
+// AGE-158, AGE-177: Import context management functions
+import {
+  applyContextStrategy,
+  DEFAULT_TOKEN_LIMIT,
+  type ContextStrategy,
+  type Message,
+} from "./context";
+
 /**
  * Strip provider prefix from modelId to prevent double-prefixing.
  * e.g. provider="openrouter", modelId="openrouter/auto" → "auto"
@@ -167,9 +175,19 @@ export const executeAgent = action({
 
       // Get conversation history for context
       const messages = await ctx.runQuery(api.messages.list, { threadId });
-      const conversationMessages = (messages as Array<{ role: string; content: string }>)
-        .slice(-20)
-        .map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
+      const allMessages = (messages as Array<{ role: string; content: string }>).map((m) => ({
+        role: m.role as "user" | "assistant" | "system",
+        content: m.content,
+      }));
+
+      // AGE-158, AGE-177: Apply context management based on agent configuration
+      const contextStrategy = (agent.contextStrategy ?? "sliding") as ContextStrategy;
+      const contextWindow = agent.contextWindow ?? DEFAULT_TOKEN_LIMIT;
+      const conversationMessages = applyContextStrategy(
+        allMessages,
+        contextStrategy,
+        contextWindow
+      );
 
       // Build full instructions with MCP tool context
       const baseInstructions = agent.instructions || "You are a helpful AI assistant.";
@@ -297,6 +315,7 @@ export const executeWorkflow = action({
  *
  * AGE-137: BYOK — fetches API key from DB and uses OpenAICompatibleConfig.
  * AGE-141: MCP tool context injected into instructions.
+ * AGE-158, AGE-177: Optional context management via contextStrategy and contextWindow.
  *
  * This action lives in Node.js runtime so chat.ts can stay in default runtime
  * and freely mix queries, mutations, and actions.
@@ -307,6 +326,9 @@ export const generateResponse = internalAction({
     modelKey:     v.string(),
     instructions: v.string(),
     messages: v.array(v.object({ role: v.string(), content: v.string() })),
+    // AGE-158, AGE-177: Optional context management parameters
+    contextStrategy: v.optional(v.union(v.literal("sliding"), v.literal("truncate"), v.literal("summarize"))),
+    contextWindow: v.optional(v.number()),
   },
   handler: async (
     ctx,
@@ -338,6 +360,21 @@ export const generateResponse = internalAction({
       ? `${args.instructions}\n\n${mcpToolContext}`
       : args.instructions;
 
+    // AGE-158, AGE-177: Apply context management if strategy is specified
+    let processedMessages = args.messages as Array<{ role: string; content: string }>;
+    if (args.contextStrategy) {
+      const contextStrategy = args.contextStrategy as ContextStrategy;
+      const contextWindow = args.contextWindow ?? DEFAULT_TOKEN_LIMIT;
+      processedMessages = applyContextStrategy(
+        processedMessages.map((m) => ({
+          role: m.role as "user" | "assistant" | "system",
+          content: m.content,
+        })),
+        contextStrategy,
+        contextWindow
+      ) as typeof processedMessages;
+    }
+
     // Build model config using OpenAICompatibleConfig (fixes model ID format)
     const modelConfig = buildModelConfig(args.provider, args.modelKey, apiKey);
 
@@ -349,7 +386,7 @@ export const generateResponse = internalAction({
     });
 
     const result = await mastraAgent.generate(
-      args.messages as unknown as MessageListInput
+      processedMessages as unknown as MessageListInput
     );
 
     return {

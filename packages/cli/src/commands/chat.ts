@@ -156,8 +156,6 @@ export function registerChatCommand(program: Command) {
         if (isTTY) {
           process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
         }
-        process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
-
         if (enableStreaming && siteUrl) {
           // AGE-173: SSE Streaming
           try {
