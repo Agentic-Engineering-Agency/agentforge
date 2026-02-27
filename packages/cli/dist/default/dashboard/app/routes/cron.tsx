@@ -3,7 +3,7 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Clock, Play, Pause, Plus, History, Trash2, Edit, X, AlertCircle } from 'lucide-react';
+import { Clock, Play, Pause, Plus, History, Trash2, Edit, X, AlertCircle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 export const Route = createFileRoute('/cron')({ component: CronPage });
 
@@ -11,27 +11,65 @@ function CronPage() {
   const cronJobs = useQuery(api.cronJobs.list, {}) ?? [];
   const agents = useQuery(api.agents.list, {}) ?? [];
   const createCron = useMutation(api.cronJobs.create);
+  const updateCron = useMutation(api.cronJobs.update);
   const removeCron = useMutation(api.cronJobs.remove);
   const toggleCron = useMutation(api.cronJobs.toggleEnabled);
+  const triggerNow = useMutation(api.cronJobs.triggerNow);
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingJob, setEditingJob] = useState<any>(null);
   const [historyJobId, setHistoryJobId] = useState<string | null>(null);
   const [confirmingDeletingId, setConfirmingDeletingId] = useState<string | null>(null);
+  const [runningJobId, setRunningJobId] = useState<string | null>(null);
+
+  // Create agent lookup map
+  const agentMap = useMemo(() => {
+    return new Map(agents.map((a: any) => [a.id, a]));
+  }, [agents]);
 
   const handleCreate = async (data: any) => {
     await createCron(data);
-    setIsModalOpen(false);
+    setIsCreateModalOpen(false);
   };
 
-  const handleDeleteClick = (id: any) => {
+  const handleEdit = async (data: any) => {
+    if (!editingJob) return;
+    await updateCron({ id: editingJob._id, ...data });
+    setEditingJob(null);
+  };
+
+  const handleDeleteClick = async (id: any) => {
     if (confirmingDeletingId === id) {
-      // Second click - actually delete
-      removeCron({ id });
+      await removeCron({ id });
       setConfirmingDeletingId(null);
     } else {
-      // First click - show confirm state
       setConfirmingDeletingId(id);
     }
+  };
+
+  const handleRunNow = async (id: any) => {
+    setRunningJobId(id);
+    try {
+      await triggerNow({ id });
+    } finally {
+      setRunningJobId(null);
+    }
+  };
+
+  const formatNextRun = (nextRun: number | undefined) => {
+    if (!nextRun) return 'Not scheduled';
+    const date = new Date(nextRun);
+    const now = new Date();
+    const diffMs = nextRun - Date.now();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'In less than a minute';
+    if (diffMins < 60) return `In ${diffMins} minute${diffMins > 1 ? 's' : ''}`;
+    if (diffHours < 24) return `In ${diffHours} hour${diffHours > 1 ? 's' : ''}`;
+    if (diffDays < 7) return `In ${diffDays} day${diffDays > 1 ? 's' : ''}`;
+    return date.toLocaleDateString();
   };
 
   return (
@@ -42,7 +80,7 @@ function CronPage() {
             <h1 className="text-3xl font-bold">Scheduled Tasks</h1>
             <p className="text-muted-foreground">Automate agent execution with cron schedules.</p>
           </div>
-          <button onClick={() => setIsModalOpen(true)} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 flex items-center gap-2">
+          <button onClick={() => setIsCreateModalOpen(true)} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 flex items-center gap-2">
             <Plus className="w-4 h-4" /> New Schedule
           </button>
         </div>
@@ -52,7 +90,7 @@ function CronPage() {
             <Clock className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">No scheduled tasks</h3>
             <p className="text-muted-foreground mb-4">Create a cron job to run agents on a schedule.</p>
-            <button onClick={() => setIsModalOpen(true)} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90">
+            <button onClick={() => setIsCreateModalOpen(true)} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90">
               <Plus className="w-4 h-4 inline mr-2" />Create Schedule
             </button>
           </div>
@@ -64,61 +102,172 @@ function CronPage() {
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Schedule</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Agent</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Next Run</th>
                   <th className="text-left px-4 py-3 font-medium text-muted-foreground">Last Run</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
                   <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {cronJobs.map((job: any) => (
-                  <tr key={job._id} className="border-t border-border hover:bg-muted/30">
-                    <td className="px-4 py-3">
-                      <div>
-                        <p className="font-medium">{job.name}</p>
-                        {job.description && <p className="text-xs text-muted-foreground">{job.description}</p>}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs">{job.schedule}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{job.agentId}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${job.isEnabled ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}`}>
-                        {job.isEnabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-xs text-muted-foreground">{job.lastRun ? new Date(job.lastRun).toLocaleString() : 'Never'}</td>
-                    <td className="px-4 py-3 text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <button onClick={() => toggleCron({ id: job._id })} className="p-1.5 rounded hover:bg-muted" title={job.isEnabled ? 'Pause' : 'Resume'}>
-                          {job.isEnabled ? <Pause className="w-4 h-4 text-muted-foreground" /> : <Play className="w-4 h-4 text-green-500" />}
-                        </button>
-                        <button
-                          onClick={() => handleDeleteClick(job._id)}
-                          className={`p-1.5 rounded transition-colors ${
-                            confirmingDeletingId === job._id
-                              ? 'bg-destructive text-destructive-foreground'
-                              : 'hover:bg-destructive/10'
-                          }`}
-                          title={confirmingDeletingId === job._id ? 'Click to confirm delete' : 'Delete cron job'}
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {cronJobs.map((job: any) => {
+                  const agent = agentMap.get(job.agentId);
+                  return (
+                    <tr key={job._id} className="border-t border-border hover:bg-muted/30">
+                      <td className="px-4 py-3">
+                        <div>
+                          <p className="font-medium">{job.name}</p>
+                          {job.description && <p className="text-xs text-muted-foreground">{job.description}</p>}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs">{job.schedule}</td>
+                      <td className="px-4 py-3">
+                        <span className="text-muted-foreground">{agent?.name || job.agentId}</span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {job.isEnabled ? formatNextRun(job.nextRun) : '-'}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-muted-foreground">
+                        {job.lastRun ? new Date(job.lastRun).toLocaleString() : 'Never'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${job.isEnabled ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}`}>
+                          {job.isEnabled ? 'Enabled' : 'Disabled'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => handleRunNow(job._id)}
+                            disabled={!job.isEnabled || runningJobId === job._id}
+                            className="p-1.5 rounded hover:bg-green-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Run now"
+                          >
+                            {runningJobId === job._id ? (
+                              <Loader2 className="w-4 h-4 text-green-500 animate-spin" />
+                            ) : (
+                              <Play className="w-4 h-4 text-green-500" />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => setHistoryJobId(historyJobId === job._id ? null : job._id)}
+                            className="p-1.5 rounded hover:bg-muted"
+                            title="View run history"
+                          >
+                            <History className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          <button onClick={() => toggleCron({ id: job._id })} className="p-1.5 rounded hover:bg-muted" title={job.isEnabled ? 'Pause' : 'Resume'}>
+                            {job.isEnabled ? <Pause className="w-4 h-4 text-muted-foreground" /> : <Play className="w-4 h-4 text-green-500" />}
+                          </button>
+                          <button onClick={() => setEditingJob(job)} className="p-1.5 rounded hover:bg-muted" title="Edit">
+                            <Edit className="w-4 h-4 text-muted-foreground" />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteClick(job._id)}
+                            className={`p-1.5 rounded transition-colors ${
+                              confirmingDeletingId === job._id
+                                ? 'bg-destructive text-destructive-foreground'
+                                : 'hover:bg-destructive/10'
+                            }`}
+                            title={confirmingDeletingId === job._id ? 'Click to confirm delete' : 'Delete cron job'}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
+
+            {/* Run History Panel */}
+            {historyJobId && <RunHistoryPanel cronJobId={historyJobId} onClose={() => setHistoryJobId(null)} />}
           </div>
         )}
 
-        {isModalOpen && <CronModal agents={agents} onSave={handleCreate} onClose={() => setIsModalOpen(false)} />}
+        {isCreateModalOpen && (
+          <CronModal agents={agents} onSave={handleCreate} onClose={() => setIsCreateModalOpen(false)} />
+        )}
+        {editingJob && (
+          <CronModal agents={agents} job={editingJob} onSave={handleEdit} onClose={() => setEditingJob(null)} />
+        )}
       </div>
     </DashboardLayout>
   );
 }
 
-function CronModal({ agents, onSave, onClose }: { agents: any[]; onSave: (data: any) => void; onClose: () => void }) {
-  const [form, setForm] = useState({ name: '', description: '', schedule: '0 9 * * *', agentId: agents[0]?.id || '', prompt: '' });
+function RunHistoryPanel({ cronJobId, onClose }: { cronJobId: any; onClose: () => void }) {
+  const history = useQuery(api.cronJobs.getRunHistory, { cronJobId, limit: 10 }) ?? [];
+
+  return (
+    <div className="border-t border-border bg-muted/30 p-4">
+      <div className="flex justify-between items-center mb-3">
+        <h3 className="font-semibold text-sm">Run History (Last 10)</h3>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+      {history.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No run history yet.</p>
+      ) : (
+        <div className="space-y-2">
+          {history.map((run: any) => (
+            <div key={run._id} className="bg-card border border-border rounded-md p-3">
+              <div className="flex items-center gap-2 mb-1">
+                {run.status === 'success' && <CheckCircle className="w-4 h-4 text-green-500" />}
+                {run.status === 'failed' && <XCircle className="w-4 h-4 text-destructive" />}
+                {run.status === 'running' && <Loader2 className="w-4 h-4 text-muted-foreground animate-spin" />}
+                <span className="text-xs font-medium capitalize">{run.status}</span>
+                <span className="text-xs text-muted-foreground ml-auto">
+                  {new Date(run.startedAt).toLocaleString()}
+                </span>
+              </div>
+              {run.output && (
+                <div className="text-xs text-muted-foreground mt-1 p-2 bg-muted/50 rounded">
+                  {run.output}
+                </div>
+              )}
+              {run.error && (
+                <div className="text-xs text-destructive mt-1 p-2 bg-destructive/10 rounded">
+                  {run.error}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CronModal({
+  agents,
+  job,
+  onSave,
+  onClose,
+}: {
+  agents: any[];
+  job?: any;
+  onSave: (data: any) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState(
+    job
+      ? {
+          name: job.name,
+          description: job.description || '',
+          schedule: job.schedule,
+          agentId: job.agentId,
+          prompt: job.prompt,
+        }
+      : {
+          name: '',
+          description: '',
+          schedule: '0 9 * * *',
+          agentId: agents[0]?.id || '',
+          prompt: '',
+        }
+  );
 
   const presets = [
     { label: 'Every minute', value: '* * * * *' },
@@ -137,41 +286,101 @@ function CronModal({ agents, onSave, onClose }: { agents: any[]; onSave: (data: 
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-lg">
         <div className="flex justify-between items-center p-4 border-b border-border">
-          <h2 className="text-lg font-bold">New Scheduled Task</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+          <h2 className="text-lg font-bold">{job ? 'Edit Scheduled Task' : 'New Scheduled Task'}</h2>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
         </div>
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Name</label>
-            <input type="text" value={form.name} onChange={(e) => setForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Daily Report" required />
+            <input
+              type="text"
+              value={form.name}
+              onChange={(e) => setForm((prev: any) => ({ ...prev, name: e.target.value }))}
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+              placeholder="e.g. Daily Report"
+              required
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Description</label>
-            <input type="text" value={form.description} onChange={(e) => setForm(prev => ({ ...prev, description: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="Optional description" />
+            <input
+              type="text"
+              value={form.description}
+              onChange={(e) => setForm((prev: any) => ({ ...prev, description: e.target.value }))}
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+              placeholder="Optional description"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Agent</label>
-            <select value={form.agentId} onChange={(e) => setForm(prev => ({ ...prev, agentId: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" required>
-              {agents.length === 0 ? <option value="">No agents available</option> : agents.map((a: any) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            <select
+              value={form.agentId}
+              onChange={(e) => setForm((prev: any) => ({ ...prev, agentId: e.target.value }))}
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+              required
+            >
+              {agents.length === 0 ? (
+                <option value="">No agents available</option>
+              ) : (
+                agents.map((a: any) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))
+              )}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Cron Schedule</label>
-            <input type="text" value={form.schedule} onChange={(e) => setForm(prev => ({ ...prev, schedule: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" required />
+            <input
+              type="text"
+              value={form.schedule}
+              onChange={(e) => setForm((prev: any) => ({ ...prev, schedule: e.target.value }))}
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono"
+              required
+            />
             <div className="flex flex-wrap gap-1 mt-2">
-              {presets.map(p => (
-                <button key={p.value} type="button" onClick={() => setForm(prev => ({ ...prev, schedule: p.value }))} className={`text-xs px-2 py-1 rounded border ${form.schedule === p.value ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted border-border text-muted-foreground hover:text-foreground'}`}>{p.label}</button>
+              {presets.map((p) => (
+                <button
+                  key={p.value}
+                  type="button"
+                  onClick={() => setForm((prev: any) => ({ ...prev, schedule: p.value }))}
+                  className={`text-xs px-2 py-1 rounded border ${
+                    form.schedule === p.value
+                      ? 'bg-primary text-primary-foreground border-primary'
+                      : 'bg-muted border-border text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {p.label}
+                </button>
               ))}
             </div>
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Prompt</label>
-            <textarea value={form.prompt} onChange={(e) => setForm(prev => ({ ...prev, prompt: e.target.value }))} rows={3} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="What should the agent do?" required />
+            <textarea
+              value={form.prompt}
+              onChange={(e) => setForm((prev: any) => ({ ...prev, prompt: e.target.value }))}
+              rows={3}
+              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm"
+              placeholder="What should the agent do?"
+              required
+            />
           </div>
         </form>
         <div className="p-4 border-t border-border flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
-          <button onClick={handleSubmit} disabled={!form.name || !form.agentId || !form.prompt} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50">Create Schedule</button>
+          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">
+            Cancel
+          </button>
+          <button
+            onClick={handleSubmit}
+            disabled={!form.name || !form.agentId || !form.prompt}
+            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50"
+          >
+            {job ? 'Update Schedule' : 'Create Schedule'}
+          </button>
         </div>
       </div>
     </div>

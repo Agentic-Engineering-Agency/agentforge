@@ -1,10 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import type { Id } from '@convex/_generated/dataModel';
 import { api } from '@convex/_generated/api';
-import { Folder, File, Upload, Trash2, FolderPlus, Search, Grid, List, Home, FileText, FileImage, FileCode, FileArchive, X, ChevronRight } from 'lucide-react';
+import { Folder, File, Upload, Trash2, FolderPlus, Search, Grid, List, Home, FileText, FileImage, FileCode, FileArchive, X, ChevronRight, Download, Loader2 } from 'lucide-react';
 
 export const Route = createFileRoute('/files')({ component: FilesPage });
 
@@ -32,6 +32,9 @@ function FilesPage() {
   const createFolder = useMutation(api.folders.create);
   const removeFile = useMutation(api.files.remove);
   const removeFolder = useMutation(api.folders.remove);
+  const generateUploadUrl = useMutation(api.files.generateUploadUrl);
+  const createFile = useMutation(api.files.create);
+  const getFileUrl = useQuery(api.files.getFileUrl, files.length > 0 && files[0].storageId ? { storageId: files[0].storageId as string } : 'skip');
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -40,6 +43,12 @@ function FilesPage() {
   const [showNewFolder, setShowNewFolder] = useState(false);
   const [confirmingDeletingFileId, setConfirmingDeletingFileId] = useState<string | null>(null);
   const [confirmingDeletingFolderId, setConfirmingDeletingFolderId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const dropZoneRef = useRef<HTMLDivElement>(null);
 
   const currentFolders = useMemo(() => {
     const result = folders.filter((f: any) => {
@@ -111,6 +120,84 @@ function FilesPage() {
     }
   };
 
+  // AGE-152: File upload via generateUploadUrl
+  const handleFileUpload = async (selectedFiles: FileList | null) => {
+    if (!selectedFiles || selectedFiles.length === 0) return;
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    try {
+      for (const file of Array.from(selectedFiles)) {
+        // Step 1: Get upload URL from Convex
+        const uploadUrl = await generateUploadUrl();
+
+        // Step 2: POST file bytes to upload URL
+        const response = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to upload ${file.name}`);
+        }
+
+        // Step 3: Extract storageId from response
+        const { storageId } = await response.json();
+
+        // Step 4: Create file metadata record
+        await createFile({
+          name: file.name,
+          originalName: file.name,
+          mimeType: file.type,
+          size: file.size,
+          url: uploadUrl.split('?')[0], // Base URL without query params
+          storageId,
+          folderId: currentFolderId as Id<'folders'> | null,
+        });
+      }
+    } catch (error) {
+      setUploadError(error instanceof Error ? error.message : 'Upload failed');
+      setTimeout(() => setUploadError(null), 5000);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // AGE-152: Download file via getFileUrl
+  const handleDownload = async (file: any) => {
+    try {
+      const url = await getFileUrl;
+      if (url) {
+        window.open(url, '_blank');
+      }
+    } catch (error) {
+      console.error('Failed to download file:', error);
+    }
+  };
+
+  // AGE-152: Drag and drop handlers
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const droppedFiles = e.dataTransfer.files;
+    await handleFileUpload(droppedFiles);
+  };
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -120,11 +207,35 @@ function FilesPage() {
             <p className="text-muted-foreground">Manage files and folders stored in your workspace.</p>
           </div>
           <div className="flex items-center gap-2">
+            {/* AGE-152: Upload button */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="bg-primary text-primary-foreground px-3 py-2 rounded-lg text-sm hover:bg-primary/90 flex items-center gap-2 disabled:opacity-50"
+            >
+              {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+              Upload File
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFileUpload(e.target.files)}
+            />
             <button onClick={() => setShowNewFolder(true)} className="bg-muted text-foreground px-3 py-2 rounded-lg text-sm hover:bg-muted/80 flex items-center gap-2">
               <FolderPlus className="w-4 h-4" /> New Folder
             </button>
           </div>
         </div>
+
+        {/* Upload error notification */}
+        {uploadError && (
+          <div className="flex items-center gap-2 px-4 py-2.5 bg-red-900/30 border border-red-700/50 rounded-lg text-red-400 text-sm">
+            <span>{uploadError}</span>
+            <button onClick={() => setUploadError(null)} className="ml-auto text-red-400/60 hover:text-red-400">&times;</button>
+          </div>
+        )}
 
         {/* Breadcrumb */}
         <nav className="flex items-center gap-1 text-sm">
@@ -137,6 +248,24 @@ function FilesPage() {
             </div>
           ))}
         </nav>
+
+        {/* AGE-152: Drag and drop upload zone */}
+        <div
+          ref={dropZoneRef}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+            isDragging
+              ? 'border-primary bg-primary/10'
+              : 'border-border hover:border-muted-foreground'
+          }`}
+        >
+          <Upload className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
+          <p className="text-sm text-muted-foreground">
+            Drag and drop files here to upload, or click the Upload button above
+          </p>
+        </div>
 
         {/* Toolbar */}
         <div className="flex flex-col sm:flex-row gap-3">
@@ -165,7 +294,7 @@ function FilesPage() {
           <div className="text-center py-16 bg-card border border-border rounded-lg">
             <File className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
             <h3 className="text-lg font-semibold mb-2">{searchQuery ? 'No results' : 'This folder is empty'}</h3>
-            <p className="text-muted-foreground">Upload files via the CLI with <code className="bg-muted px-1 rounded">agentforge files upload</code></p>
+            <p className="text-muted-foreground">Upload files via the button above or drag and drop</p>
           </div>
         ) : viewMode === 'grid' ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
@@ -195,20 +324,31 @@ function FilesPage() {
                 <div key={file._id} className="bg-card border border-border rounded-lg p-4 hover:shadow-md transition-shadow group">
                   <div className="flex items-center justify-between mb-2">
                     <Icon className="w-8 h-8 text-muted-foreground" />
-                    <button
-                      onClick={() => handleDeleteFileClick(file._id)}
-                      className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-colors ${
-                        confirmingDeletingFileId === file._id
-                          ? 'bg-destructive text-destructive-foreground'
-                          : 'hover:bg-destructive/10'
-                      }`}
-                      title={confirmingDeletingFileId === file._id ? 'Click to confirm delete' : 'Delete file'}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {/* AGE-152: Download button */}
+                      <button
+                        onClick={() => handleDownload(file)}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded transition-colors hover:bg-muted"
+                        title="Download file"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => handleDeleteFileClick(file._id)}
+                        className={`opacity-0 group-hover:opacity-100 p-1 rounded transition-colors ${
+                          confirmingDeletingFileId === file._id
+                            ? 'bg-destructive text-destructive-foreground'
+                            : 'hover:bg-destructive/10'
+                        }`}
+                        title={confirmingDeletingFileId === file._id ? 'Click to confirm delete' : 'Delete file'}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-sm font-medium truncate">{file.name}</p>
+                  <p className="text-sm font-medium truncate" title={file.name}>{file.name}</p>
                   <p className="text-xs text-muted-foreground">{formatFileSize(file.size)}</p>
+                  <p className="text-xs text-muted-foreground">{formatDate(file.uploadedAt)}</p>
                 </div>
               );
             })}
@@ -243,7 +383,17 @@ function FilesPage() {
                       <td className="px-4 py-3 text-muted-foreground">{file.mimeType}</td>
                       <td className="px-4 py-3 text-muted-foreground">{formatFileSize(file.size)}</td>
                       <td className="px-4 py-3 text-muted-foreground">{formatDate(file.uploadedAt)}</td>
-                      <td className="px-4 py-3 text-right"><button onClick={() => handleDeleteFileClick(file._id)} className={`p-1.5 rounded transition-colors ${confirmingDeletingFileId === file._id ? 'bg-destructive text-destructive-foreground' : 'hover:bg-destructive/10'}`} title={confirmingDeletingFileId === file._id ? 'Click to confirm delete' : 'Delete file'}><Trash2 className="w-4 h-4" /></button></td>
+                      <td className="px-4 py-3 text-right flex items-center justify-end gap-1">
+                        {/* AGE-152: Download button */}
+                        <button
+                          onClick={() => handleDownload(file)}
+                          className="p-1.5 rounded transition-colors hover:bg-muted"
+                          title="Download file"
+                        >
+                          <Download className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDeleteFileClick(file._id)} className={`p-1.5 rounded transition-colors ${confirmingDeletingFileId === file._id ? 'bg-destructive text-destructive-foreground' : 'hover:bg-destructive/10'}`} title={confirmingDeletingFileId === file._id ? 'Click to confirm delete' : 'Delete file'}><Trash2 className="w-4 h-4" /></button>
+                      </td>
                     </tr>
                   );
                 })}

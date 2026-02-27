@@ -19,6 +19,8 @@ import {
   Loader2,
   MessageSquare,
   Trash2,
+  X,
+  File,
 } from "lucide-react";
 
 // ============================================================
@@ -82,6 +84,8 @@ function ChatPageComponent() {
   // ── Convex queries ──────────────────────────────────────────
   const agents = useQuery(api.agents.listActive, {}) ?? [];
   const threads = useQuery(api.chat.listThreads, {}) ?? [];
+  // AGE-144: Query available files for attachment
+  const availableFiles = useQuery(api.files.list, {}) ?? [];
 
   // ── Convex mutations & actions ──────────────────────────────
   const createThread = useMutation(api.chat.createThread);
@@ -96,6 +100,9 @@ function ChatPageComponent() {
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [vaultNotification, setVaultNotification] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // AGE-144: File attachment state
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; name: string; size: number; mimeType: string }>>([]);
+  const [showFilePicker, setShowFilePicker] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -206,7 +213,12 @@ function ChatPageComponent() {
         agentId: currentAgentId,
         threadId: threadId as Id<"threads">,
         content: messageText,
+        // AGE-144: Include attached file IDs
+        fileIds: attachedFiles.map(f => f.id as Id<"files">),
       });
+
+      // Clear attachments after sending
+      setAttachedFiles([]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(`Failed to send message: ${msg}`);
@@ -513,16 +525,90 @@ function ChatPageComponent() {
               </span>
             </div>
           )}
+
+          {/* AGE-144: Attached files chips */}
+          {attachedFiles.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2 max-w-3xl mx-auto">
+              {attachedFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-sm"
+                >
+                  <File className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="max-w-[150px] truncate">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFiles(attachedFiles.filter((f) => f.id !== file.id))}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* AGE-144: File picker dropdown */}
+          {showFilePicker && (
+            <div className="mb-2 max-w-3xl mx-auto bg-card border border-border rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium">Attach a file</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowFilePicker(false)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {availableFiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No files available. Upload files in the Files tab.</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {availableFiles.map((file: any) => (
+                    <button
+                      key={file._id}
+                      type="button"
+                      onClick={() => {
+                        if (!attachedFiles.find((f) => f.id === file._id)) {
+                          setAttachedFiles([...attachedFiles, {
+                            id: file._id,
+                            name: file.name,
+                            size: file.size,
+                            mimeType: file.mimeType,
+                          }]);
+                        }
+                        setShowFilePicker(false);
+                      }}
+                      disabled={attachedFiles.find((f) => f.id === file._id) !== undefined}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-sm text-left"
+                    >
+                      <File className="w-4 h-4 text-muted-foreground" />
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {file.size > 1024 * 1024
+                          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                          : `${(file.size / 1024).toFixed(1)} KB`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <form
             onSubmit={handleSendMessage}
             className="max-w-3xl mx-auto flex items-center gap-2"
           >
+            {/* AGE-144: Functional paperclip button */}
             <button
               type="button"
-              className="p-2.5 rounded-lg hover:bg-background border border-border"
+              onClick={() => setShowFilePicker(!showFilePicker)}
+              className={`p-2.5 rounded-lg hover:bg-background border ${showFilePicker || attachedFiles.length > 0 ? 'bg-primary/10 border-primary' : 'border-border'}`}
               title="Attach file"
             >
-              <Paperclip className="w-4 h-4 text-muted-foreground" />
+              <Paperclip className={`w-4 h-4 ${showFilePicker || attachedFiles.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
             </button>
             <div className="flex-1 relative">
               <input
@@ -552,7 +638,7 @@ function ChatPageComponent() {
             </button>
             <button
               type="submit"
-              disabled={!input.trim() || isGenerating}
+              disabled={(!input.trim() && attachedFiles.length === 0) || isGenerating}
               className="p-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? (
