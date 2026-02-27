@@ -350,4 +350,23 @@ export default defineSchema({
     .index("byInstanceId", ["instanceId"])
     .index("byStatus", ["status"])
     .index("byUserId", ["userId"]),
+  // Dynamic model list cache (AGE-174)
+  modelCache: defineTable({
+    provider: v.string(),
+    models: v.array(v.string()),
+    cachedAt: v.number(),
+  }).index("byProvider", ["provider"]),
+
+  // API access tokens for /v1/chat/completions endpoint (AGE-176)
+  apiAccessTokens: defineTable({
+    tokenHash: v.string(),
+    name: v.string(),
+    agentId: v.optional(v.string()),
+    createdAt: v.number(),
+    lastUsedAt: v.optional(v.number()),
+    revokedAt: v.optional(v.number()),
+  })
+    .index("byTokenHash", ["tokenHash"])
+    .index("byAgentId", ["agentId"]),
+
 });
