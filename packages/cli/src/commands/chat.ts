@@ -156,16 +156,6 @@ export function registerChatCommand(program: Command) {
         if (isTTY) {
           process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
         }
-        try {
-          const response = await safeCall(
-            () => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }),
-            'Failed to get response'
-          );
-          const text = (response as any)?.response || (response as any)?.text || (response as any)?.content || String(response);
-          console.log(text);
-          history.push({ role: 'assistant', content: text });
-        } catch {
-          console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
         process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
 
         if (enableStreaming && siteUrl) {

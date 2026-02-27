@@ -20,7 +20,8 @@
  */
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
+import type { Doc } from "./_generated/dataModel";
 import { Agent } from "@mastra/core/agent";
 import type { MessageListInput } from "@mastra/core/agent/message-list";
 
@@ -294,3 +295,127 @@ http.route({
 });
 
 export default http;
+
+// ─── AGE-176: OpenAI Chat Completions endpoint ────────────────────────────────
+
+/**
+ * POST /v1/chat/completions
+ *
+ * OpenAI-compatible endpoint. Authenticate with:
+ *   Authorization: Bearer agf_<token>
+ * The `model` field maps to an AgentForge agentId.
+ * Supports both streaming (stream:true → SSE) and non-streaming.
+ */
+http.route({
+  path: "/v1/chat/completions",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    // Validate Authorization header
+    const authHeader = request.headers.get("Authorization") ?? "";
+    if (!authHeader.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: { message: "Missing or invalid Authorization header", type: "auth_error" } }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+    const plaintext = authHeader.slice(7).trim();
+    const tokenHash = await hashTokenHttp(plaintext);
+    const tokenData = await ctx.runQuery(internal.apiAccessTokens.validateToken, { tokenHash });
+    if (!tokenData) {
+      return new Response(
+        JSON.stringify({ error: { message: "Invalid or revoked token", type: "auth_error" } }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
+      );
+    }
+
+    // Parse request
+    let body: { model?: string; messages?: Array<{ role: string; content: string }>; stream?: boolean };
+    try { body = await request.json(); } catch {
+      return new Response(JSON.stringify({ error: { message: "Invalid JSON" } }), { status: 400 });
+    }
+
+    const { model: agentId, messages = [], stream = false } = body;
+    if (!agentId) return new Response(JSON.stringify({ error: { message: "model (agentId) is required" } }), { status: 400 });
+
+    // Token scope check
+    if (tokenData.agentId && tokenData.agentId !== agentId) {
+      return new Response(JSON.stringify({ error: { message: "Token not authorized for this agent" } }), { status: 403 });
+    }
+
+    // Record usage (fire-and-forget)
+    ctx.runMutation(internal.apiAccessTokens.recordUsage, { tokenId: tokenData.tokenId }).catch(() => {});
+
+    // Get agent
+    const agent = await ctx.runQuery(api.agents.get, { id: agentId });
+    if (!agent) return new Response(JSON.stringify({ error: { message: "Agent not found" } }), { status: 404 });
+
+    const typedAgent = agent as Doc<"agents">;
+    const provider = typedAgent.provider || "openrouter";
+    const apiKey = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+    if (!apiKey) return new Response(JSON.stringify({ error: { message: `No API key for provider: ${provider}` } }), { status: 500 });
+
+    const modelConfig = buildModelConfig(provider, typedAgent.model || "auto", apiKey);
+    const mastraAgent = new Agent({
+      id: "agf-completions",
+      name: "agf-completions",
+      instructions: typedAgent.instructions || "You are a helpful assistant.",
+      model: modelConfig,
+    });
+
+    const typedMessages = messages.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
+    const completionId = `chatcmpl-${Date.now()}`;
+
+    if (stream) {
+      // Streaming SSE response
+      const { readable, writable } = new TransformStream();
+      const writer = writable.getWriter();
+      const encoder = new TextEncoder();
+
+      (async () => {
+        try {
+          const streamResult = await mastraAgent.stream(typedMessages as unknown as MessageListInput);
+          for await (const chunk of streamResult.textStream) {
+            const data = { id: completionId, object: "chat.completion.chunk", choices: [{ delta: { content: chunk }, index: 0, finish_reason: null }] };
+            await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+          }
+          await writer.write(encoder.encode(`data: [DONE]\n\n`));
+        } catch (e) {
+          const err = e instanceof Error ? e.message : String(e);
+          await writer.write(encoder.encode(`data: ${JSON.stringify({ error: err })}\n\n`));
+        } finally { await writer.close(); }
+      })();
+
+      return new Response(readable, {
+        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" },
+      });
+    } else {
+      // Non-streaming full response
+      const result = await mastraAgent.generate(typedMessages as unknown as MessageListInput);
+      const content = result.text ?? "";
+      return new Response(JSON.stringify({
+        id: completionId,
+        object: "chat.completion",
+        created: Math.floor(Date.now() / 1000),
+        model: agentId,
+        choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
+        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
+      }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }
+  }),
+});
+
+http.route({
+  path: "/v1/chat/completions",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(null, {
+      headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" },
+    });
+  }),
+});
+
+/** SHA-256 hash using Web Crypto API (available in Convex runtime) */
+async function hashTokenHttp(token: string): Promise<string> {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
