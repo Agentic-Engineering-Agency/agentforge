@@ -1,238 +1,193 @@
-# AgentForge — Claude Code Configuration
+# CLAUDE.md — AgentForge Development Context
 
-You are working on **AgentForge**, a minimalist framework for collaborative AI agents.
-This project uses **SpecSafe spec-driven development (SDD)** — no code is written without a spec.
-
----
-
-## 📋 Always Read First
-
-1. **`PROJECT_STATE.md`** — Active specs, their stages, next tasks, track assignments
-2. **`CONCURRENT_PLAN.md`** — Full development roadmap (Track A / Track B)
-3. **`specs/active/*.md`** — The spec you are working on
+> Read this file completely before starting any work. All rules are mandatory.
 
 ---
 
-## 🏗️ Project Architecture
+## 🎯 What is AgentForge?
 
-### Monorepo Structure
-```
-agentforge/
-├── packages/
-│   ├── core/          # @agentforge-ai/core — Agent primitives, sandbox, MCP server
-│   ├── cli/           # @agentforge-ai/cli — CLI tool (agentforge init/deploy/etc.)
-│   ├── channels/      # @agentforge-ai/channels — Base messaging channel abstractions
-│   ├── channels-telegram/ # @agentforge-ai/channels-telegram — Telegram adapter
-│   ├── sandbox/       # Sandbox execution environment
-│   └── web/           # Dashboard UI (React/Vite)
-├── convex/            # Convex serverless backend (database + actions + mutations)
-│   ├── schema.ts      # ⚠️ Database schema — Track B owns this (AGE-106)
-│   ├── agents.ts      # Agent CRUD operations
-│   ├── projects.ts    # Project management
-│   ├── threads.ts     # Conversation threads
-│   ├── messages.ts    # Message storage
-│   ├── files.ts       # File storage
-│   ├── skills.ts      # Skills registry
-│   ├── mastraIntegration.ts  # Mastra AI framework integration
-│   └── workflows/     # Mastra Workflows engine (stub — needs implementation)
-├── specs/
-│   ├── active/        # Current specs in progress
-│   ├── completed/     # Finished specs
-│   └── archive/       # Historical specs (pre-SpecSafe)
-└── tests/             # E2E tests
-```
+AgentForge is an AI agent platform similar to OpenClaw, but:
+- **Smaller** — focused, not trying to cover every use case
+- **Safer** — encrypted key storage, RBAC, audit logs from the start
+- **Mastra-native** — the entire agent runtime is built on Mastra + Convex
+- **CLI-primary** — every feature works from the terminal first
 
-### Tech Stack
-| Layer | Technology |
-|-------|-----------|
-| Language | TypeScript (ESM, strict) |
-| Package Manager | pnpm 9.15.4 (workspaces) |
-| Backend | Convex (serverless DB + realtime) |
-| AI Framework | Mastra (`@mastra/core ^1.5.0`) |
-| Test Runner | Vitest |
-| Frontend | React + Vite (packages/web) |
-| Sandbox | Docker (E2B-compatible) |
-| Browser Automation | Playwright (packages/core/browser-tool.ts) |
-| Channels | WhatsApp, Telegram (packages/channels-*) |
-| CI/CD | GitHub Actions |
-| Node Version | >=18.0.0 |
-
-### Key Exported APIs (packages/core)
-- `Agent` — Core agent class with multi-provider LLM + failover
-- `SandboxManager` — Docker container isolation
-- `MCPServer` — MCP server for tool exposure
-- `BrowserSessionManager` / `BrowserActionExecutor` — Browser automation
-
-### LLM Providers Supported (Mastra model router)
-All providers use `"provider/model-name"` format. No Vercel AI SDK.
-`openai`, `anthropic`, `google`, `mistral`, `deepseek`, `xai`, `openrouter`, `cohere`, `meta`, `custom`
-
-> ⚡ **Architecture Decision (Feb 22, 2026):** Vercel AI SDK removed. Mastra handles all model routing.
+**NOT allowed:**
+- Raw AI SDK calls bypassing Mastra
+- Hardcoded model lists
+- Fake/stub implementations shipped as real features
+- `createTool` pattern for skills (use SKILL.md standard)
 
 ---
 
-## 👥 Concurrent Development Tracks
+## 🛡️ MANDATORY RULES — READ BEFORE WRITING ANY CODE
 
-### Track A: Lalo + Puck (Architecture & Infrastructure)
-**Owns:** `convex/schema.ts`, `convex/workflows/`, `convex/migrations/`, `docs/DESIGN-*.md`
-**Focus:** Database schema, infrastructure, Mastra backend, workflow engine
+### 1. Codebase Audit First
+Before implementing: search the codebase. Does it exist? Is it broken? Is it a placeholder?
+Test against the live deployment: `watchful-chipmunk-946.convex.cloud`
 
-### Track B: Luci + Seshat (Core Engine + Product)
-**Owns:** `convex/llmProviders.ts`, `convex/mastraIntegration.ts`, `convex/chat.ts`, `packages/core/`, `packages/web/`, `packages/cli/`, `packages/channels*`, `.github/workflows/`
-**Focus:** LLM providers, Mastra migration, Dashboard UI, integrations, DevOps
-
-> **Note:** Luci may work on tasks from both tracks. Coordinate via Linear.
-
-**⚠️ Sync Point:** AGE-106 (schema, owned by Lalo/Puck) must merge before AGE-107 (files) or any feature using `projectId` can start.
-
----
-
-## 🛡️ SpecSafe Workflow (MANDATORY)
-
-```
-specsafe new "<name>"          →  Create spec (gets SPEC-ID)
-specsafe spec <id>             →  Validate & enhance with AI → SPEC stage
-specsafe test-create <id>      →  Generate tests → TEST stage
-specsafe test-apply <id>       →  Implementation guidance → CODE stage
-[implement code]               →  Make tests pass (RED → GREEN → REFACTOR)
-specsafe verify <id>           →  Run tests, loop on failure
-specsafe qa <id>               →  QA validation → QA stage
-specsafe done <id>             →  Complete & archive → DONE
-```
-
-**⚠️ DO NOT USE:** `specsafe test` (ambiguous), `specsafe complete` (deprecated), `specsafe code` (doesn't exist).
-
-### Rules
-
-✅ **ALWAYS** read `PROJECT_STATE.md` before touching any code  
-✅ **ALWAYS** run `specsafe status` to see what's active  
-✅ **ALWAYS** reference spec ID in commit messages: `feat(AGE-106): ...`  
-✅ **ALWAYS** run tests: `pnpm test` before marking complete  
-✅ **ALWAYS** work on a branch: `feat/AGE-{number}-{description}` or `fix/AGE-{number}-{description}`  
-✅ **ALWAYS** push branch directly to main (no develop branch)  
-
-❌ **NEVER** edit `PROJECT_STATE.md` directly — use `specsafe` CLI  
-❌ **NEVER** write code before a spec exists  
-❌ **NEVER** commit without a passing test  
-❌ **NEVER** push to `main` directly — always use a feature branch  
-❌ **NEVER** edit files owned by the other track without coordination  
-
----
-
-## 🚀 Current Sprint: Phase 0 → Phase 1
-
-### Phase 0 — Synchronization (Immediate, sequential)
-| Session | Track | Task | Branch |
-|---------|-------|------|--------|
-| **0.1** | B (Luci/Seshat) | Mastra-Native Migration (remove Vercel AI SDK) | `feat/session-0.1-mastra-migration` |
-| **0.2** | A (Lalo/Puck) | Global vs Project Config Design Doc | `docs/session-0.2-project-config-design` |
-
-**Session 0.1:** Remove `ai`, `@ai-sdk/*` deps. Refactor `convex/mastraIntegration.ts` + `convex/chat.ts` to use Mastra Agent.generate(). Upgrade `@mastra/core` to ^1.5.0. Rebuild CLI dist.
-**Session 0.2:** Write `docs/DESIGN-PROJECT-CONFIG.md` classifying all 20 tables as global/project-scoped/both.
-
-### Sprint 1.1 (After Phase 0 — parallel)
-| Session | Track | Issue | Task | Branch |
-|---------|-------|-------|------|--------|
-| **1.1A** | B (Luci/Seshat) | AGE-105 | LLM Models Update (Mastra format) | `feat/AGE-105-update-llm-models` |
-| **1.1B** | A (Lalo/Puck) | AGE-106 | Project-scoped Schema Refactor | `feat/AGE-106-project-scoped-schema` |
-
-> 🔒 **SYNC POINT:** AGE-106 must merge to main before Sprint 1.2 begins.
-
-### Sprint 1.2 (After AGE-106 merges — parallel)
-| Session | Track | Issue | Task | Branch |
-|---------|-------|-------|------|--------|
-| **1.2A** | A (Lalo/Puck) | AGE-104 | Mastra Workflows Engine | `feat/AGE-104-mastra-workflows` |
-| **1.2B** | B (Luci/Seshat) | AGE-107 | File Uploads + R2 Backend | `feat/AGE-107-file-uploads` |
-| **1.2B** | B (Luci/Seshat) | AGE-108 | CI: Automate CLI Build | `feat/AGE-108-ci-build` |
-| **1.2B** | B (Luci/Seshat) | AGE-41 | Discord Channel Adapter | `feat/AGE-41-discord-adapter` |
-
-**Full execution order + Claude Code session prompts:** See Notion Concurrent Dev Plan.
-
----
-
-## 🔧 Useful Commands
-
+### 2. SpecSafe-First
 ```bash
-pnpm test              # Run all tests
-pnpm test:core         # Run core package tests only
-pnpm build             # Build all packages
-pnpm typecheck         # TypeScript check
-specsafe status        # Show SpecSafe project status
-specsafe list          # List all specs
+specsafe new <feature>   # Step 1: Write spec + tests
+# Step 2: Watch tests fail (proves tests work)
+# Step 3: Implement
+pnpm test                # Step 4: Must be GREEN
+# Step 5: If failing — fix NOW, before anything else
 ```
+**Never write code before tests. Never ship with failing tests.**
 
----
-
-## 🛡️ MANDATORY DEVELOPMENT PROCESS
-
-> These rules apply to ALL agents, ALL sprints, ALL sessions. No exceptions.
-
-### SpecSafe-First (NON-NEGOTIABLE)
-
-**Order of operations — every time, no shortcuts:**
-
-| Step | Action |
-|------|--------|
-| 1 | **Write tests first** — before any implementation |
-| 2 | **Implement** — only after tests exist |
-| 3 | **Run `pnpm test`** — all tests must pass |
-| 4 | **Fix failures** — if tests fail, fix before proceeding |
-
-```bash
-# TDD workflow
-specsafe new <feature>   # Create spec
-# write test expectations
-pnpm test                # Watch fail (red)
-# implement
-pnpm test                # Must be green before PR
-```
-
-### Research Official Docs First
-
-Before implementing ANYTHING involving Mastra, Convex, or any external dependency:
-
-1. **Read the current docs** — APIs break between minor versions
-2. **Check for breaking changes** — especially Mastra (updates weekly)
-3. **Never assume from prior context** — always verify
-
-- Mastra: https://mastra.ai/docs
+### 3. Research Official Docs (Every Sprint)
+APIs change constantly. Read before implementing:
+- Mastra Workspace: https://mastra.ai/docs/workspace/overview
+- Mastra Skills (SKILL.md): https://mastra.ai/docs/workspace/skills
+- Mastra Filesystem: https://mastra.ai/docs/workspace/filesystem
+- Mastra S3/R2: https://mastra.ai/reference/workspace/s3-filesystem
 - Convex: https://docs.convex.dev
-- @mastra/s3 (R2): https://mastra.ai/reference/workspace/s3-filesystem
+- Convex File Storage: https://docs.convex.dev/file-storage
+- Convex HTTP Actions (SSE): https://docs.convex.dev/functions/http-actions
 
-### CLI-First Development
+### 4. CLI First → Dashboard Second
+Every new feature:
+1. `agentforge <command>` — implement + test in CLI
+2. Dashboard route — replicate same logic in UI
+Never implement dashboard-only features.
 
-Every feature: **CLI first → dashboard second**
+### 5. Mastra-Native APIs (Mandatory Patterns)
 
-```bash
-agentforge <command>   # 1. Implement + test here
-# then replicate in dashboard/app/routes/...
-```
-
-### Mastra 1.8.0 BYOK — OpenAICompatibleConfig
-
+**BYOK Model Config — ALWAYS use OpenAICompatibleConfig:**
 ```typescript
-// ✅ Use OpenAICompatibleConfig (official API)
+// ✅ Correct (v0.10.0+)
 new Agent({
   model: {
-    providerId: provider,                    // 'openai' | 'anthropic' | 'openrouter'
-    modelId:    getBaseModelId(provider, id), // ALWAYS strip provider prefix!
+    providerId: provider,                      // 'openai' | 'anthropic' | 'openrouter'
+    modelId: getBaseModelId(provider, modelId), // strip provider prefix!
     apiKey,
-    url: getProviderBaseUrl(provider),       // needed for OpenRouter, Mistral, etc.
+    url: getProviderBaseUrl(provider),          // for OpenRouter/Mistral/etc
   }
 })
 
-// ❌ Never use magic strings — Mastra 1.8.0 does not strip the prefix
-// 'openai/gpt-4.1' → OpenAI API receives 'openai/gpt-4.1' → 404
-// 'openrouter/auto' + provider 'openrouter' → 'openrouter/openrouter/auto' → 400
+// ❌ Wrong — Mastra 1.8.0 does NOT strip prefix → API gets 'openai/gpt-4.1' → 404
+new Agent({ model: 'openai/gpt-4.1' })
 ```
 
-### Convex Runtime Rules
-
+**Workspace + Skills (SKILL.md standard):**
 ```typescript
-// "use node" files: ONLY actions/internalActions
-// Default runtime: queries + mutations + regular actions
+import { Workspace, LocalFilesystem } from '@mastra/core/workspace'
+import { S3Filesystem } from '@mastra/s3'
 
-// ✅ Correct split
-// chat.ts (default) — queries, mutations, actions
-// chatActions.ts ("use node") — Node.js-dependent internalActions
+const workspace = new Workspace({
+  filesystem: process.env.AGENTFORGE_FILESYSTEM === 'r2'
+    ? new S3Filesystem({ bucket, region: 'auto', endpoint, accessKeyId, secretAccessKey })
+    : new LocalFilesystem({ basePath: './workspace' }),
+  skills: ['/skills'],  // SKILL.md folders, NOT createTool
+})
 ```
+
+**Skills must be SKILL.md folders (agentskills.io spec), NOT createTool:**
+```
+/skills/my-skill/
+  SKILL.md          ← metadata + instructions
+  references/       ← supporting docs
+  scripts/          ← executable scripts
+  assets/           ← images/files
+```
+
+**Streaming (use Agent.stream(), not Agent.generate()):**
+```typescript
+const stream = await agent.stream(messages)
+// Use Convex HTTP action for SSE delivery to client
+```
+
+### 6. Convex Runtime Rules
+```typescript
+// "use node" files: ONLY actions and internalActions
+// Default runtime: queries + mutations + standard actions
+
+// ✅ Correct internal call
+await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider })
+
+// ❌ Wrong — internal functions not accessible via api.*
+await ctx.runQuery(api.apiKeys.getDecryptedForProvider, { provider })
+```
+
+### 7. File Storage (No Fake Implementations)
+```typescript
+// ✅ Dev: Convex built-in storage
+const uploadUrl = await ctx.storage.generateUploadUrl()
+const storageId = await ctx.storage.store(file)
+
+// ✅ Prod: Mastra S3Filesystem → Cloudflare R2
+// ❌ Never: store file content as base64 in DB / metadata-only "upload"
+```
+
+### 8. Quality & Security After Every Sprint
+After every PR:
+1. Run full test suite: `pnpm test` — ALL must pass
+2. Security review: all mutations have server-side validation
+3. Live test: test feature against `watchful-chipmunk-946.convex.cloud`
+4. No `as any` on Convex mutation payloads
+5. No `window.confirm` / `alert` — use toast or two-step confirm pattern
+
+---
+
+## 📋 Current Status (2026-02-27)
+
+### ✅ Working
+- `agentforge agents list/create/edit/delete` — Convex connected
+- `agentforge chat <agent-id>` — API-level works (interactive TTY may have issues)
+- `agentforge cron list/create` — connected
+- `agentforge mcp list/add` — connected
+- `agentforge files list` — lists metadata
+- BYOK: `OpenAICompatibleConfig` — confirmed working end-to-end
+
+### 🐛 Broken (must fix before new features)
+- **AGE-170:** File upload is metadata-only — content never stored
+- **AGE-171:** Chat CLI interactive stdin broken
+- **AGE-172:** Skills dashboard uses `createTool` not SKILL.md
+- **AGE-173:** Streaming is placeholder — falls back to full generation
+
+### 🔨 Missing Core Features
+- **AGE-174:** Dynamic model list from provider API
+- **AGE-175:** Mastra Workspace wired to agents
+- **AGE-159:** Streaming SSE via Convex HTTP actions
+- **AGE-157:** Complete project scoping (8 tables still unscoped)
+- **AGE-152:** File management in dashboard UI (upload button missing)
+
+---
+
+## 🏗️ Sprint Execution Order
+
+### Phase 0 — Fix What's Broken (Start Here)
+1. AGE-170: Real file storage (Convex storage API)
+2. AGE-171: Chat CLI interactive mode
+3. AGE-173: Streaming (Convex HTTP + SSE)
+4. AGE-172: Skills → SKILL.md standard
+
+### Phase 1 — Core Completeness
+5. AGE-174: Dynamic model loading
+6. AGE-157: Complete project scoping
+7. AGE-152: File management UI
+8. AGE-175: Mastra Workspace integration
+
+### Phase 2 — Intelligence
+9. AGE-158: Context window management
+10. AGE-160: Model failover chains
+11. AGE-161: Browser automation (Playwright, native Mastra tool)
+12. AGE-143: Real MCP tool execution
+
+### Phase 3 — Platform
+13. AGE-162: Real-time dashboard (Convex reactive)
+14. AGE-145: Better Auth (multi-tenant)
+15. AGE-163: Usage metering + billing
+
+---
+
+## 📦 Live Test Deployment
+
+```
+Deployment:  watchful-chipmunk-946.convex.cloud
+Project dir: /tmp/agentforge-test/agentforge-test
+Dashboard:   http://localhost:3000
+```
+
+**Every feature must be tested against this deployment before PR.**
