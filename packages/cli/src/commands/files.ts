@@ -52,16 +52,100 @@ export function registerFilesCommand(program: Command) {
       const mimeType = mimeTypes[ext] || 'application/octet-stream';
 
       const client = await createClient();
-      await safeCall(
-        () => client.mutation('files:create' as any, {
-          name, originalName: name, mimeType, size: stat.size,
-          url: 'pending-upload',
-          folderId: opts.folder, projectId: opts.project,
-        }),
-        'Failed to upload file metadata'
-      );
-      success(`File "${name}" registered (${formatSize(stat.size)}, ${mimeType}).`);
-      info('Note: File content storage requires Convex file storage or R2 integration.');
+      
+      try {
+        // Step 1: Generate upload URL
+        info('Generating upload URL...');
+        const uploadUrl = await safeCall(
+          () => client.mutation('files:generateUploadUrl' as any, {}),
+          'Failed to generate upload URL'
+        ) as string;
+        
+        // Step 2: POST file to upload URL
+        info('Uploading file content...');
+        const fileBuffer = fs.readFileSync(absPath);
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': mimeType },
+          body: fileBuffer,
+        });
+        
+        if (!uploadResponse.ok) {
+          throw new Error(`Upload failed: ${uploadResponse.statusText}`);
+        }
+        
+        const { storageId } = await uploadResponse.json() as { storageId: string };
+        
+        // Step 3: Save metadata with storage ID
+        info('Saving file metadata...');
+        const fileId = await safeCall(
+          () => client.mutation('files:create' as any, {
+            name, originalName: name, mimeType, size: stat.size,
+            url: uploadUrl, storageId,
+            folderId: opts.folder, projectId: opts.project,
+          }),
+          'Failed to save file metadata'
+        );
+        
+        success(`File "${name}" uploaded successfully (${formatSize(stat.size)}, ${mimeType}).`);
+        info(`File ID: ${fileId}`);
+      } catch (err) {
+        error(`Upload failed: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
+    });
+
+  files
+    .command('download')
+    .argument('<id>', 'File ID')
+    .option('--output <path>', 'Output file path')
+    .description('Download a file')
+    .action(async (id, opts) => {
+      const client = await createClient();
+      
+      try {
+        // Get file metadata
+        const file = await safeCall(
+          () => client.query('files:get' as any, { id }),
+          'Failed to get file metadata'
+        ) as any;
+        
+        if (!file) {
+          error(`File not found: ${id}`);
+          process.exit(1);
+        }
+        
+        if (!file.storageId) {
+          error('This file does not have stored content (legacy metadata-only entry).');
+          process.exit(1);
+        }
+        
+        // Get file URL
+        info('Getting file URL...');
+        const fileUrl = await safeCall(
+          () => client.query('files:getFileUrl' as any, { storageId: file.storageId }),
+          'Failed to get file URL'
+        ) as string;
+        
+        // Download file content
+        info('Downloading file content...');
+        const response = await fetch(fileUrl);
+        if (!response.ok) {
+          throw new Error(`Download failed: ${response.statusText}`);
+        }
+        
+        const buffer = Buffer.from(await response.arrayBuffer());
+        
+        // Determine output path
+        const outputPath = opts.output || path.join(process.cwd(), file.originalName || file.name);
+        
+        // Save to disk
+        await fs.writeFile(outputPath, buffer);
+        success(`File downloaded to: ${outputPath} (${formatSize(buffer.length)})`);
+      } catch (err) {
+        error(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
+        process.exit(1);
+      }
     });
 
   files

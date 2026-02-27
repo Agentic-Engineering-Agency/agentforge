@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 
 // Query: List files
 export const list = query({
@@ -42,7 +42,23 @@ export const get = query({
   },
 });
 
-// Mutation: Create file metadata (file stored in Cloudflare R2)
+// Mutation: Generate upload URL for Convex file storage
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+// Query: Get file URL from storage ID
+export const getFileUrl = query({
+  args: { storageId: v.string() },
+  handler: async (ctx, { storageId }) => {
+    return await ctx.storage.getUrl(storageId as any);
+  },
+});
+
+// Mutation: Create file metadata (file stored in Convex storage)
 export const create = mutation({
   args: {
     name: v.string(),
@@ -50,6 +66,7 @@ export const create = mutation({
     mimeType: v.string(),
     size: v.number(),
     url: v.string(),
+    storageId: v.optional(v.string()),
     folderId: v.optional(v.id("folders")),
     projectId: v.optional(v.id("projects")),
     userId: v.optional(v.string()),
