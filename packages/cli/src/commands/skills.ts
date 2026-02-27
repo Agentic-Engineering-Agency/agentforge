@@ -1559,6 +1559,9 @@ export function registerSkillsCommand(program: Command) {
       fs.mkdirSync(path.join(skillDir, 'references'), { recursive: true });
       fs.mkdirSync(path.join(skillDir, 'scripts'), { recursive: true });
 
+      // Assets directory for images and other files
+      fs.mkdirSync(path.join(skillDir, 'assets'), { recursive: true });
+
       // SKILL.md (Agent Skills Specification format)
       const tagsYaml = tags.length > 0
         ? `tags:\n${tags.map((t: string) => `  - ${t}`).join('\n')}`
@@ -1620,6 +1623,7 @@ See \`scripts/\` for executable scripts the agent can run.
       dim(`  ${skillDir}/SKILL.md`);
       dim(`  ${skillDir}/references/README.md`);
       dim(`  ${skillDir}/scripts/example.ts`);
+      dim(`  ${skillDir}/assets/`);
       console.log();
       info(`Edit ${colors.cyan}SKILL.md${colors.reset} to add instructions for your agent.`);
       info('The skill will be auto-discovered by the Mastra Workspace.');
