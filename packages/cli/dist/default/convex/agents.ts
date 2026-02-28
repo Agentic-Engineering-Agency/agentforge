@@ -6,8 +6,15 @@ import { api } from "./_generated/api";
 export const list = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
+    if (args.projectId) {
+      return await ctx.db
+        .query("agents")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
+    }
     if (args.userId) {
       return await ctx.db
         .query("agents")
@@ -33,8 +40,18 @@ export const get = query({
 export const listActive = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
+    if (args.projectId) {
+      return await ctx.db
+        .query("agents")
+        .withIndex("byProjectAndActive", (q) =>
+          q.eq("projectId", args.projectId!).eq("isActive", true)
+        )
+        .collect();
+    }
+
     const activeQuery = ctx.db
       .query("agents")
       .withIndex("byIsActive", (q) => q.eq("isActive", true));
@@ -63,6 +80,9 @@ export const create = mutation({
     maxTokens: v.optional(v.number()),
     topP: v.optional(v.number()),
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
+    sandboxEnabled: v.optional(v.boolean()),
+    sandboxImage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -90,6 +110,9 @@ export const update = mutation({
     maxTokens: v.optional(v.number()),
     topP: v.optional(v.number()),
     isActive: v.optional(v.boolean()),
+    projectId: v.optional(v.id("projects")),
+    sandboxEnabled: v.optional(v.boolean()),
+    sandboxImage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;

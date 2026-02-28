@@ -81,6 +81,8 @@ export const create = mutation({
     topP: v.optional(v.number()),
     userId: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
+    sandboxEnabled: v.optional(v.boolean()),
+    sandboxImage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -109,6 +111,8 @@ export const update = mutation({
     topP: v.optional(v.number()),
     isActive: v.optional(v.boolean()),
     projectId: v.optional(v.id("projects")),
+    sandboxEnabled: v.optional(v.boolean()),
+    sandboxImage: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const { id, ...updates } = args;
