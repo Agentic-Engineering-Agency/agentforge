@@ -194,4 +194,165 @@ http.route({
   }),
 });
 
+// OPTIONS preflight for /api/stream
+http.route({
+  path: "/api/stream",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(),
+    });
+  }),
+});
+
+// POST /api/stream — SSE streaming endpoint for agent responses
+// Returns token-by-token streaming via text/event-stream format
+http.route({
+  path: "/api/stream",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      });
+    }
+
+    const { agentId, message, threadId, userId } = body as {
+      agentId?: unknown;
+      message?: unknown;
+      threadId?: unknown;
+      userId?: unknown;
+    };
+
+    if (typeof agentId !== "string" || typeof message !== "string") {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields: agentId, message" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Create a readable stream for SSE
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Get agent configuration
+          const agent = await ctx.runQuery(api.agents.get, { id: agentId });
+          if (!agent) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: "Agent not found" })}\n\n`));
+            controller.close();
+            return;
+          }
+
+          // Create or get thread
+          let currentThreadId = threadId as string | undefined;
+          if (!currentThreadId) {
+            currentThreadId = await ctx.runMutation(api.threads.create, {
+              agentId,
+              userId: typeof userId === "string" ? userId : undefined,
+            });
+          }
+
+          // Add user message to thread
+          await ctx.runMutation(api.messages.add, {
+            threadId: currentThreadId,
+            role: "user",
+            content: message,
+          });
+
+          // Create session
+          const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await ctx.runMutation(api.sessions.create, {
+            sessionId,
+            threadId: currentThreadId,
+            agentId,
+            userId: typeof userId === "string" ? userId : undefined,
+            channel: "api",
+          });
+
+          // Import Agent class for streaming
+          const { Agent: AgentClass } = await import("@agentforge-ai/core");
+          const { getBaseModelId, getProviderBaseUrl } = await import("./lib/apiKeys");
+
+          // Get API key for provider
+          const apiKeyData = await ctx.runQuery(api.apiKeys.getDecryptedForProvider, {
+            provider: agent.provider || "openrouter",
+          });
+
+          if (!apiKeyData || !apiKeyData.apiKey) {
+            throw new Error(`No API key found for provider: ${agent.provider}`);
+          }
+
+          // Create agent instance
+          const mastraAgent = new AgentClass({
+            id: agentId,
+            name: agent.name,
+            instructions: agent.instructions || "You are a helpful AI assistant.",
+            model: {
+              providerId: agent.provider || "openrouter",
+              modelId: getBaseModelId(agent.provider || "openrouter", agent.model || "gpt-4o-mini"),
+              apiKey: apiKeyData.apiKey,
+              url: getProviderBaseUrl(agent.provider || "openrouter"),
+            },
+            temperature: agent.temperature,
+            maxTokens: agent.maxTokens,
+          });
+
+          // Stream the response
+          let fullResponse = "";
+          for await (const chunk of mastraAgent.stream(message)) {
+            const text = chunk.content;
+            fullResponse += text;
+
+            // Send SSE event
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "text-delta", textDelta: text })}\n\n`)
+            );
+          }
+
+          // Add assistant message to thread
+          await ctx.runMutation(api.messages.add, {
+            threadId: currentThreadId,
+            role: "assistant",
+            content: fullResponse,
+          });
+
+          // Update session status
+          await ctx.runMutation(api.sessions.updateStatus, {
+            sessionId,
+            status: "completed",
+          });
+
+          // Send done event
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          controller.close();
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "error", error: errorMessage })}\n\n`)
+          );
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders(),
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
+  }),
+});
+
 export default http;
