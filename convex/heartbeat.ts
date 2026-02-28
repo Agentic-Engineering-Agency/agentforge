@@ -52,24 +52,30 @@ export const get = query({
 export const listActive = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const heartbeats = await ctx.db
       .query("heartbeats")
       .withIndex("byStatus", (q) => q.eq("status", "active"))
       .collect();
-    
+
+    if (args.projectId) {
+      // Filter by projectId
+      return heartbeats.filter((h) => h.projectId === args.projectId);
+    }
+
     if (args.userId) {
       // Filter by userId if provided
       const userAgents = await ctx.db
         .query("agents")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
         .collect();
-      
+
       const userAgentIds = new Set(userAgents.map((a) => a.id));
       return heartbeats.filter((h) => userAgentIds.has(h.agentId));
     }
-    
+
     return heartbeats;
   },
 });
@@ -99,11 +105,12 @@ export const upsert = mutation({
     context: v.string(),
     checkIntervalMs: v.optional(v.number()), // How often to check (default: 5 minutes)
     metadata: v.optional(v.any()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const { checkIntervalMs = 5 * 60 * 1000, ...data } = args;
     const now = Date.now();
-    
+
     // Check if heartbeat exists
     const existing = await ctx.db
       .query("heartbeats")
@@ -114,7 +121,7 @@ export const upsert = mutation({
           : q.eq(q.field("threadId"), undefined)
       )
       .first();
-    
+
     if (existing) {
       // Update existing heartbeat
       await ctx.db.patch(existing._id, {

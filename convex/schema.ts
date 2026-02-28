@@ -64,7 +64,10 @@ export default defineSchema({
     tool_results: v.optional(v.any()),
     metadata: v.optional(v.any()),
     createdAt: v.number(),
-  }).index("byThread", ["threadId"]),
+    projectId: v.optional(v.id("projects")),
+  })
+    .index("byThread", ["threadId"])
+    .index("byProjectId", ["projectId"]),
 
   // Active sessions
   sessions: defineTable({
@@ -83,12 +86,14 @@ export default defineSchema({
     startedAt: v.number(),
     lastActivityAt: v.number(),
     completedAt: v.optional(v.number()),
+    projectId: v.optional(v.id("projects")),
   })
     .index("bySessionId", ["sessionId"])
     .index("byThreadId", ["threadId"])
     .index("byAgentId", ["agentId"])
     .index("byStatus", ["status"])
-    .index("byUserId", ["userId"]),
+    .index("byUserId", ["userId"])
+    .index("byProjectId", ["projectId"]),
 
   // File storage metadata (files stored in Cloudflare R2)
   files: defineTable({
@@ -210,9 +215,11 @@ export default defineSchema({
     completedAt: v.optional(v.number()),
     output: v.optional(v.string()),
     error: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byCronJobId", ["cronJobId"])
-    .index("byStatus", ["status"]),
+    .index("byStatus", ["status"])
+    .index("byProjectId", ["projectId"]),
 
   // MCP (Model Context Protocol) connections
   mcpConnections: defineTable({
@@ -327,10 +334,12 @@ export default defineSchema({
     lastCheck: v.number(),
     nextCheck: v.number(),
     metadata: v.optional(v.any()),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byAgentId", ["agentId"])
     .index("byStatus", ["status"])
-    .index("byNextCheck", ["nextCheck"]),
+    .index("byNextCheck", ["nextCheck"])
+    .index("byProjectId", ["projectId"]),
 
   // Secure Vault for encrypted secrets storage
   vault: defineTable({
@@ -449,9 +458,11 @@ export default defineSchema({
     error: v.optional(v.string()),
     startedAt: v.optional(v.number()),
     completedAt: v.optional(v.number()),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byRunId", ["runId"])
-    .index("byStatus", ["status"]),
+    .index("byStatus", ["status"])
+    .index("byProjectId", ["projectId"]),
 
   // Memory entries for agent long-term and short-term memory
   memoryEntries: defineTable({

@@ -14,6 +14,7 @@ export const add = mutation({
     content: v.string(),
     tool_calls: v.optional(v.any()),
     fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const messageId = await ctx.db.insert("messages", {
@@ -43,6 +44,7 @@ export const create = mutation({
     content: v.string(),
     tool_calls: v.optional(v.any()),
     fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const messageId = await ctx.db.insert("messages", {

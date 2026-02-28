@@ -14,18 +14,19 @@ export const add = mutation({
     ),
     content: v.string(),
     tool_calls: v.optional(v.any()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const messageId = await ctx.db.insert("messages", {
       ...args,
       createdAt: Date.now(),
     });
-    
+
     // Update thread's updatedAt timestamp
     await ctx.db.patch(args.threadId, {
       updatedAt: Date.now(),
     });
-    
+
     return messageId;
   },
 });
@@ -42,6 +43,7 @@ export const create = mutation({
     ),
     content: v.string(),
     tool_calls: v.optional(v.any()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const messageId = await ctx.db.insert("messages", {
