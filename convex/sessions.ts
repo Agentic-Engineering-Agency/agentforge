@@ -7,14 +7,34 @@ export const list = query({
     userId: v.optional(v.string()),
     agentId: v.optional(v.string()),
     status: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
+    if (args.projectId) {
+      // Query by projectId index
+      const sessions = await ctx.db
+        .query("sessions")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
+
+      if (args.status) {
+        return sessions.filter((s) => s.status === args.status);
+      }
+      if (args.agentId) {
+        return sessions.filter((s) => s.agentId === args.agentId);
+      }
+      if (args.userId) {
+        return sessions.filter((s) => s.userId === args.userId);
+      }
+      return sessions;
+    }
+
     if (args.status) {
       const sessions = await ctx.db
         .query("sessions")
         .withIndex("byStatus", (q) => q.eq("status", args.status! as any))
         .collect();
-      
+
       if (args.userId) {
         return sessions.filter((s) => s.userId === args.userId);
       }
@@ -23,21 +43,21 @@ export const list = query({
       }
       return sessions;
     }
-    
+
     if (args.agentId) {
       return await ctx.db
         .query("sessions")
         .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
         .collect();
     }
-    
+
     if (args.userId) {
       return await ctx.db
         .query("sessions")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
         .collect();
     }
-    
+
     return await ctx.db.query("sessions").collect();
   },
 });
@@ -81,6 +101,7 @@ export const create = mutation({
     userId: v.optional(v.string()),
     channel: v.optional(v.string()),
     metadata: v.optional(v.any()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const now = Date.now();

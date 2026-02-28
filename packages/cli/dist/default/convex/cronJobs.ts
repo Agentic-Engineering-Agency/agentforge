@@ -194,11 +194,18 @@ export const recordRun = mutation({
     error: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Get the parent cron job to inherit projectId
+    const cronJob = await ctx.db.get(args.cronJobId);
+    if (!cronJob) {
+      throw new Error(`Cron job not found`);
+    }
+
     const now = Date.now();
     const runId = await ctx.db.insert("cronJobRuns", {
       cronJobId: args.cronJobId,
       status: args.status,
       startedAt: now,
+      projectId: cronJob.projectId,
       ...(args.status !== "running" && { completedAt: now }),
       ...(args.output && { output: args.output }),
       ...(args.error && { error: args.error }),
