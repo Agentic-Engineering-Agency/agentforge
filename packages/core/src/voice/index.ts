@@ -18,3 +18,7 @@ export {
   MAX_STT_FILE_SIZE,
 } from './voice-config.js';
 export type { VoiceConfig } from './voice-config.js';
+
+// TTS Engine Classes
+export { ElevenLabsTTS, WebSpeechTTS, createTTSEngine } from './tts.js';
+export type { TTSEngine, TTSEngineConfig } from './tts.js';
