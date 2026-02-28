@@ -31,6 +31,18 @@ export default defineSchema({
     // Docker sandbox configuration
     sandboxEnabled: v.optional(v.boolean()),
     sandboxImage: v.optional(v.string()),
+    // Workspace storage configuration
+    workspaceStorage: v.optional(
+      v.object({
+        type: v.union(v.literal("local"), v.literal("s3"), v.literal("r2")),
+        basePath: v.optional(v.string()),
+        bucket: v.optional(v.string()),
+        region: v.optional(v.string()),
+        endpoint: v.optional(v.string()),
+        accessKeyId: v.optional(v.string()),
+        secretAccessKey: v.optional(v.string()),
+      })
+    ),
   })
     .index("byAgentId", ["id"])
     .index("byUserId", ["userId"])
