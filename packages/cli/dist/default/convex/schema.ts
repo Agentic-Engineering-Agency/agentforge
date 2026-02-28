@@ -611,4 +611,33 @@ export default defineSchema({
     .index("by_category", ["category"])
     .index("by_downloads", ["downloads"])
     .searchIndex("search_skills", { searchField: "description", filterFields: ["category"] }),
+
+  // Research jobs for parallel multi-agent research
+  researchJobs: defineTable({
+    topic: v.string(),
+    depth: v.union(v.literal("shallow"), v.literal("medium"), v.literal("deep")),
+    agentCount: v.number(),
+    status: v.union(v.literal("pending"), v.literal("running"), v.literal("completed"), v.literal("failed")),
+    results: v.optional(v.string()),
+    synthesis: v.optional(v.string()),
+    questions: v.optional(v.array(v.object({
+      id: v.string(),
+      question: v.string(),
+      status: v.union(v.literal("pending"), v.literal("running"), v.literal("completed"), v.literal("failed")),
+    }))),
+    findings: v.optional(v.array(v.object({
+      questionId: v.string(),
+      question: v.string(),
+      answer: v.string(),
+    }))),
+    error: v.optional(v.string()),
+    userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("byStatus", ["status"])
+    .index("byUserId", ["userId"])
+    .index("byProjectId", ["projectId"])
+    .index("byCreatedAt", ["createdAt"]),
 });
