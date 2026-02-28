@@ -1705,6 +1705,83 @@ See \`scripts/\` for executable scripts the agent can run.
       error(`Skill "${name}" not found (installed or in registry).`);
     });
 
+  // ─── skills bundled ────────────────────────────────────────────────────
+  // List and run bundled skills (lightweight built-in capabilities)
+  skills
+    .command('bundled')
+    .description('List bundled skills (lightweight built-in capabilities)')
+    .action(async () => {
+      const { BUNDLED_SKILLS } = await import('@agentforge-ai/core');
+      header('Bundled Skills');
+      table(
+        BUNDLED_SKILLS.map((s) => ({
+          Name: s.name,
+          Description: truncate(s.description, 60),
+          Category: s.category,
+        }))
+      );
+      info(`Run a bundled skill: ${colors.cyan}agentforge skills run <name> --args '{"key":"value"}'${colors.reset}`);
+    });
+
+  // ─── skills run ────────────────────────────────────────────────────────────
+  // Execute a bundled skill directly from CLI
+  skills
+    .command('run')
+    .argument('<name>', 'Bundled skill name (e.g., calculator, datetime, web-search)')
+    .option('--args <json>', 'Arguments as JSON string')
+    .description('Run a bundled skill directly from the CLI')
+    .action(async (name, opts) => {
+      const { bundledSkillRegistry } = await import('@agentforge-ai/core');
+
+      // Check if skill exists
+      if (!bundledSkillRegistry.has(name)) {
+        error(`Bundled skill "${name}" not found.`);
+        info('Available bundled skills:');
+        const skills = bundledSkillRegistry.list();
+        for (const s of skills) {
+          dim(`  - ${s.name}: ${s.description}`);
+        }
+        process.exit(1);
+      }
+
+      // Parse arguments
+      let args: Record<string, unknown> = {};
+      if (opts.args) {
+        try {
+          args = JSON.parse(opts.args);
+        } catch {
+          error('Invalid JSON in --args');
+          process.exit(1);
+        }
+      }
+
+      header(`Running bundled skill: ${name}`);
+      info('Arguments:');
+      if (Object.keys(args).length > 0) {
+        for (const [key, value] of Object.entries(args)) {
+          dim(`  ${key}: ${JSON.stringify(value)}`);
+        }
+      } else {
+        dim('  (no arguments)');
+      }
+      console.log();
+
+      const startTime = Date.now();
+      try {
+        const result = await bundledledSkillRegistry.execute(name, args);
+        const elapsed = Date.now() - startTime;
+
+        success('Result:');
+        console.log(result);
+        console.log();
+        dim(`Completed in ${elapsed}ms`);
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : String(err);
+        error(`Skill execution failed: ${errMsg}`);
+        process.exit(1);
+      }
+    });
+
   // ─── Top-level alias: agentforge install <skill> ──────────────────
   program
     .command('install')
