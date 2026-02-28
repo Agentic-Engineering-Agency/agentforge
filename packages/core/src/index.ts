@@ -148,6 +148,19 @@ export type { SkillFileSystem } from './skills/skill-discovery.js';
 export { skillDefinitionSchema, SkillParseError } from './skills/types.js';
 export type { SkillDefinition, SkillToolDefinition } from './skills/types.js';
 
+// ─── Bundled Skills ────────────────────────────────────────────────────────────
+export {
+  BundledSkillRegistry,
+  bundledSkillRegistry,
+  BUNDLED_SKILLS,
+  WebSearchSkill,
+  CalculatorSkill,
+  DateTimeSkill,
+  UrlFetchSkill,
+  FileReaderSkill,
+} from './skills/bundled-index.js';
+export type { BundledSkill } from './skills/types.js';
+
 export {
   fetchFeaturedSkills,
   searchSkills,
@@ -174,3 +187,7 @@ export type {
   ResearchFinding,
   ResearchReport,
 } from './research/index.js';
+
+// ─── SSE Streaming ─────────────────────────────────────────────────────────────
+export { SSEStreamParser, streamToAsyncIterator, consumeStream } from './streaming.js';
+export type { SSEChunk } from './streaming.js';

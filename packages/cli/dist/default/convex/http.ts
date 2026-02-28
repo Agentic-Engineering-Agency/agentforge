@@ -1,421 +1,358 @@
-"use node";
-
-/**
- * Convex HTTP Actions for SSE Streaming
- *
- * AGE-173: Real token-by-token streaming via Convex HTTP actions + SSE.
- *
- * This module exposes HTTP endpoints for streaming agent responses:
- * - POST /stream-agent: Streams agent responses as SSE events
- *
- * SSE Event Format:
- * - Token:   data: {"token":"..."}\n\n
- * - Done:    data: {"done":true}\n\n
- * - Error:   data: {"error":"..."}\n\n
- *
- * Security:
- * - Input validation on agentId, message, threadId
- * - CORS headers for cross-origin requests
- * - No sensitive data in responses
- */
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
-import type { Doc } from "./_generated/dataModel";
-import { Agent } from "@mastra/core/agent";
-import type { MessageListInput } from "@mastra/core/agent/message-list";
+import { api } from "./_generated/api";
 
 const http = httpRouter();
 
-/**
- * Strip provider prefix from modelId to prevent double-prefixing.
- */
-function getBaseModelId(provider: string, modelId: string): string {
-  const prefix = `${provider}/`;
-  return modelId.startsWith(prefix) ? modelId.slice(prefix.length) : modelId;
-}
-
-/**
- * Return custom base URL for providers that aren't natively supported by Mastra.
- */
-function getProviderBaseUrl(provider: string): string | undefined {
-  const urls: Record<string, string> = {
-    openrouter: "https://openrouter.ai/api/v1",
-    mistral:    "https://api.mistral.ai/v1",
-    deepseek:   "https://api.deepseek.com",
-    xai:        "https://api.x.ai/v1",
-    cohere:     "https://api.cohere.ai/v1",
-  };
-  return urls[provider];
-}
-
-/**
- * Build the Mastra OpenAICompatibleConfig for BYOK.
- */
-function buildModelConfig(
-  provider: string,
-  modelId: string,
-  apiKey: string
-): { providerId: string; modelId: string; apiKey: string; url?: string } {
-  const baseModelId = getBaseModelId(provider, modelId);
-  const baseUrl = getProviderBaseUrl(provider);
+function corsHeaders(): Record<string, string> {
   return {
-    providerId: provider,
-    modelId: baseModelId,
-    apiKey,
-    ...(baseUrl ? { url: baseUrl } : {}),
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization",
   };
 }
 
-/**
- * Build MCP tool context string from active connections.
- */
-function buildMcpToolContext(
-  connections: Array<{ name: string; capabilities?: string[] }>
-): string {
-  if (connections.length === 0) return "";
-  const toolsList = connections
-    .map((c) => `${c.name} (${(c.capabilities || []).join(", ")})`)
-    .join(", ");
-  return `You have access to these MCP tools: ${toolsList}. Use them when relevant.`;
-}
-
-/**
- * Validate input for security.
- * Returns an error message if validation fails, null otherwise.
- */
-function validateInput(
-  agentId: unknown,
-  message: unknown,
-  threadId: unknown
-): string | null {
-  if (typeof agentId !== "string" || !agentId.trim()) {
-    return "Missing required field: agentId";
-  }
-  if (typeof message !== "string" || !message.trim()) {
-    return "Missing required field: message";
-  }
-  if (threadId !== undefined && typeof threadId !== "string") {
-    return "Invalid threadId format";
-  }
-
-  // Basic injection protection - agentId should be alphanumeric with dashes/underscores
-  const safeIdPattern = /^[a-zA-Z0-9_-]+$/;
-  if (!safeIdPattern.test(agentId as string)) {
-    return "Invalid agentId format";
-  }
-
-  // Message length limit (prevent abuse)
-  if ((message as string).length > 50000) {
-    return "Message too long (max 50000 characters)";
-  }
-
-  return null;
-}
-
-/**
- * POST /stream-agent
- *
- * Streams agent responses as Server-Sent Events (SSE).
- *
- * Request body:
- * - agentId: string (required) - The agent ID to use
- * - message: string (required) - The user message
- * - threadId: string (optional) - Thread ID for conversation context
- *
- * Response: SSE stream with:
- * - data: {"token":"..."} for each text chunk
- * - data: {"done":true} when complete
- * - data: {"error":"..."} on error
- */
+// OPTIONS preflight handler for CORS
 http.route({
-  path: "/stream-agent",
-  method: "POST",
+  path: "/api/files/download",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(),
+    });
+  }),
+});
+
+// File download endpoint — redirects to the stored file URL
+http.route({
+  path: "/api/files/download",
+  method: "GET",
   handler: httpAction(async (ctx, request) => {
-    // Parse request body
-    let body: { agentId?: string; message?: string; threadId?: string };
-    try {
-      body = await request.json();
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return new Response("Unauthorized", {
+        status: 401,
+        headers: corsHeaders(),
+      });
+    }
+
+    const url = new URL(request.url);
+    const fileId = url.searchParams.get("id");
+    if (!fileId) {
+      return new Response("Missing file id", {
         status: 400,
-        headers: { "Content-Type": "application/json" },
+        headers: corsHeaders(),
       });
     }
 
-    const { agentId, message, threadId } = body;
-
-    // Validate input
-    const validationError = validateInput(agentId, message, threadId);
-    if (validationError) {
-      return new Response(JSON.stringify({ error: validationError }), {
-        status: 400,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      });
-    }
-
-    // Get agent from DB
-    const agent = await ctx.runQuery(api.agents.get, { id: agentId });
-    if (!agent) {
-      return new Response(JSON.stringify({ error: "Agent not found" }), {
-        status: 404,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      });
-    }
-
-    // Get API key for the provider
-    const provider = agent.provider || "openrouter";
-    const apiKey = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
-    if (!apiKey) {
-      return new Response(
-        JSON.stringify({ error: `No API key configured for provider: ${provider}` }),
-        {
-          status: 500,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
-    }
-
-    // Get MCP tool context
-    const mcpConnections = await ctx.runQuery(api.mcpConnections.list, { isEnabled: true });
-    const mcpToolContext = buildMcpToolContext(
-      mcpConnections as Array<{ name: string; capabilities?: string[] }>
-    );
-
-    // Get conversation history if threadId provided
-    let conversationMessages: Array<{ role: "user" | "assistant" | "system"; content: string }> = [];
-    if (threadId) {
-      const history = await ctx.runQuery(api.messages.list, { threadId: threadId as any });
-      conversationMessages = (history as Array<{ role: string; content: string }>)
-        .slice(-20)
-        .map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
-    }
-
-    // Add current user message
-    conversationMessages.push({ role: "user", content: message! });
-
-    // Build full instructions with MCP tool context
-    const baseInstructions = agent.instructions || "You are a helpful AI assistant.";
-    const fullInstructions = mcpToolContext
-      ? `${baseInstructions}\n\n${mcpToolContext}`
-      : baseInstructions;
-
-    // Build model config
-    const modelId = agent.model || "auto";
-    const modelConfig = buildModelConfig(provider, modelId, apiKey);
-
-    // Create Mastra agent
-    const mastraAgent = new Agent({
-      id: "agentforge-streamer",
-      name: "agentforge-streamer",
-      instructions: fullInstructions,
-      model: modelConfig,
+    const file = await ctx.runQuery(api.files.getDownloadUrl, {
+      id: fileId as Parameters<typeof api.files.getDownloadUrl>[0]["id"],
     });
 
-    // Create SSE stream
-    const { readable, writable } = new TransformStream();
-    const writer = writable.getWriter();
-    const encoder = new TextEncoder();
-
-    // Start streaming in background
-    (async () => {
-      try {
-        const stream = await mastraAgent.stream(
-          conversationMessages as unknown as MessageListInput
-        );
-
-        // Stream text chunks
-        for await (const chunk of stream.textStream) {
-          await writer.write(
-            encoder.encode(`data: ${JSON.stringify({ token: chunk })}\n\n`)
-          );
-        }
-
-        // Send completion event
-        await writer.write(encoder.encode(`data: ${JSON.stringify({ done: true })}\n\n`));
-      } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : String(e);
-        await writer.write(
-          encoder.encode(`data: ${JSON.stringify({ error: errorMessage })}\n\n`)
-        );
-      } finally {
-        await writer.close();
-      }
-    })();
-
-    // Return SSE response
-    return new Response(readable, {
+    return new Response(null, {
+      status: 302,
       headers: {
-        "Content-Type": "text/event-stream",
-        "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
+        ...corsHeaders(),
+        Location: file.url,
       },
     });
   }),
 });
 
-/**
- * OPTIONS /stream-agent
- *
- * Pre-flight request handler for CORS.
- */
+// OPTIONS preflight for /a2a/task
 http.route({
-  path: "/stream-agent",
+  path: "/a2a/task",
   method: "OPTIONS",
-  handler: httpAction(async (_ctx, request) => {
-    const headers = request.headers;
-    if (
-      headers.get("Origin") !== null &&
-      headers.get("Access-Control-Request-Method") !== null &&
-      headers.get("Access-Control-Request-Headers") !== null
-    ) {
-      return new Response(null, {
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Methods": "POST, OPTIONS",
-          "Access-Control-Allow-Headers": "Content-Type",
-          "Access-Control-Max-Age": "86400",
-        },
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(),
+    });
+  }),
+});
+
+// POST /a2a/task — create a delegated A2A task
+http.route({
+  path: "/a2a/task",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const authHeader = request.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { ...corsHeaders(), "Content-Type": "application/json" },
       });
     }
-    return new Response();
+
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      });
+    }
+
+    const { from, to, instruction, context, constraints, callbackUrl, projectId } = body as {
+      from?: unknown;
+      to?: unknown;
+      instruction?: unknown;
+      context?: unknown;
+      constraints?: unknown;
+      callbackUrl?: unknown;
+      projectId?: unknown;
+    };
+
+    if (typeof from !== "string" || typeof to !== "string" || typeof instruction !== "string") {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields: from, to, instruction" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (instruction.length > 10000) {
+      return new Response(
+        JSON.stringify({ error: "instruction exceeds maximum length of 10000 characters" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const agentIdPattern = /^[a-zA-Z0-9_-]{1,128}$/;
+    if (!agentIdPattern.test(from)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid from agent ID format" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        }
+      );
+    }
+    if (!agentIdPattern.test(to)) {
+      return new Response(
+        JSON.stringify({ error: "Invalid to agent ID format" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    const taskId = crypto.randomUUID();
+
+    await ctx.runMutation(api.a2aTasks.createTask, {
+      taskId,
+      fromAgentId: from,
+      toAgentId: to,
+      instruction,
+      context: context ?? undefined,
+      constraints: constraints as Parameters<typeof api.a2aTasks.createTask>[0]["constraints"] ?? undefined,
+      callbackUrl: typeof callbackUrl === "string" ? callbackUrl : undefined,
+      projectId: projectId ?? undefined,
+    });
+
+    return new Response(JSON.stringify({ taskId, status: "pending" }), {
+      status: 202,
+      headers: { ...corsHeaders(), "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// GET /a2a/task — check task status by ?id=<taskId>
+http.route({
+  path: "/a2a/task",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    const url = new URL(request.url);
+    const taskId = url.searchParams.get("id");
+    if (!taskId) {
+      return new Response(JSON.stringify({ error: "Missing query param: id" }), {
+        status: 400,
+        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      });
+    }
+
+    const task = await ctx.runQuery(api.a2aTasks.getTask, { taskId });
+    if (!task) {
+      return new Response(JSON.stringify({ error: "Task not found" }), {
+        status: 404,
+        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      });
+    }
+
+    return new Response(JSON.stringify(task), {
+      status: 200,
+      headers: { ...corsHeaders(), "Content-Type": "application/json" },
+    });
+  }),
+});
+
+// OPTIONS preflight for /api/stream
+http.route({
+  path: "/api/stream",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(),
+    });
+  }),
+});
+
+// POST /api/stream — SSE streaming endpoint for agent responses
+// Returns token-by-token streaming via text/event-stream format
+http.route({
+  path: "/api/stream",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      });
+    }
+
+    const { agentId, message, threadId, userId } = body as {
+      agentId?: unknown;
+      message?: unknown;
+      threadId?: unknown;
+      userId?: unknown;
+    };
+
+    if (typeof agentId !== "string" || typeof message !== "string") {
+      return new Response(
+        JSON.stringify({ error: "Missing required fields: agentId, message" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    // Create a readable stream for SSE
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Get agent configuration
+          const agent = await ctx.runQuery(api.agents.get, { id: agentId });
+          if (!agent) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: "Agent not found" })}\n\n`));
+            controller.close();
+            return;
+          }
+
+          // Create or get thread
+          let currentThreadId = threadId as string | undefined;
+          if (!currentThreadId) {
+            currentThreadId = await ctx.runMutation(api.threads.create, {
+              agentId,
+              userId: typeof userId === "string" ? userId : undefined,
+            });
+          }
+
+          // Add user message to thread
+          await ctx.runMutation(api.messages.add, {
+            threadId: currentThreadId,
+            role: "user",
+            content: message,
+          });
+
+          // Create session
+          const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+          await ctx.runMutation(api.sessions.create, {
+            sessionId,
+            threadId: currentThreadId,
+            agentId,
+            userId: typeof userId === "string" ? userId : undefined,
+            channel: "api",
+          });
+
+          // Import Agent class for streaming
+          const { Agent: AgentClass } = await import("@agentforge-ai/core");
+          const { getBaseModelId, getProviderBaseUrl } = await import("./lib/apiKeys");
+
+          // Get API key for provider
+          const apiKeyData = await ctx.runQuery(api.apiKeys.getDecryptedForProvider, {
+            provider: agent.provider || "openrouter",
+          });
+
+          if (!apiKeyData || !apiKeyData.apiKey) {
+            throw new Error(`No API key found for provider: ${agent.provider}`);
+          }
+
+          // Create agent instance
+          const mastraAgent = new AgentClass({
+            id: agentId,
+            name: agent.name,
+            instructions: agent.instructions || "You are a helpful AI assistant.",
+            model: {
+              providerId: agent.provider || "openrouter",
+              modelId: getBaseModelId(agent.provider || "openrouter", agent.model || "gpt-4o-mini"),
+              apiKey: apiKeyData.apiKey,
+              url: getProviderBaseUrl(agent.provider || "openrouter"),
+            },
+            temperature: agent.temperature,
+            maxTokens: agent.maxTokens,
+          });
+
+          // Stream the response
+          let fullResponse = "";
+          for await (const chunk of mastraAgent.stream(message)) {
+            const text = chunk.content;
+            fullResponse += text;
+
+            // Send SSE event
+            controller.enqueue(
+              encoder.encode(`data: ${JSON.stringify({ type: "text-delta", textDelta: text })}\n\n`)
+            );
+          }
+
+          // Add assistant message to thread
+          await ctx.runMutation(api.messages.add, {
+            threadId: currentThreadId,
+            role: "assistant",
+            content: fullResponse,
+          });
+
+          // Update session status
+          await ctx.runMutation(api.sessions.updateStatus, {
+            sessionId,
+            status: "completed",
+          });
+
+          // Send done event
+          controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
+          controller.close();
+        } catch (error: unknown) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "error", error: errorMessage })}\n\n`)
+          );
+          controller.close();
+        }
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        ...corsHeaders(),
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        "Connection": "keep-alive",
+      },
+    });
   }),
 });
 
 export default http;
-
-// ─── AGE-176: OpenAI Chat Completions endpoint ────────────────────────────────
-
-/**
- * POST /v1/chat/completions
- *
- * OpenAI-compatible endpoint. Authenticate with:
- *   Authorization: Bearer agf_<token>
- * The `model` field maps to an AgentForge agentId.
- * Supports both streaming (stream:true → SSE) and non-streaming.
- */
-http.route({
-  path: "/v1/chat/completions",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    // Validate Authorization header
-    const authHeader = request.headers.get("Authorization") ?? "";
-    if (!authHeader.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: { message: "Missing or invalid Authorization header", type: "auth_error" } }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-    const plaintext = authHeader.slice(7).trim();
-    const tokenHash = await hashTokenHttp(plaintext);
-    const tokenData = await ctx.runQuery(internal.apiAccessTokens.validateToken, { tokenHash });
-    if (!tokenData) {
-      return new Response(
-        JSON.stringify({ error: { message: "Invalid or revoked token", type: "auth_error" } }),
-        { status: 401, headers: { "Content-Type": "application/json" } }
-      );
-    }
-
-    // Parse request
-    let body: { model?: string; messages?: Array<{ role: string; content: string }>; stream?: boolean };
-    try { body = await request.json(); } catch {
-      return new Response(JSON.stringify({ error: { message: "Invalid JSON" } }), { status: 400 });
-    }
-
-    const { model: agentId, messages = [], stream = false } = body;
-    if (!agentId) return new Response(JSON.stringify({ error: { message: "model (agentId) is required" } }), { status: 400 });
-
-    // Token scope check
-    if (tokenData.agentId && tokenData.agentId !== agentId) {
-      return new Response(JSON.stringify({ error: { message: "Token not authorized for this agent" } }), { status: 403 });
-    }
-
-    // Record usage (fire-and-forget)
-    ctx.runMutation(internal.apiAccessTokens.recordUsage, { tokenId: tokenData.tokenId }).catch(() => {});
-
-    // Get agent
-    const agent = await ctx.runQuery(api.agents.get, { id: agentId });
-    if (!agent) return new Response(JSON.stringify({ error: { message: "Agent not found" } }), { status: 404 });
-
-    const typedAgent = agent as Doc<"agents">;
-    const provider = typedAgent.provider || "openrouter";
-    const apiKey = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
-    if (!apiKey) return new Response(JSON.stringify({ error: { message: `No API key for provider: ${provider}` } }), { status: 500 });
-
-    const modelConfig = buildModelConfig(provider, typedAgent.model || "auto", apiKey);
-    const mastraAgent = new Agent({
-      id: "agf-completions",
-      name: "agf-completions",
-      instructions: typedAgent.instructions || "You are a helpful assistant.",
-      model: modelConfig,
-    });
-
-    const typedMessages = messages.map((m) => ({ role: m.role as "user" | "assistant" | "system", content: m.content }));
-    const completionId = `chatcmpl-${Date.now()}`;
-
-    if (stream) {
-      // Streaming SSE response
-      const { readable, writable } = new TransformStream();
-      const writer = writable.getWriter();
-      const encoder = new TextEncoder();
-
-      (async () => {
-        try {
-          const streamResult = await mastraAgent.stream(typedMessages as unknown as MessageListInput);
-          for await (const chunk of streamResult.textStream) {
-            const data = { id: completionId, object: "chat.completion.chunk", choices: [{ delta: { content: chunk }, index: 0, finish_reason: null }] };
-            await writer.write(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-          }
-          await writer.write(encoder.encode(`data: [DONE]\n\n`));
-        } catch (e) {
-          const err = e instanceof Error ? e.message : String(e);
-          await writer.write(encoder.encode(`data: ${JSON.stringify({ error: err })}\n\n`));
-        } finally { await writer.close(); }
-      })();
-
-      return new Response(readable, {
-        headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache", "Access-Control-Allow-Origin": "*" },
-      });
-    } else {
-      // Non-streaming full response
-      const result = await mastraAgent.generate(typedMessages as unknown as MessageListInput);
-      const content = result.text ?? "";
-      return new Response(JSON.stringify({
-        id: completionId,
-        object: "chat.completion",
-        created: Math.floor(Date.now() / 1000),
-        model: agentId,
-        choices: [{ index: 0, message: { role: "assistant", content }, finish_reason: "stop" }],
-        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-      }), { headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    }
-  }),
-});
-
-http.route({
-  path: "/v1/chat/completions",
-  method: "OPTIONS",
-  handler: httpAction(async (_ctx, _request) => {
-    return new Response(null, {
-      headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type, Authorization" },
-    });
-  }),
-});
-
-/** SHA-256 hash using Web Crypto API (available in Convex runtime) */
-async function hashTokenHttp(token: string): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
