@@ -19,6 +19,8 @@ import {
   MessageSquare,
   Trash2,
   ExternalLink,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
 
 // ============================================================
@@ -96,6 +98,9 @@ function ChatPageComponent() {
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [vaultNotification, setVaultNotification] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isStreamingMode, setIsStreamingMode] = useState(true);
+  const [streamingMessage, setStreamingMessage] = useState<string>("");
+  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -166,9 +171,13 @@ function ChatPageComponent() {
         return;
       }
 
-      await sendMessageToChat(input);
+      if (isStreamingMode) {
+        await sendMessageStreaming(input);
+      } else {
+        await sendMessageToChat(input);
+      }
     },
-    [input, currentAgentId, currentThreadId]
+    [input, currentAgentId, currentThreadId, isStreamingMode]
   );
 
   const sendMessageToChat = async (text: string, secrets?: DetectedSecret[]) => {
@@ -215,9 +224,161 @@ function ChatPageComponent() {
     }
   };
 
+  // ── Send message with SSE streaming ───────────────────────────
+  const sendMessageStreaming = async (text: string, secrets?: DetectedSecret[]) => {
+    if (!currentAgentId) return;
+
+    let messageText = text;
+    if (secrets && secrets.length > 0) {
+      messageText = censorText(text, secrets);
+      setVaultNotification(
+        `${secrets.length} secret${secrets.length > 1 ? "s" : ""} detected and redacted.`
+      );
+      setTimeout(() => setVaultNotification(null), 5000);
+    }
+
+    setInput("");
+    setIsGenerating(true);
+    setStreamingMessage("");
+    setError(null);
+
+    try {
+      // If no thread exists, create one first
+      let threadId = currentThreadId;
+      if (!threadId) {
+        const agent = agents.find((a: any) => a.id === currentAgentId);
+        threadId = await createThread({
+          agentId: currentAgentId,
+          name: `Chat with ${agent?.name || "Agent"}`,
+        });
+        setCurrentThreadId(threadId);
+      }
+
+      // Build Convex site URL for SSE endpoint
+      const convexUrl = import.meta.env.VITE_CONVEX_URL;
+      let apiUrl: string;
+      if (import.meta.env.VITE_CONVEX_SITE_URL) {
+        apiUrl = `${import.meta.env.VITE_CONVEX_SITE_URL}/api/stream`;
+      } else {
+        // Convert .cloud to .site for HTTP endpoints
+        apiUrl = convexUrl?.replace('https://', 'https://').replace('.convex.cloud', '.convex.site') + '/api/stream';
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: currentAgentId,
+          message: messageText,
+          threadId: threadId,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+
+      if (!reader) {
+        throw new Error('No response body');
+      }
+
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+            if (data === '[DONE]') {
+              setIsGenerating(false);
+              setStreamingMessage('');
+              return;
+            }
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.type === 'text-delta' && parsed.textDelta) {
+                setStreamingMessage(prev => prev + parsed.textDelta);
+              } else if (parsed.type === 'error') {
+                throw new Error(parsed.error || 'Stream error');
+              }
+            } catch {
+              // Ignore parse errors for non-JSON lines
+            }
+          }
+        }
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Streaming failed: ${msg}`);
+    } finally {
+      setIsGenerating(false);
+      setStreamingMessage('');
+    }
+  };
+
+  // ── Play voice TTS for message ───────────────────────────────────
+  const playVoiceForMessage = async (messageContent: string, messageId: string) => {
+    if (playingMessageId) return; // Already playing
+
+    setPlayingMessageId(messageId);
+
+    try {
+      const convexUrl = import.meta.env.VITE_CONVEX_URL;
+      let apiUrl: string;
+      if (import.meta.env.VITE_CONVEX_SITE_URL) {
+        apiUrl = `${import.meta.env.VITE_CONVEX_SITE_URL}/api/voice/synthesize`;
+      } else {
+        apiUrl = convexUrl?.replace('https://', 'https://').replace('.convex.cloud', '.convex.site') + '/api/voice/synthesize';
+      }
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: messageContent }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      audio.onended = () => {
+        URL.revokeObjectURL(audioUrl);
+        setPlayingMessageId(null);
+      };
+
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        setPlayingMessageId(null);
+      };
+
+      await audio.play();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Voice playback failed: ${msg}`);
+      setPlayingMessageId(null);
+    }
+  };
+
   const handleConfirmSendWithSecrets = () => {
     if (pendingMessage && secretWarning) {
-      sendMessageToChat(pendingMessage, secretWarning);
+      if (isStreamingMode) {
+        sendMessageStreaming(pendingMessage, secretWarning);
+      } else {
+        sendMessageToChat(pendingMessage, secretWarning);
+      }
     }
     setSecretWarning(null);
     setPendingMessage(null);
@@ -263,6 +424,26 @@ function ChatPageComponent() {
             </button>
           </div>
           <div className="flex items-center gap-3">
+            {/* Streaming mode toggle */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-background border border-border rounded-lg">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <span className="text-xs text-muted-foreground">Stream</span>
+                <button
+                  type="button"
+                  onClick={() => setIsStreamingMode(!isStreamingMode)}
+                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                    isStreamingMode ? 'bg-primary' : 'bg-muted'
+                  }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      isStreamingMode ? 'translate-x-5' : 'translate-x-0.5'
+                    }`}
+                  />
+                </button>
+              </label>
+            </div>
+
             {/* Agent selector */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-background border border-border rounded-lg">
               <div
@@ -408,6 +589,21 @@ function ChatPageComponent() {
                         View Run <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
+                    {msg.role === "assistant" && (
+                      <button
+                        type="button"
+                        onClick={() => playVoiceForMessage(msg.content, msg._id)}
+                        disabled={playingMessageId !== null}
+                        className="inline-flex items-center gap-1 text-primary/70 hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Play voice"
+                      >
+                        {playingMessageId === msg._id ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          <Volume2 className="w-3 h-3" />
+                        )}
+                      </button>
+                    )}
                   </div>
                 </div>
                 {msg.role === "user" && (
@@ -417,6 +613,23 @@ function ChatPageComponent() {
                 )}
               </div>
             ))}
+
+            {/* Streaming message indicator */}
+            {streamingMessage && (
+              <div className="flex items-end gap-2.5 justify-start">
+                <div className="w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-primary" />
+                </div>
+                <div className="max-w-[75%]">
+                  <div className="px-4 py-2.5 rounded-2xl rounded-bl-md bg-card border border-border">
+                    <p className="text-sm whitespace-pre-wrap">
+                      {streamingMessage}
+                      <span className="inline-block w-2 h-4 bg-primary ml-1 animate-pulse" />
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Typing indicator */}
             {isGenerating && (
