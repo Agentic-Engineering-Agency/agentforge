@@ -176,6 +176,8 @@ export type { MarketplaceSkill, PublishSkillInput } from './skills/marketplace-c
 // ─── Voice Tools (TTS + STT) ─────────────────────────────────────────────────
 export { textToSpeech, speechToText, createVoiceTool, sanitizeTtsText, DEFAULT_VOICE_CONFIG, MAX_TTS_TEXT_LENGTH, MAX_STT_FILE_SIZE } from './voice/index.js';
 export type { TtsRequest, TtsResponse, SttRequest, SttResponse, VoiceConfig } from './voice/index.js';
+export { ElevenLabsTTS, WebSpeechTTS, createTTSEngine } from './voice/index.js';
+export type { TTSEngine, TTSEngineConfig } from './voice/index.js';
 
 // ─── Deep Research Mode ────────────────────────────────────────────────────────
 export { ResearchOrchestrator } from './research/index.js';
@@ -187,6 +189,14 @@ export type {
   ResearchFinding,
   ResearchReport,
 } from './research/index.js';
+
+// ─── Multi-Agent Workflows ───────────────────────────────────────────────────────
+export { AgentPipeline } from './workflows/index.js';
+export type {
+  PipelineStep,
+  PipelineHistoryEntry,
+  AgentPipelineConfig,
+} from './workflows/index.js';
 
 // ─── SSE Streaming ─────────────────────────────────────────────────────────────
 export { SSEStreamParser, streamToAsyncIterator, consumeStream } from './streaming.js';

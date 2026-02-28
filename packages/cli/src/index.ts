@@ -26,6 +26,8 @@ import { registerSandboxCommand } from './commands/sandbox.js';
 import { registerResearchCommand } from './commands/research.js';
 import { authCommand } from './commands/auth.js';
 import { browserCommand } from './commands/browser.js';
+import { registerVoiceCommand } from './commands/voice.js';
+import { registerWorkflowsCommand } from './commands/workflows.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -134,11 +136,15 @@ registerSandboxCommand(program);
 // ─── Research ─────────────────────────────────────────────────────
 registerResearchCommand(program);
 
-// ─── Dashboard Auth ───────────────────────────────────────────────
-program.addCommand(authCommand);
 
 // ─── Browser Automation ───────────────────────────────────────────
+// ─── Dashboard Auth ───────────────────────────────────────────────
+// ─── Voice ─────────────────────────────────────────────────────
+// ─── Workflows ─────────────────────────────────────────────────
+program.addCommand(authCommand);
 program.addCommand(browserCommand);
+registerVoiceCommand(program);
+registerWorkflowsCommand(program);
 
 // ─── Status, Dashboard, Logs, Heartbeat ──────────────────────────
 registerStatusCommand(program);
