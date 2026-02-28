@@ -22,6 +22,7 @@ import { registerTokensCommand } from './commands/tokens.js';
 import { registerChannelTelegramCommand } from './commands/channel-telegram.js';
 import { registerChannelWhatsAppCommand } from './commands/channel-whatsapp.js';
 import { registerChannelSlackCommand } from './commands/channel-slack.js';
+import { registerChannelDiscordCommand } from './commands/channel-discord.js';
 import { registerSandboxCommand } from './commands/sandbox.js';
 import { registerResearchCommand } from './commands/research.js';
 import { authCommand } from './commands/auth.js';
@@ -129,6 +130,7 @@ registerKeysCommand(program);
 registerChannelTelegramCommand(program);
 registerChannelWhatsAppCommand(program);
 registerChannelSlackCommand(program);
+registerChannelDiscordCommand(program);
 
 // ─── Sandbox ─────────────────────────────────────────────────────
 registerSandboxCommand(program);
