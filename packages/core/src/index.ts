@@ -125,6 +125,12 @@ export * from './channels/slack/index.js';
 
 export * from './mcp/index.js';
 
+export { MCPExecutor } from './mcp-executor.js';
+export type { MCPExecutorConfig, ToolInfo } from './mcp-executor.js';
+
+export { FailoverChain, FailoverExhaustedError } from './failover.js';
+export type { ProviderConfig, FailoverChainConfig } from './failover.js';
+
 export { A2AAgentRegistry, A2AClient, A2AServer } from './a2a/index.js';
 export type {
   A2ATask,

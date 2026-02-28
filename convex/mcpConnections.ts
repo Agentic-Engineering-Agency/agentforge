@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 
 // Query: List MCP connections
 export const list = query({
@@ -137,5 +137,42 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
     return { success: true };
+  },
+});
+
+// Action: Get MCP connection config for tool execution
+// Note: Actual tool execution happens client-side via MCPExecutor
+// Convex cannot run Node.js process spawning directly
+export const executeToolCall = action({
+  args: {
+    id: v.id("mcpConnections"),
+    toolName: v.string(),
+    toolArgs: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    // Get connection config for client-side execution
+    const connection = await ctx.runQuery(internal.mcpConnections.get, { id: args.id });
+
+    if (!connection) {
+      throw new Error(`MCP connection not found: ${args.id}`);
+    }
+
+    if (!connection.isEnabled) {
+      throw new Error(`MCP connection is disabled: ${connection.name}`);
+    }
+
+    // Return connection config for client-side MCPExecutor to use
+    // Actual execution happens outside Convex (requires child_process)
+    return {
+      connection: {
+        id: connection._id,
+        name: connection.name,
+        serverUrl: connection.serverUrl,
+        protocol: connection.protocol,
+        credentials: connection.credentials,
+      },
+      toolName: args.toolName,
+      toolArgs: args.toolArgs,
+    };
   },
 });

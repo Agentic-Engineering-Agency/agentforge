@@ -1,32 +1,45 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, action } from "./_generated/server";
 
 // Query: List MCP connections
 export const list = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
     isEnabled: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
+    if (args.projectId) {
+      const connections = await ctx.db
+        .query("mcpConnections")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .collect();
+
+      if (args.isEnabled !== undefined) {
+        return connections.filter((c) => c.isEnabled === args.isEnabled);
+      }
+      return connections;
+    }
+
     if (args.isEnabled !== undefined) {
       const connections = await ctx.db
         .query("mcpConnections")
         .withIndex("byIsEnabled", (q) => q.eq("isEnabled", args.isEnabled!))
         .collect();
-      
+
       if (args.userId) {
         return connections.filter((c) => c.userId === args.userId);
       }
       return connections;
     }
-    
+
     if (args.userId) {
       return await ctx.db
         .query("mcpConnections")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
         .collect();
     }
-    
+
     return await ctx.db.query("mcpConnections").collect();
   },
 });
@@ -48,6 +61,7 @@ export const create = mutation({
     credentials: v.optional(v.any()),
     capabilities: v.optional(v.any()),
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -87,25 +101,14 @@ export const updateStatus = mutation({
   args: {
     id: v.id("mcpConnections"),
     isConnected: v.boolean(),
-    lastConnectedAt: v.optional(v.number()),
-    toolCount: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const { id, isConnected, lastConnectedAt, toolCount } = args;
-    const updates: Record<string, any> = {
-      isConnected,
+    await ctx.db.patch(args.id, {
+      isConnected: args.isConnected,
+      lastConnectedAt: args.isConnected ? Date.now() : undefined,
       updatedAt: Date.now(),
-    };
-    if (lastConnectedAt !== undefined) {
-      updates.lastConnectedAt = lastConnectedAt;
-    } else if (isConnected) {
-      updates.lastConnectedAt = Date.now();
-    }
-    if (toolCount !== undefined) {
-      updates.toolCount = toolCount;
-    }
-    await ctx.db.patch(id, updates);
-    return id;
+    });
+    return args.id;
   },
 });
 
@@ -134,5 +137,42 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
     return { success: true };
+  },
+});
+
+// Action: Get MCP connection config for tool execution
+// Note: Actual tool execution happens client-side via MCPExecutor
+// Convex cannot run Node.js process spawning directly
+export const executeToolCall = action({
+  args: {
+    id: v.id("mcpConnections"),
+    toolName: v.string(),
+    toolArgs: v.optional(v.any()),
+  },
+  handler: async (ctx, args) => {
+    // Get connection config for client-side execution
+    const connection = await ctx.runQuery(internal.mcpConnections.get, { id: args.id });
+
+    if (!connection) {
+      throw new Error(`MCP connection not found: ${args.id}`);
+    }
+
+    if (!connection.isEnabled) {
+      throw new Error(`MCP connection is disabled: ${connection.name}`);
+    }
+
+    // Return connection config for client-side MCPExecutor to use
+    // Actual execution happens outside Convex (requires child_process)
+    return {
+      connection: {
+        id: connection._id,
+        name: connection.name,
+        serverUrl: connection.serverUrl,
+        protocol: connection.protocol,
+        credentials: connection.credentials,
+      },
+      toolName: args.toolName,
+      toolArgs: args.toolArgs,
+    };
   },
 });
