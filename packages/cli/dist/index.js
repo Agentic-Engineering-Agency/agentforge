@@ -331,8 +331,8 @@ var CloudClient = class {
    */
   getUrl(endpoint) {
     const base = this.baseUrl.replace(/\/$/, "");
-    const path14 = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-    return `${base}${path14}`;
+    const path16 = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    return `${base}${path16}`;
   }
   /**
    * Get request headers with authentication
@@ -3228,6 +3228,7 @@ function registerCronCommand(program2) {
 }
 
 // src/commands/mcp.ts
+import { MCPExecutor } from "@agentforge-ai/core/mcp-executor";
 import readline5 from "readline";
 function prompt4(q) {
   const rl = readline5.createInterface({ input: process.stdin, output: process.stdout });
@@ -3319,6 +3320,92 @@ function registerMcpCommand(program2) {
     const client = await createClient();
     await safeCall(() => client.mutation("mcpConnections:update", { id, isEnabled: false }), "Failed");
     success(`Connection "${id}" disabled.`);
+  });
+  mcp.command("list-tools").argument("<connection-name>", "Connection name").description("List available tools from an MCP server").action(async (connectionName) => {
+    const client = await createClient();
+    const conns = await safeCall(() => client.query("mcpConnections:list", {}), "Failed to list connections");
+    const conn = conns.find((c) => c.name === connectionName || c._id?.endsWith(connectionName));
+    if (!conn) {
+      error(`Connection "${connectionName}" not found.`);
+      process.exit(1);
+    }
+    if (!conn.isEnabled) {
+      error(`Connection "${connectionName}" is disabled.`);
+      process.exit(1);
+    }
+    const config = await safeCall(
+      () => client.action("mcpConnections:executeToolCall", {
+        id: conn._id,
+        toolName: "",
+        toolArgs: {}
+      }),
+      "Failed to get connection config"
+    );
+    const executor = new MCPExecutor();
+    try {
+      const [command, ...args] = config.connection.serverUrl.split(" ");
+      await executor.connect({
+        id: conn._id,
+        command,
+        args,
+        env: config.connection.credentials
+      });
+      const tools = await executor.listTools();
+      header(`Available tools from "${connectionName}":`);
+      table(tools.map((t) => ({
+        Name: t.name,
+        Description: t.description || "N/A"
+      })));
+      await executor.disconnect();
+    } catch (e) {
+      error(`Failed to list tools: ${e.message}`);
+      process.exit(1);
+    }
+  });
+  mcp.command("run").argument("<connection-name>", "Connection name").argument("<tool-name>", "Tool name to execute").option("--args <json>", "Tool arguments as JSON string", "{}").description("Execute a tool on an MCP server").action(async (connectionName, toolName, opts) => {
+    const client = await createClient();
+    const conns = await safeCall(() => client.query("mcpConnections:list", {}), "Failed to list connections");
+    const conn = conns.find((c) => c.name === connectionName || c._id?.endsWith(connectionName));
+    if (!conn) {
+      error(`Connection "${connectionName}" not found.`);
+      process.exit(1);
+    }
+    if (!conn.isEnabled) {
+      error(`Connection "${connectionName}" is disabled.`);
+      process.exit(1);
+    }
+    let toolArgs;
+    try {
+      toolArgs = JSON.parse(opts.args);
+    } catch {
+      error("Invalid JSON in --args");
+      process.exit(1);
+    }
+    const config = await safeCall(
+      () => client.action("mcpConnections:executeToolCall", {
+        id: conn._id,
+        toolName,
+        toolArgs
+      }),
+      "Failed to get connection config"
+    );
+    const executor = new MCPExecutor();
+    try {
+      const [command, ...args] = config.connection.serverUrl.split(" ");
+      await executor.connect({
+        id: conn._id,
+        command,
+        args,
+        env: config.connection.credentials
+      });
+      const result = await executor.executeTool(toolName, toolArgs);
+      success(`Tool "${toolName}" executed successfully:`);
+      console.log(JSON.stringify(result, null, 2));
+      await executor.disconnect();
+    } catch (e) {
+      error(`Failed to execute tool: ${e.message}`);
+      process.exit(1);
+    }
   });
 }
 
@@ -5927,6 +6014,184 @@ async function runMinimalSlackBot(config) {
   });
 }
 
+// src/commands/sandbox.ts
+import fs14 from "fs-extra";
+import path14 from "path";
+function registerSandboxCommand(program2) {
+  program2.command("sandbox").description("Run code in an isolated Docker sandbox").argument("<file>", "Path to the JavaScript/TypeScript file to execute").option("-i, --image <image>", "Docker image to use (default: node:22-slim)", "node:22-slim").option("-t, --timeout <ms>", "Execution timeout in milliseconds (default: 30000)", "30000").action(async (file, options) => {
+    await runSandbox(file, options);
+  });
+}
+async function runSandbox(file, options) {
+  header();
+  const filePath = path14.resolve(file);
+  if (!await fs14.pathExists(filePath)) {
+    error(`File not found: ${file}`);
+    process.exit(1);
+  }
+  const imageName = options.image || "node:22-slim";
+  const timeoutMs = parseInt(String(options.timeout), 10) || 3e4;
+  info(`Running file in isolated Docker sandbox`);
+  dim(`File: ${filePath}`);
+  dim(`Image: ${imageName}`);
+  dim(`Timeout: ${timeoutMs}ms`);
+  let SandboxManager;
+  try {
+    const sandboxModule = await import("@agentforge-ai/core/sandbox");
+    SandboxManager = sandboxModule.DockerSandboxManager;
+  } catch (err) {
+    error("Failed to load sandbox module. Make sure @agentforge-ai/core is installed.");
+    process.exit(1);
+  }
+  const manager = new SandboxManager({
+    provider: "docker",
+    dockerConfig: {
+      image: imageName,
+      timeout: timeoutMs / 1e3
+    }
+  });
+  let sandbox;
+  try {
+    await manager.initialize();
+    sandbox = await manager.create({
+      scope: "agent",
+      workspaceAccess: "none"
+    });
+    success("Sandbox started");
+    const containerId = sandbox.getContainerId();
+    if (containerId) {
+      dim(`Container ID: ${containerId}`);
+    }
+    const fileContent = await fs14.readFile(filePath, "utf-8");
+    const fileName = path14.basename(filePath);
+    await sandbox.writeFile(`/workspace/${fileName}`, fileContent);
+    dim(`File written to sandbox: /workspace/${fileName}`);
+    info("Executing file...");
+    const result = await sandbox.exec(`node /workspace/${fileName}`, {
+      timeout: timeoutMs
+    });
+    if (result.stdout) {
+      console.log("\n" + result.stdout);
+    }
+    if (result.stderr) {
+      console.error("\n" + result.stderr);
+    }
+    if (result.exitCode === 0) {
+      success("Execution completed successfully");
+    } else {
+      error(`Execution failed with exit code ${result.exitCode}`);
+      process.exit(result.exitCode);
+    }
+  } catch (err) {
+    error(`Sandbox execution failed: ${err instanceof Error ? err.message : String(err)}`);
+    await manager.shutdown();
+    process.exit(1);
+  } finally {
+    if (sandbox) {
+      await manager.destroy(sandbox);
+      success("Sandbox destroyed");
+    }
+    await manager.shutdown();
+  }
+}
+
+// src/commands/research.ts
+import fs15 from "fs-extra";
+import path15 from "path";
+function registerResearchCommand(program2) {
+  program2.command("research").description("Deep Research Mode \u2014 parallel multi-agent research").argument("<topic>", "Research topic or question").option("-d, --depth <depth>", "Research depth: shallow, standard, or deep", "standard").option("-p, --provider <provider>", "LLM provider (default: openai)", "openai").option("-m, --model <model>", "Model to use (default: gpt-4o-mini)", "gpt-4o-mini").option("-k, --key <key>", "API key (default: from environment)").action(async (topic, options) => {
+    await runResearch(topic, options);
+  });
+}
+async function runResearch(topic, options) {
+  header();
+  const depth = options.depth || "standard";
+  const provider = options.provider || "openai";
+  const model = options.model || "gpt-4o-mini";
+  let apiKey = options.key;
+  if (!apiKey) {
+    const envVar = `${provider.toUpperCase()}_API_KEY`;
+    apiKey = process.env[envVar] || "";
+    if (!apiKey) {
+      error(`API key not found. Set ${envVar} environment variable or use --key option.`);
+      process.exit(1);
+    }
+  }
+  info(`Starting Deep Research Mode`);
+  dim(`Topic: ${topic}`);
+  dim(`Depth: ${depth}`);
+  dim(`Provider: ${provider}`);
+  dim(`Model: ${model}`);
+  let ResearchOrchestrator;
+  try {
+    const researchModule = await import("@agentforge-ai/core");
+    ResearchOrchestrator = researchModule.ResearchOrchestrator;
+  } catch (err) {
+    error("Failed to load ResearchOrchestrator. Make sure @agentforge-ai/core is installed.");
+    process.exit(1);
+  }
+  const agentCount = depth === "shallow" ? 3 : depth === "standard" ? 5 : 10;
+  dim(`Spawning ${agentCount} parallel research agents...`);
+  const orchestrator = new ResearchOrchestrator({ topic, depth });
+  try {
+    info("Running research workflow...");
+    dim("  Step 1: Planning \u2014 generating research questions...");
+    const report = await orchestrator.run({
+      providerId: provider,
+      modelId: model,
+      apiKey
+    });
+    success("Research complete!");
+    dim(`  Generated ${report.questions.length} research questions`);
+    dim(`  Collected ${report.findings.length} findings`);
+    dim(`  Synthesized comprehensive report`);
+    const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, -5);
+    const filename = `research-${timestamp}.md`;
+    const filepath = path15.resolve(filename);
+    const reportContent = formatReport(report);
+    await fs15.writeFile(filepath, reportContent, "utf-8");
+    console.log("\n" + reportContent);
+    success(`Report saved to: ${filename}`);
+  } catch (err) {
+    error(`Research failed: ${err instanceof Error ? err.message : String(err)}`);
+    process.exit(1);
+  }
+}
+function formatReport(report) {
+  const lines = [];
+  lines.push(`# Research Report: ${report.topic}`);
+  lines.push("");
+  lines.push(`**Depth:** ${report.depth}  |  **Date:** ${new Date(report.timestamp).toLocaleString()}`);
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## Research Questions");
+  lines.push("");
+  for (const q of report.questions) {
+    lines.push(`${q.id}. ${q.question}`);
+  }
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## Synthesis");
+  lines.push("");
+  lines.push(report.synthesis);
+  lines.push("");
+  lines.push("---");
+  lines.push("");
+  lines.push("## Individual Findings");
+  lines.push("");
+  for (const finding of report.findings) {
+    lines.push(`### ${finding.question}`);
+    lines.push("");
+    lines.push(finding.answer);
+    lines.push("");
+    lines.push("---");
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+
 // src/index.ts
 import { readFileSync } from "fs";
 import { fileURLToPath as fileURLToPath2 } from "url";
@@ -5965,6 +6230,8 @@ registerKeysCommand(program);
 registerChannelTelegramCommand(program);
 registerChannelWhatsAppCommand(program);
 registerChannelSlackCommand(program);
+registerSandboxCommand(program);
+registerResearchCommand(program);
 registerStatusCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map
