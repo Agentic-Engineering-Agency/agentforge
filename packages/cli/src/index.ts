@@ -22,6 +22,8 @@ import { registerTokensCommand } from './commands/tokens.js';
 import { registerChannelTelegramCommand } from './commands/channel-telegram.js';
 import { registerChannelWhatsAppCommand } from './commands/channel-whatsapp.js';
 import { registerChannelSlackCommand } from './commands/channel-slack.js';
+import { registerSandboxCommand } from './commands/sandbox.js';
+import { registerResearchCommand } from './commands/research.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
@@ -123,6 +125,12 @@ registerKeysCommand(program);
 registerChannelTelegramCommand(program);
 registerChannelWhatsAppCommand(program);
 registerChannelSlackCommand(program);
+
+// ─── Sandbox ─────────────────────────────────────────────────────
+registerSandboxCommand(program);
+
+// ─── Research ─────────────────────────────────────────────────────
+registerResearchCommand(program);
 
 // ─── Status, Dashboard, Logs, Heartbeat ──────────────────────────
 registerStatusCommand(program);

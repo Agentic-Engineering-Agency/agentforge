@@ -28,6 +28,9 @@ export default defineSchema({
       )
     ),
     projectId: v.optional(v.id("projects")),
+    // Docker sandbox configuration
+    sandboxEnabled: v.optional(v.boolean()),
+    sandboxImage: v.optional(v.string()),
   })
     .index("byAgentId", ["id"])
     .index("byUserId", ["userId"])

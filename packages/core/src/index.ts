@@ -163,3 +163,14 @@ export type { MarketplaceSkill, PublishSkillInput } from './skills/marketplace-c
 // ─── Voice Tools (TTS + STT) ─────────────────────────────────────────────────
 export { textToSpeech, speechToText, createVoiceTool, sanitizeTtsText, DEFAULT_VOICE_CONFIG, MAX_TTS_TEXT_LENGTH, MAX_STT_FILE_SIZE } from './voice/index.js';
 export type { TtsRequest, TtsResponse, SttRequest, SttResponse, VoiceConfig } from './voice/index.js';
+
+// ─── Deep Research Mode ────────────────────────────────────────────────────────
+export { ResearchOrchestrator } from './research/index.js';
+export type {
+  ResearchConfig,
+  ResearchAgentConfig,
+  ResearchDepth,
+  ResearchQuestion,
+  ResearchFinding,
+  ResearchReport,
+} from './research/index.js';

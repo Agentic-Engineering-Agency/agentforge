@@ -9,23 +9,35 @@ export default defineSchema({
     description: v.optional(v.string()),
     instructions: v.string(),
     model: v.string(),
-    provider: v.string(), // "openai", "openrouter", "anthropic", etc.
+    provider: v.string(), // "openai", "openrouter", "anthropic", "google", "venice", "custom"
     tools: v.optional(v.any()),
     temperature: v.optional(v.number()),
     maxTokens: v.optional(v.number()),
     topP: v.optional(v.number()),
-    contextStrategy: v.optional(v.union(v.literal("sliding"), v.literal("truncate"), v.literal("summarize"))), // AGE-158, AGE-177
-    contextWindow: v.optional(v.number()), // AGE-158, AGE-177: override default token limit
     isActive: v.boolean(),
     createdAt: v.number(),
     updatedAt: v.number(),
     userId: v.optional(v.string()),
+    // Model failover configuration (per-agent)
+    failoverModels: v.optional(
+      v.array(
+        v.object({
+          provider: v.string(),
+          model: v.string(),
+        })
+      )
+    ),
     projectId: v.optional(v.id("projects")),
+    // Docker sandbox configuration
+    sandboxEnabled: v.optional(v.boolean()),
+    sandboxImage: v.optional(v.string()),
   })
     .index("byAgentId", ["id"])
     .index("byUserId", ["userId"])
     .index("byIsActive", ["isActive"])
-    .index("byProjectId", ["projectId"]),
+    .index("byProjectId", ["projectId"])
+    .index("byProjectAndActive", ["projectId", "isActive"])
+    .index("byActiveUser", ["isActive", "userId"]),
 
   // Conversation threads
   threads: defineTable({
@@ -53,7 +65,6 @@ export default defineSchema({
     content: v.string(),
     tool_calls: v.optional(v.any()),
     tool_results: v.optional(v.any()),
-    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files for context
     metadata: v.optional(v.any()),
     createdAt: v.number(),
     projectId: v.optional(v.id("projects")),
@@ -93,8 +104,7 @@ export default defineSchema({
     originalName: v.string(),
     mimeType: v.string(),
     size: v.number(),
-    url: v.string(), // Convex file storage URL
-    storageId: v.optional(v.string()), // Convex storage ID
+    url: v.string(), // Cloudflare R2 URL
     folderId: v.optional(v.id("folders")),
     projectId: v.optional(v.id("projects")),
     userId: v.optional(v.string()),
@@ -124,15 +134,29 @@ export default defineSchema({
     description: v.optional(v.string()),
     userId: v.optional(v.string()),
     settings: v.optional(v.any()),
-    // Agent assignment
-    agentIds: v.optional(v.array(v.string())),
-    // Project-scoped configuration
-    systemPrompt: v.optional(v.string()),
-    defaultModel: v.optional(v.string()),
-    defaultProvider: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }).index("byUserId", ["userId"]),
+    isDefault: v.optional(v.boolean()),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("byUserId", ["userId"])
+    .index("byUserAndDefault", ["userId", "isDefault"]),
+
+  // Project membership / access control
+  projectMembers: defineTable({
+    projectId: v.id("projects"),
+    userId: v.string(),
+    role: v.union(
+      v.literal("owner"),
+      v.literal("editor"),
+      v.literal("viewer")
+    ),
+    invitedAt: v.number(),
+    acceptedAt: v.optional(v.number()),
+  })
+    .index("byProjectId", ["projectId"])
+    .index("byUserId", ["userId"])
+    .index("byProjectAndUser", ["projectId", "userId"]),
 
   // Skills/Tools marketplace
   skills: defineTable({
@@ -152,10 +176,13 @@ export default defineSchema({
     installedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byUserId", ["userId"])
     .index("byIsInstalled", ["isInstalled"])
-    .index("byCategory", ["category"]),
+    .index("byCategory", ["category"])
+    .index("byProjectId", ["projectId"])
+    .index("byProjectAndInstalled", ["projectId", "isInstalled"]),
 
   // Cron jobs/scheduled tasks
   cronJobs: defineTable({
@@ -171,11 +198,13 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byAgentId", ["agentId"])
     .index("byUserId", ["userId"])
     .index("byIsEnabled", ["isEnabled"])
-    .index("byNextRun", ["nextRun"]),
+    .index("byNextRun", ["nextRun"])
+    .index("byProjectId", ["projectId"]),
 
   // Cron job execution history
   cronJobRuns: defineTable({
@@ -206,19 +235,19 @@ export default defineSchema({
     capabilities: v.optional(v.any()),
     userId: v.optional(v.string()),
     lastConnectedAt: v.optional(v.number()),
-    toolCount: v.optional(v.number()), // Number of tools available from this MCP server
     createdAt: v.number(),
     updatedAt: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byUserId", ["userId"])
-    .index("byIsEnabled", ["isEnabled"]),
+    .index("byIsEnabled", ["isEnabled"])
+    .index("byProjectId", ["projectId"]),
 
   // API keys and credentials (encrypted)
   apiKeys: defineTable({
     provider: v.string(), // "openai", "openrouter", "anthropic", etc.
     keyName: v.string(),
     encryptedKey: v.string(),
-    iv: v.optional(v.string()), // XOR encoding IV
     isActive: v.boolean(),
     userId: v.optional(v.string()),
     createdAt: v.number(),
@@ -240,11 +269,14 @@ export default defineSchema({
     cost: v.optional(v.number()), // Estimated cost in USD
     userId: v.optional(v.string()),
     timestamp: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byAgentId", ["agentId"])
     .index("byUserId", ["userId"])
     .index("byTimestamp", ["timestamp"])
-    .index("byProvider", ["provider"]),
+    .index("byProvider", ["provider"])
+    .index("byProjectId", ["projectId"])
+    .index("byUserAndTimestamp", ["userId", "timestamp"]),
 
   // User settings and configuration
   settings: defineTable({
@@ -269,11 +301,14 @@ export default defineSchema({
     metadata: v.optional(v.any()),
     userId: v.optional(v.string()),
     timestamp: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byLevel", ["level"])
     .index("bySource", ["source"])
     .index("byTimestamp", ["timestamp"])
-    .index("byUserId", ["userId"]),
+    .index("byUserId", ["userId"])
+    .index("byProjectId", ["projectId"])
+    .index("byProjectAndTimestamp", ["projectId", "timestamp"]),
 
   // Channels for multi-platform support
   channels: defineTable({
@@ -284,10 +319,12 @@ export default defineSchema({
     userId: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byType", ["type"])
     .index("byUserId", ["userId"])
-    .index("byIsEnabled", ["isEnabled"]),
+    .index("byIsEnabled", ["isEnabled"])
+    .index("byProjectId", ["projectId"]),
 
   // Heartbeat system for ongoing task tracking
   heartbeats: defineTable({
@@ -354,28 +391,212 @@ export default defineSchema({
     userId: v.optional(v.string()),
     startedAt: v.number(),
     stoppedAt: v.optional(v.number()),
+    projectId: v.optional(v.id("projects")),
   })
     .index("byAgentId", ["agentId"])
     .index("byInstanceId", ["instanceId"])
     .index("byStatus", ["status"])
-    .index("byUserId", ["userId"]),
-  // Dynamic model list cache (AGE-174)
-  modelCache: defineTable({
-    provider: v.string(),
-    models: v.array(v.string()),
-    cachedAt: v.number(),
-  }).index("byProvider", ["provider"]),
+    .index("byUserId", ["userId"])
+    .index("byProjectId", ["projectId"]),
 
-  // API access tokens for /v1/chat/completions endpoint (AGE-176)
-  apiAccessTokens: defineTable({
-    tokenHash: v.string(),
+  // Mastra Workflow definitions
+  workflowDefinitions: defineTable({
     name: v.string(),
-    agentId: v.optional(v.string()),
+    description: v.optional(v.string()),
+    steps: v.string(), // JSON-serialized step definitions
+    triggers: v.optional(v.string()), // JSON-serialized trigger config
+    inputSchema: v.optional(v.string()), // JSON-serialized Zod schema description
+    outputSchema: v.optional(v.string()), // JSON-serialized Zod schema description
+    isActive: v.boolean(),
+    projectId: v.optional(v.id("projects")),
+    userId: v.optional(v.string()),
     createdAt: v.number(),
-    lastUsedAt: v.optional(v.number()),
-    revokedAt: v.optional(v.number()),
+    updatedAt: v.number(),
   })
-    .index("byTokenHash", ["tokenHash"])
-    .index("byAgentId", ["agentId"]),
+    .index("byProjectId", ["projectId"])
+    .index("byUserId", ["userId"])
+    .index("byIsActive", ["isActive"]),
 
+  // Workflow execution runs
+  workflowRuns: defineTable({
+    workflowId: v.id("workflowDefinitions"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("suspended"),
+      v.literal("completed"),
+      v.literal("failed")
+    ),
+    input: v.optional(v.string()), // JSON-serialized input
+    output: v.optional(v.string()), // JSON-serialized output
+    currentStepIndex: v.number(),
+    suspendedAt: v.optional(v.string()), // Step ID where suspended
+    suspendPayload: v.optional(v.string()), // JSON-serialized suspend data
+    error: v.optional(v.string()),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    projectId: v.optional(v.id("projects")),
+    userId: v.optional(v.string()),
+  })
+    .index("byWorkflowId", ["workflowId"])
+    .index("byStatus", ["status"])
+    .index("byProjectId", ["projectId"])
+    .index("byUserId", ["userId"]),
+
+  // Individual step records for a workflow run
+  workflowSteps: defineTable({
+    runId: v.id("workflowRuns"),
+    stepId: v.string(),
+    name: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("completed"),
+      v.literal("failed"),
+      v.literal("skipped"),
+      v.literal("suspended")
+    ),
+    input: v.optional(v.string()), // JSON-serialized
+    output: v.optional(v.string()), // JSON-serialized
+    error: v.optional(v.string()),
+    startedAt: v.optional(v.number()),
+    completedAt: v.optional(v.number()),
+    projectId: v.optional(v.id("projects")),
+  })
+    .index("byRunId", ["runId"])
+    .index("byStatus", ["status"])
+    .index("byProjectId", ["projectId"]),
+
+  // Memory entries for agent long-term and short-term memory
+  memoryEntries: defineTable({
+    content: v.string(),
+    type: v.union(
+      v.literal("conversation"),
+      v.literal("fact"),
+      v.literal("summary"),
+      v.literal("episodic")
+    ),
+    agentId: v.string(),
+    threadId: v.optional(v.id("threads")),
+    projectId: v.optional(v.id("projects")),
+    userId: v.optional(v.string()),
+    embedding: v.optional(v.array(v.float64())),
+    importance: v.number(),
+    accessCount: v.number(),
+    lastAccessedAt: v.optional(v.number()),
+    metadata: v.optional(v.any()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    expiresAt: v.optional(v.number()),
+  })
+    .index("byAgentId", ["agentId"])
+    .index("byThreadId", ["threadId"])
+    .index("byProjectId", ["projectId"])
+    .index("byAgentAndType", ["agentId", "type"])
+    .index("byAgentAndProject", ["agentId", "projectId"])
+    .index("byCreatedAt", ["createdAt"])
+    .index("byImportance", ["importance"])
+    .vectorIndex("byEmbedding", {
+      vectorField: "embedding",
+      dimensions: 1536,
+      filterFields: ["agentId", "projectId", "type"],
+    }),
+
+  // Granular usage events for cost analytics and observability
+  usageEvents: defineTable({
+    agentId: v.string(),
+    projectId: v.optional(v.string()),
+    threadId: v.optional(v.string()),
+    model: v.string(),
+    inputTokens: v.number(),
+    outputTokens: v.number(),
+    costUsd: v.number(),
+    timestamp: v.number(),
+    latencyMs: v.optional(v.number()),
+    metadata: v.optional(v.any()),
+  })
+    .index("byAgentId", ["agentId"])
+    .index("byProjectId", ["projectId"])
+    .index("byModel", ["model"])
+    .index("byTimestamp", ["timestamp"]),
+
+  // Memory consolidation records
+  memoryConsolidations: defineTable({
+    agentId: v.string(),
+    projectId: v.optional(v.id("projects")),
+    sourceMemoryIds: v.array(v.id("memoryEntries")),
+    resultMemoryId: v.id("memoryEntries"),
+    strategy: v.union(
+      v.literal("summarize"),
+      v.literal("merge"),
+      v.literal("deduplicate")
+    ),
+    createdAt: v.number(),
+  })
+    .index("byAgentId", ["agentId"])
+    .index("byProjectId", ["projectId"]),
+
+  // Agent-to-Agent (A2A) protocol task tracking
+  a2aTasks: defineTable({
+    taskId: v.string(),           // UUID
+    fromAgentId: v.string(),      // Delegating agent
+    toAgentId: v.string(),        // Receiving agent
+    instruction: v.string(),      // Task description
+    context: v.optional(v.any()), // Conversation context
+    constraints: v.optional(v.object({
+      maxTokens: v.optional(v.number()),
+      timeoutMs: v.optional(v.number()),
+      maxCost: v.optional(v.number()),
+    })),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("running"),
+      v.literal("success"),
+      v.literal("error"),
+      v.literal("timeout")
+    ),
+    output: v.optional(v.string()),
+    artifacts: v.optional(v.array(v.object({
+      type: v.union(v.literal("text"), v.literal("code"), v.literal("file"), v.literal("data")),
+      content: v.string(),
+      mimeType: v.optional(v.string()),
+      name: v.optional(v.string()),
+    }))),
+    usage: v.optional(v.object({
+      inputTokens: v.number(),
+      outputTokens: v.number(),
+      cost: v.number(),
+    })),
+    durationMs: v.optional(v.number()),
+    callbackUrl: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("byTaskId", ["taskId"])
+    .index("byFromAgentId", ["fromAgentId"])
+    .index("byToAgentId", ["toAgentId"])
+    .index("byStatus", ["status"])
+    .index("byProjectId", ["projectId"]),
+
+  // Skill Marketplace — public registry of published skills
+  skillMarketplace: defineTable({
+    name: v.string(),
+    version: v.string(),
+    description: v.string(),
+    author: v.string(),
+    category: v.string(),
+    tags: v.array(v.string()),
+    downloads: v.number(),
+    featured: v.boolean(),
+    skillMdContent: v.string(),
+    readmeContent: v.optional(v.string()),
+    repositoryUrl: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_name", ["name"])
+    .index("by_category", ["category"])
+    .index("by_downloads", ["downloads"])
+    .searchIndex("search_skills", { searchField: "description", filterFields: ["category"] }),
 });
