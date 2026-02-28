@@ -355,4 +355,105 @@ http.route({
   }),
 });
 
+// OPTIONS preflight for /api/voice/synthesize
+http.route({
+  path: "/api/voice/synthesize",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(),
+    });
+  }),
+});
+
+// POST /api/voice/synthesize — Text-to-speech synthesis endpoint
+// Streams ElevenLabs audio for the provided text
+http.route({
+  path: "/api/voice/synthesize",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    let body: Record<string, unknown>;
+    try {
+      body = await request.json();
+    } catch {
+      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+        status: 400,
+        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      });
+    }
+
+    const { text, voiceId } = body as {
+      text?: unknown;
+      voiceId?: unknown;
+    };
+
+    if (typeof text !== "string") {
+      return new Response(
+        JSON.stringify({ error: "Missing required field: text" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    if (text.length > 5000) {
+      return new Response(
+        JSON.stringify({ error: "Text exceeds maximum length of 5000 characters" }),
+        {
+          status: 400,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        }
+      );
+    }
+
+    try {
+      // Import TTS engine
+      const { ElevenLabsTTS, createTTSEngine } = await import("@agentforge-ai/core");
+
+      // Get ElevenLabs API key
+      const apiKeyData = await ctx.runQuery(api.apiKeys.getDecryptedForProvider, {
+        provider: "elevenlabs",
+      });
+
+      if (!apiKeyData || !apiKeyData.apiKey) {
+        return new Response(
+          JSON.stringify({ error: "ElevenLabs API key not configured" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders(), "Content-Type": "application/json" },
+          }
+        );
+      }
+
+      // Create TTS engine and synthesize
+      const tts = new ElevenLabsTTS({
+        apiKey: apiKeyData.apiKey,
+        voiceId: typeof voiceId === "string" ? voiceId : undefined,
+      });
+
+      const audioBuffer = await tts.synthesize(text);
+
+      return new Response(audioBuffer, {
+        status: 200,
+        headers: {
+          ...corsHeaders(),
+          "Content-Type": "audio/mpeg",
+          "Content-Disposition": `attachment; filename="speech-${Date.now()}.mp3"`,
+        },
+      });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return new Response(
+        JSON.stringify({ error: `TTS synthesis failed: ${errorMessage}` }),
+        {
+          status: 500,
+          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        }
+      );
+    }
+  }),
+});
+
 export default http;
