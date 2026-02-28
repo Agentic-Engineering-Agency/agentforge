@@ -2890,6 +2890,62 @@ console.log('Hello from ${name}!');
     }
     error(`Skill "${name}" not found (installed or in registry).`);
   });
+  skills.command("bundled").description("List bundled skills (lightweight built-in capabilities)").action(async () => {
+    const { BUNDLED_SKILLS } = await import("@agentforge-ai/core");
+    header("Bundled Skills");
+    table(
+      BUNDLED_SKILLS.map((s) => ({
+        Name: s.name,
+        Description: truncate(s.description, 60),
+        Category: s.category
+      }))
+    );
+    info(`Run a bundled skill: ${colors.cyan}agentforge skills run <name> --args '{"key":"value"}'${colors.reset}`);
+  });
+  skills.command("run").argument("<name>", "Bundled skill name (e.g., calculator, datetime, web-search)").option("--args <json>", "Arguments as JSON string").description("Run a bundled skill directly from the CLI").action(async (name, opts) => {
+    const { bundledSkillRegistry } = await import("@agentforge-ai/core");
+    if (!bundledSkillRegistry.has(name)) {
+      error(`Bundled skill "${name}" not found.`);
+      info("Available bundled skills:");
+      const skills2 = bundledSkillRegistry.list();
+      for (const s of skills2) {
+        dim(`  - ${s.name}: ${s.description}`);
+      }
+      process.exit(1);
+    }
+    let args = {};
+    if (opts.args) {
+      try {
+        args = JSON.parse(opts.args);
+      } catch {
+        error("Invalid JSON in --args");
+        process.exit(1);
+      }
+    }
+    header(`Running bundled skill: ${name}`);
+    info("Arguments:");
+    if (Object.keys(args).length > 0) {
+      for (const [key, value] of Object.entries(args)) {
+        dim(`  ${key}: ${JSON.stringify(value)}`);
+      }
+    } else {
+      dim("  (no arguments)");
+    }
+    console.log();
+    const startTime = Date.now();
+    try {
+      const result = await bundledledSkillRegistry.execute(name, args);
+      const elapsed = Date.now() - startTime;
+      success("Result:");
+      console.log(result);
+      console.log();
+      dim(`Completed in ${elapsed}ms`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      error(`Skill execution failed: ${errMsg}`);
+      process.exit(1);
+    }
+  });
   program2.command("install").argument("<name>", "Skill name to install").option("--from <source>", "Source: registry (default), github, local", "registry").description("Install a skill (alias for: agentforge skills install)").action(async (name, opts) => {
     const skillsCmd = skills.commands.find((c) => c.name() === "install");
     if (skillsCmd) {
