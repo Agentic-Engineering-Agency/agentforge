@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { createClient, safeCall } from '../lib/convex-client.js';
 import { header, table, details, success, error, info, formatDate } from '../lib/display.js';
+import { MCPExecutor } from '@agentforge-ai/core/mcp-executor';
 import readline from 'node:readline';
 
 function prompt(q: string): Promise<string> {
@@ -113,5 +114,122 @@ export function registerMcpCommand(program: Command) {
       const client = await createClient();
       await safeCall(() => client.mutation('mcpConnections:update' as any, { id, isEnabled: false }), 'Failed');
       success(`Connection "${id}" disabled.`);
+    });
+
+  mcp
+    .command('list-tools')
+    .argument('<connection-name>', 'Connection name')
+    .description('List available tools from an MCP server')
+    .action(async (connectionName) => {
+      const client = await createClient();
+      const conns = await safeCall(() => client.query('mcpConnections:list' as any, {}), 'Failed to list connections');
+      const conn = (conns as any[]).find((c: any) => c.name === connectionName || c._id?.endsWith(connectionName));
+
+      if (!conn) {
+        error(`Connection "${connectionName}" not found.`);
+        process.exit(1);
+      }
+
+      if (!conn.isEnabled) {
+        error(`Connection "${connectionName}" is disabled.`);
+        process.exit(1);
+      }
+
+      // Get connection config for client-side execution
+      const config = await safeCall(
+        () => client.action('mcpConnections:executeToolCall' as any, {
+          id: conn._id,
+          toolName: '',
+          toolArgs: {},
+        }),
+        'Failed to get connection config'
+      );
+
+      // Use MCPExecutor to list tools (client-side)
+      const executor = new MCPExecutor();
+      try {
+        // Parse server URL as command/args for stdio transport
+        // For http/sse, we'd need different transport logic
+        const [command, ...args] = config.connection.serverUrl.split(' ');
+        await executor.connect({
+          id: conn._id,
+          command,
+          args,
+          env: config.connection.credentials,
+        });
+
+        const tools = await executor.listTools();
+        header(`Available tools from "${connectionName}":`);
+        table(tools.map((t: any) => ({
+          Name: t.name,
+          Description: t.description || 'N/A',
+        })));
+
+        await executor.disconnect();
+      } catch (e: any) {
+        error(`Failed to list tools: ${e.message}`);
+        process.exit(1);
+      }
+    });
+
+  mcp
+    .command('run')
+    .argument('<connection-name>', 'Connection name')
+    .argument('<tool-name>', 'Tool name to execute')
+    .option('--args <json>', 'Tool arguments as JSON string', '{}')
+    .description('Execute a tool on an MCP server')
+    .action(async (connectionName, toolName, opts) => {
+      const client = await createClient();
+      const conns = await safeCall(() => client.query('mcpConnections:list' as any, {}), 'Failed to list connections');
+      const conn = (conns as any[]).find((c: any) => c.name === connectionName || c._id?.endsWith(connectionName));
+
+      if (!conn) {
+        error(`Connection "${connectionName}" not found.`);
+        process.exit(1);
+      }
+
+      if (!conn.isEnabled) {
+        error(`Connection "${connectionName}" is disabled.`);
+        process.exit(1);
+      }
+
+      let toolArgs: Record<string, unknown>;
+      try {
+        toolArgs = JSON.parse(opts.args);
+      } catch {
+        error('Invalid JSON in --args');
+        process.exit(1);
+      }
+
+      // Get connection config for client-side execution
+      const config = await safeCall(
+        () => client.action('mcpConnections:executeToolCall' as any, {
+          id: conn._id,
+          toolName,
+          toolArgs,
+        }),
+        'Failed to get connection config'
+      );
+
+      // Use MCPExecutor to execute tool (client-side)
+      const executor = new MCPExecutor();
+      try {
+        const [command, ...args] = config.connection.serverUrl.split(' ');
+        await executor.connect({
+          id: conn._id,
+          command,
+          args,
+          env: config.connection.credentials,
+        });
+
+        const result = await executor.executeTool(toolName, toolArgs);
+        success(`Tool "${toolName}" executed successfully:`);
+        console.log(JSON.stringify(result, null, 2));
+
+        await executor.disconnect();
+      } catch (e: any) {
+        error(`Failed to execute tool: ${e.message}`);
+        process.exit(1);
+      }
     });
 }
