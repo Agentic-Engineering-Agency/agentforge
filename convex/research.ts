@@ -116,7 +116,8 @@ export const update = mutation({
 /**
  * Action: Start a research job using ResearchOrchestrator.
  *
- * This action runs in Node.js environment to support ResearchOrchestrator.
+ * NOTE: Temporarily disabled due to bundling issues with @agentforge-ai/core.
+ * Re-enable once the ResearchOrchestrator is moved to a separate package or refactored.
  */
 export const start = action({
   args: {
@@ -138,65 +139,15 @@ export const start = action({
       projectId: args.projectId,
     });
 
-    // Update status to running
+    // Update job with error
     await ctx.runMutation(internal.research.update, {
       jobId,
-      status: "running",
+      status: "failed",
+      error: "Research endpoint temporarily disabled. ResearchOrchestrator will be re-enabled in a future update.",
+      completedAt: Date.now(),
     });
 
-    try {
-      // Import ResearchOrchestrator from packages/core
-      const { ResearchOrchestrator } = await import("@agentforge-ai/core");
-
-      // Get default agent config from API keys
-      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
-        provider: "openrouter",
-      });
-
-      if (!apiKeyData || !apiKeyData.apiKey) {
-        throw new Error("No API key found for provider: openrouter");
-      }
-
-      const { getProviderBaseUrl } = await import("./lib/apiKeys");
-
-      // Create orchestrator and run research
-      const orchestrator = new ResearchOrchestrator({
-        topic: args.topic,
-        depth: args.depth,
-      });
-
-      const report = await orchestrator.run({
-        providerId: "openrouter",
-        modelId: "gpt-4o-mini",
-        apiKey: apiKeyData.apiKey,
-        url: getProviderBaseUrl("openrouter"),
-      });
-
-      // Update job with results
-      await ctx.runMutation(internal.research.update, {
-        jobId,
-        status: "completed",
-        results: JSON.stringify(report.findings, null, 2),
-        synthesis: report.synthesis,
-        questions: report.questions,
-        findings: report.findings,
-        completedAt: Date.now(),
-      });
-
-      return { success: true, jobId };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      // Update job with error
-      await ctx.runMutation(internal.research.update, {
-        jobId,
-        status: "failed",
-        error: errorMessage,
-        completedAt: Date.now(),
-      });
-
-      throw error;
-    }
+    throw new Error("Research endpoint temporarily disabled. ResearchOrchestrator will be re-enabled in a future update.");
   },
 });
 

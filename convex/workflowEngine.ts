@@ -1,3 +1,5 @@
+"use node";
+
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
@@ -31,8 +33,8 @@ export const executeWorkflow = internalAction({
       name: string;
     }>;
 
-    // Import AgentPipeline dynamically (runs in Node environment)
-    const { AgentPipeline } = await import("@agentforge-ai/core");
+    // Import AgentPipeline from local lib
+    const { AgentPipeline } = await import("./lib/pipeline");
 
     // Build pipeline from workflow steps
     const pipeline = new AgentPipeline({
@@ -73,9 +75,9 @@ export const executeWorkflow = internalAction({
           });
 
           try {
-            // Import Agent class
-            const { Agent: AgentClass } = await import("@agentforge-ai/core");
-            const { getBaseModelId, getProviderBaseUrl } = await import("./lib/apiKeys");
+            // Import Agent class from local lib
+            const { Agent: AgentClass } = await import("./lib/agent");
+            const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
 
             // Get API key for provider
             const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {

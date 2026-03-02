@@ -279,8 +279,8 @@ http.route({
           });
 
           // Import Agent class for streaming
-          const { Agent: AgentClass } = await import("@agentforge-ai/core");
-          const { getBaseModelId, getProviderBaseUrl } = await import("./lib/apiKeys");
+          const { Agent: AgentClass } = await import("./lib/agent");
+          const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
 
           // Get API key for provider
           const apiKeyData = await ctx.runQuery(api.apiKeys.getDecryptedForProvider, {
@@ -368,91 +368,21 @@ http.route({
 });
 
 // POST /api/voice/synthesize — Text-to-speech synthesis endpoint
-// Streams ElevenLabs audio for the provided text
+// NOTE: Temporarily disabled due to bundling issues with @agentforge-ai/core
+// Re-enable once the TTS module is moved to a separate package or refactored
 http.route({
   path: "/api/voice/synthesize",
   method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    let body: Record<string, unknown>;
-    try {
-      body = await request.json();
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-        status: 400,
+  handler: httpAction(async (_ctx, _request) => {
+    return new Response(
+      JSON.stringify({
+        error: "TTS endpoint temporarily disabled. Use ElevenLabs API directly or enable in a future update."
+      }),
+      {
+        status: 501,
         headers: { ...corsHeaders(), "Content-Type": "application/json" },
-      });
-    }
-
-    const { text, voiceId } = body as {
-      text?: unknown;
-      voiceId?: unknown;
-    };
-
-    if (typeof text !== "string") {
-      return new Response(
-        JSON.stringify({ error: "Missing required field: text" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    if (text.length > 5000) {
-      return new Response(
-        JSON.stringify({ error: "Text exceeds maximum length of 5000 characters" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    try {
-      // Import TTS engine
-      const { ElevenLabsTTS, createTTSEngine } = await import("@agentforge-ai/core");
-
-      // Get ElevenLabs API key
-      const apiKeyData = await ctx.runQuery(api.apiKeys.getDecryptedForProvider, {
-        provider: "elevenlabs",
-      });
-
-      if (!apiKeyData || !apiKeyData.apiKey) {
-        return new Response(
-          JSON.stringify({ error: "ElevenLabs API key not configured" }),
-          {
-            status: 500,
-            headers: { ...corsHeaders(), "Content-Type": "application/json" },
-          }
-        );
       }
-
-      // Create TTS engine and synthesize
-      const tts = new ElevenLabsTTS({
-        apiKey: apiKeyData.apiKey,
-        voiceId: typeof voiceId === "string" ? voiceId : undefined,
-      });
-
-      const audioBuffer = await tts.synthesize(text);
-
-      return new Response(audioBuffer, {
-        status: 200,
-        headers: {
-          ...corsHeaders(),
-          "Content-Type": "audio/mpeg",
-          "Content-Disposition": `attachment; filename="speech-${Date.now()}.mp3"`,
-        },
-      });
-    } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      return new Response(
-        JSON.stringify({ error: `TTS synthesis failed: ${errorMessage}` }),
-        {
-          status: 500,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
-        }
-      );
-    }
+    );
   }),
 });
 
