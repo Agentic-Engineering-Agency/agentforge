@@ -106,7 +106,7 @@ export function registerWorkflowsCommand(program: Command) {
         );
 
         success(`Created run: ${colors.cyan}${runId}${colors.reset}`);
-        info(dim('Executing workflow steps...'));
+        dim('Executing workflow steps...');
 
         // Execute the workflow (via action)
         const result = await safeCall(
@@ -118,7 +118,7 @@ export function registerWorkflowsCommand(program: Command) {
           success('Workflow completed successfully');
           if ((result as any).output) {
             console.log();
-            info(dim('Output:'));
+            dim('Output:');
             console.log(`  ${(result as any).output}`);
           }
         }

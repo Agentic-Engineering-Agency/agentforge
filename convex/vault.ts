@@ -5,8 +5,86 @@ import { mutation, query, internalMutation } from "./_generated/server";
 declare const process: { env: Record<string, string | undefined> };
 
 // ============================================================
-// SECURE VAULT - Encrypted secrets management
+// SECURE VAULT - AES-256-GCM Encrypted secrets management
 // ============================================================
+
+// Helper: Convert string to ArrayBuffer
+function str2ab(str: string): ArrayBuffer {
+  const encoder = new TextEncoder();
+  return encoder.encode(str).buffer;
+}
+
+// Helper: Convert ArrayBuffer to string
+function ab2str(buf: ArrayBuffer): string {
+  const decoder = new TextDecoder();
+  return decoder.decode(buf);
+}
+
+// Helper: Convert base64 to ArrayBuffer
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+// Helper: Convert ArrayBuffer to base64
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.byteLength; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Helper: Get or generate per-deployment salt for key derivation
+function getVaultSalt(): ArrayBuffer {
+  const storedSalt = process.env.VAULT_SALT;
+
+  if (storedSalt && storedSalt.length >= 16) {
+    // Use the provided salt from environment variable
+    return str2ab(storedSalt);
+  }
+
+  // Generate a random salt (this should be persisted to VAULT_SALT in production)
+  const randomSalt = crypto.getRandomValues(new Uint8Array(16));
+  console.warn(
+    'WARNING: VAULT_SALT not set or too short. Using ephemeral random salt. ' +
+    'Encrypted data will be inaccessible after restart! ' +
+    'Generate a persistent salt with: openssl rand -base64 16'
+  );
+  return randomSalt.buffer;
+}
+
+// Helper: Derive a cryptographic key from a string
+async function deriveKey(keyString: string): Promise<CryptoKey> {
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    str2ab(keyString),
+    'PBKDF2',
+    false,
+    ['deriveBits', 'deriveKey']
+  );
+
+  // Use a unique per-deployment salt for key derivation
+  const salt = getVaultSalt();
+
+  return crypto.subtle.deriveKey(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
 
 // Secret pattern detection for auto-capture from chat
 const SECRET_PATTERNS = [
@@ -40,37 +118,55 @@ function maskSecret(value: string): string {
 
 // Encryption key from Convex environment variable.
 // Set VAULT_ENCRYPTION_KEY in your Convex dashboard under Settings > Environment Variables.
-// If not set, a default key is used (NOT SECURE for production).
+// This is now MANDATORY - the vault will not work without it.
 function getEncryptionKey(): string {
-  return process.env.VAULT_ENCRYPTION_KEY ?? "agentforge-default-key-set-env-var";
+  const key = process.env.VAULT_ENCRYPTION_KEY;
+  if (!key || key.length < 32) {
+    throw new Error(
+      "VAULT_ENCRYPTION_KEY must be set in environment variables and be at least 32 characters long. " +
+      "Set this in your Convex dashboard under Settings > Environment Variables."
+    );
+  }
+  return key;
 }
 
-// XOR-based encoding with per-entry IV for database obfuscation.
-// For production deployments with sensitive data, consider integrating
-// with a proper KMS (e.g., AWS KMS, Cloudflare Workers Secrets).
-function encodeSecret(value: string, key: string): { encrypted: string; iv: string } {
-  const iv = Array.from({ length: 16 }, () =>
-    Math.floor(Math.random() * 256).toString(16).padStart(2, "0")
-  ).join("");
-  const combined = key + iv;
-  let encrypted = "";
-  for (let i = 0; i < value.length; i++) {
-    const charCode = value.charCodeAt(i) ^ combined.charCodeAt(i % combined.length);
-    encrypted += charCode.toString(16).padStart(4, "0");
-  }
-  return { encrypted, iv };
+// AES-256-GCM encryption for secure secret storage.
+// Each encryption uses a unique IV (Initialization Vector) for security.
+async function encodeSecret(value: string, keyString: string): Promise<{ encrypted: string; iv: string }> {
+  const key = await deriveKey(keyString);
+
+  // Generate a unique IV for each encryption (12 bytes for GCM)
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+
+  // Encrypt the value
+  const encrypted = await crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv: iv },
+    key,
+    str2ab(value)
+  );
+
+  // Return base64-encoded encrypted data and IV
+  return {
+    encrypted: arrayBufferToBase64(encrypted),
+    iv: arrayBufferToBase64(iv.buffer),
+  };
 }
 
-function decodeSecret(encrypted: string, iv: string, key: string): string {
-  const combined = key + iv;
-  let decoded = "";
-  for (let i = 0; i < encrypted.length; i += 4) {
-    const charCode =
-      parseInt(encrypted.substring(i, i + 4), 16) ^
-      combined.charCodeAt((i / 4) % combined.length);
-    decoded += String.fromCharCode(charCode);
-  }
-  return decoded;
+// AES-256-GCM decryption for secure secret retrieval.
+async function decodeSecret(encryptedB64: string, ivB64: string, keyString: string): Promise<string> {
+  const key = await deriveKey(keyString);
+
+  const encrypted = base64ToArrayBuffer(encryptedB64);
+  const iv = new Uint8Array(base64ToArrayBuffer(ivB64));
+
+  // Decrypt the value
+  const decrypted = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: iv },
+    key,
+    encrypted
+  );
+
+  return ab2str(decrypted);
 }
 
 // ---- Queries ----
@@ -144,7 +240,7 @@ export const store = mutation({
   },
   handler: async (ctx, args) => {
     const key = getEncryptionKey();
-    const { encrypted, iv } = encodeSecret(args.value, key);
+    const { encrypted, iv } = await encodeSecret(args.value, key);
     const masked = maskSecret(args.value);
     const now = Date.now();
 
@@ -185,7 +281,7 @@ export const storeFromChat = mutation({
   },
   handler: async (ctx, args) => {
     const key = getEncryptionKey();
-    const { encrypted, iv } = encodeSecret(args.value, key);
+    const { encrypted, iv } = await encodeSecret(args.value, key);
     const masked = maskSecret(args.value);
     const now = Date.now();
 
@@ -236,7 +332,7 @@ export const update = mutation({
 
     if (args.value) {
       const key = getEncryptionKey();
-      const { encrypted, iv } = encodeSecret(args.value, key);
+      const { encrypted, iv } = await encodeSecret(args.value, key);
       updates.encryptedValue = encrypted;
       updates.iv = iv;
       updates.maskedValue = maskSecret(args.value);
@@ -300,7 +396,7 @@ export const retrieveSecret = internalMutation({
     });
 
     const key = getEncryptionKey();
-    const decrypted = decodeSecret(entry.encryptedValue, entry.iv, key);
+    const decrypted = await decodeSecret(entry.encryptedValue, entry.iv, key);
     return decrypted;
   },
 });
@@ -360,7 +456,7 @@ export const censorMessage = mutation({
 
         if (args.autoStore !== false) {
           const key = getEncryptionKey();
-          const { encrypted, iv } = encodeSecret(secretValue, key);
+          const { encrypted, iv } = await encodeSecret(secretValue, key);
           const now = Date.now();
 
           const id = await ctx.db.insert("vault", {

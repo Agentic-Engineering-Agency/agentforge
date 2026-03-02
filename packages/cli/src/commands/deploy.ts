@@ -1,11 +1,50 @@
 import path from 'node:path';
-import { execSync } from 'node:child_process';
+import { execSync, execFile } from 'node:child_process';
 import fs from 'fs-extra';
 import chalk from 'chalk';
 import ora from 'ora';
 import prompts from 'prompts';
 import { CloudClient, CloudClientError, type AgentConfig } from '../lib/cloud-client.js';
 import { readCredentials, getCloudUrl } from '../lib/credentials.js';
+import type { ExecFileException } from 'node:child_process';
+
+/**
+ * Environment variable name validation pattern.
+ * Allows alphanumeric characters and underscores, must not start with a number.
+ */
+const ENV_VAR_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/i;
+
+/**
+ * Safely execute npx convex env set with proper argument escaping.
+ * Prevents command injection by using execFile without shell.
+ *
+ * @param projectDir - The working directory
+ * @param key - Environment variable name
+ * @param value - Environment variable value
+ * @throws {Error} If key contains invalid characters
+ * @throws {Error} If the convex command fails
+ */
+function setConvexEnvVar(projectDir: string, key: string, value: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    // Validate environment variable name to prevent injection
+    if (!ENV_VAR_NAME_PATTERN.test(key)) {
+      reject(new Error(`Invalid environment variable name: "${key}". Must match ${ENV_VAR_NAME_PATTERN}`));
+      return;
+    }
+
+    // Use execFile WITHOUT shell option to prevent shell injection.
+    // Arguments are passed directly to the process, not interpreted by a shell.
+    execFile('npx', ['convex', 'env', 'set', key, value], {
+      cwd: projectDir,
+    }, (error: ExecFileException | null) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve();
+      }
+    });
+  });
+}
 
 /**
  * Options for the deploy command.
@@ -440,13 +479,12 @@ async function deployToConvex(options: DeployOptions): Promise<void> {
     console.log('  Setting environment variables...');
     for (const [key, value] of Object.entries(envVars)) {
       try {
-        execSync(`npx convex env set ${key} "${value}"`, {
-          cwd: projectDir,
-          stdio: 'pipe',
-        });
+        await setConvexEnvVar(projectDir, key, value);
         console.log(`    ✅ ${key}`);
-      } catch {
-        console.error(`    ❌ Failed to set ${key}`);
+      } catch (err) {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.error(`    ❌ Failed to set ${key}: ${errorMessage}`);
+        throw new Error(`Failed to set environment variable ${key}: ${errorMessage}`);
       }
     }
     console.log('');

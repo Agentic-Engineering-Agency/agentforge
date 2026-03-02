@@ -32,7 +32,7 @@ export function registerResearchCommand(program: Command): void {
 // ─── Implementation ────────────────────────────────────────────────────────────
 
 async function runResearch(topic: string, options: ResearchOptions): Promise<void> {
-  header();
+  header('Research');
 
   const depth = options.depth || 'standard';
   const provider = options.provider || 'openai';
