@@ -1768,7 +1768,7 @@ See \`scripts/\` for executable scripts the agent can run.
 
       const startTime = Date.now();
       try {
-        const result = await bundledledSkillRegistry.execute(name, args);
+        const result = await bundledSkillRegistry.execute(name, args);
         const elapsed = Date.now() - startTime;
 
         success('Result:');

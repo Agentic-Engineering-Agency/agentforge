@@ -28,7 +28,7 @@ export function registerSandboxCommand(program: Command): void {
 // ─── Implementation ────────────────────────────────────────────────────────────
 
 async function runSandbox(file: string, options: SandboxOptions): Promise<void> {
-  header();
+  header('Sandbox');
 
   // Validate file exists
   const filePath = path.resolve(file);
@@ -48,8 +48,8 @@ async function runSandbox(file: string, options: SandboxOptions): Promise<void> 
   // Import sandbox manager dynamically
   let SandboxManager: any;
   try {
-    const sandboxModule = await import('@agentforge-ai/core/sandbox');
-    SandboxManager = sandboxModule.DockerSandboxManager;
+    const coreModule = await import('@agentforge-ai/core');
+    SandboxManager = coreModule.DockerSandboxManager;
   } catch (err) {
     error('Failed to load sandbox module. Make sure @agentforge-ai/core is installed.');
     process.exit(1);
