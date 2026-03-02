@@ -20,8 +20,27 @@ import {
   Trash2,
   ExternalLink,
   Volume2,
-  VolumeX,
 } from "lucide-react";
+
+// ============================================================
+// URL Helper Functions
+// ============================================================
+
+/**
+ * Normalize a base URL by validating, trimming, and removing trailing slashes.
+ * Throws an error if the URL is invalid or empty.
+ */
+function normalizeBaseUrl(url: string | undefined, context: string): string {
+  if (!url) {
+    throw new Error(`Missing ${context}. Please configure the environment variable.`);
+  }
+  const trimmed = url.trim();
+  if (!trimmed) {
+    throw new Error(`Empty ${context}. Please configure the environment variable.`);
+  }
+  // Remove trailing slashes
+  return trimmed.replace(/\/+$/, "");
+}
 
 // ============================================================
 // SECRET DETECTION ENGINE (client-side mirror of vault patterns)
@@ -133,7 +152,7 @@ function ChatPageComponent() {
   };
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isGenerating]);
+  }, [messages, isGenerating, streamingMessage]);
 
   // ── Secret detection as user types ──────────────────────────
   const inputHasSecrets = input.length > 8 ? detectSecrets(input) : [];
@@ -255,13 +274,13 @@ function ChatPageComponent() {
       }
 
       // Build Convex site URL for SSE endpoint
-      const convexUrl = import.meta.env.VITE_CONVEX_URL;
       let apiUrl: string;
       if (import.meta.env.VITE_CONVEX_SITE_URL) {
-        apiUrl = `${import.meta.env.VITE_CONVEX_SITE_URL}/api/stream`;
+        apiUrl = `${normalizeBaseUrl(import.meta.env.VITE_CONVEX_SITE_URL, "VITE_CONVEX_SITE_URL")}/api/stream`;
       } else {
         // Convert .cloud to .site for HTTP endpoints
-        apiUrl = convexUrl?.replace('https://', 'https://').replace('.convex.cloud', '.convex.site') + '/api/stream';
+        const convexUrl = normalizeBaseUrl(import.meta.env.VITE_CONVEX_URL, "VITE_CONVEX_URL");
+        apiUrl = convexUrl.replace('.convex.cloud', '.convex.site') + '/api/stream';
       }
 
       const response = await fetch(apiUrl, {
@@ -329,14 +348,15 @@ function ChatPageComponent() {
     if (playingMessageId) return; // Already playing
 
     setPlayingMessageId(messageId);
+    let audioUrl: string | null = null;
 
     try {
-      const convexUrl = import.meta.env.VITE_CONVEX_URL;
       let apiUrl: string;
       if (import.meta.env.VITE_CONVEX_SITE_URL) {
-        apiUrl = `${import.meta.env.VITE_CONVEX_SITE_URL}/api/voice/synthesize`;
+        apiUrl = `${normalizeBaseUrl(import.meta.env.VITE_CONVEX_SITE_URL, "VITE_CONVEX_SITE_URL")}/api/voice/synthesize`;
       } else {
-        apiUrl = convexUrl?.replace('https://', 'https://').replace('.convex.cloud', '.convex.site') + '/api/voice/synthesize';
+        const convexUrl = normalizeBaseUrl(import.meta.env.VITE_CONVEX_URL, "VITE_CONVEX_URL");
+        apiUrl = convexUrl.replace('.convex.cloud', '.convex.site') + '/api/voice/synthesize';
       }
 
       const response = await fetch(apiUrl, {
@@ -351,24 +371,30 @@ function ChatPageComponent() {
       }
 
       const audioBlob = await response.blob();
-      const audioUrl = URL.createObjectURL(audioBlob);
+      audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
 
-      audio.onended = () => {
-        URL.revokeObjectURL(audioUrl);
+      const cleanup = () => {
+        if (audioUrl) {
+          URL.revokeObjectURL(audioUrl);
+          audioUrl = null;
+        }
         setPlayingMessageId(null);
       };
 
-      audio.onerror = () => {
-        URL.revokeObjectURL(audioUrl);
-        setPlayingMessageId(null);
-      };
+      audio.onended = cleanup;
+      audio.onerror = cleanup;
 
       await audio.play();
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(`Voice playback failed: ${msg}`);
       setPlayingMessageId(null);
+    } finally {
+      // Ensure cleanup happens on all paths
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+      }
     }
   };
 
@@ -430,6 +456,8 @@ function ChatPageComponent() {
                 <span className="text-xs text-muted-foreground">Stream</span>
                 <button
                   type="button"
+                  role="switch"
+                  aria-checked={isStreamingMode}
                   onClick={() => setIsStreamingMode(!isStreamingMode)}
                   className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
                     isStreamingMode ? 'bg-primary' : 'bg-muted'

@@ -3284,7 +3284,7 @@ function registerCronCommand(program2) {
 }
 
 // src/commands/mcp.ts
-import { MCPExecutor } from "@agentforge-ai/core/mcp-executor";
+import { MCPExecutor } from "@agentforge-ai/core";
 import readline5 from "readline";
 function prompt4(q) {
   const rl = readline5.createInterface({ input: process.stdin, output: process.stdout });
@@ -6717,7 +6717,7 @@ function formatReport(report) {
 // src/commands/auth.ts
 import { Command } from "commander";
 
-// src/lib/context.ts
+// src/lib/cli-context.ts
 import { readFileSync } from "fs";
 import { join as join2 } from "path";
 function readEnvValue5(key) {
@@ -6731,7 +6731,8 @@ function readEnvValue5(key) {
       for (const line of lines) {
         const [envKey, ...envValueParts] = line.split("=");
         if (envKey.trim() === key && envValueParts.length > 0) {
-          return envValueParts.join("=").trim();
+          const value = envValueParts.join("=").trim();
+          return value.replace(/^["']|["']$/g, "");
         }
       }
     } catch {
