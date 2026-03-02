@@ -3,6 +3,8 @@
  *
  * Pure functions for context management that can be tested without Convex dependencies.
  * These are shared between the CLI and Convex backend.
+ *
+ * CLI-specific functions (getContext, readEnvValue) have been moved to cli-context.ts.
  */
 
 import { readFileSync } from 'fs';
