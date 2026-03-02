@@ -5,6 +5,17 @@
 import { Command } from 'commander';
 import { getContext } from '../lib/context.js';
 import { ConvexClient } from 'convex/browser';
+import type { FunctionReference } from 'convex/server';
+
+// Helper to create a FunctionReference from a string identifier
+// This is needed because ConvexClient.mutation/query require FunctionReference types
+function mutationRef(name: string): FunctionReference<'mutation'> {
+  return name as any;
+}
+
+function queryRef(name: string): FunctionReference<'query'> {
+  return name as any;
+}
 
 export const authCommand = new Command('auth');
 
@@ -21,7 +32,7 @@ authCommand
     const convex = new ConvexClient(ctx.deployUrl);
 
     try {
-      const result = await convex.mutation('auth:setPassword', { password });
+      const result = await convex.mutation(mutationRef('auth:setPassword'), { password });
 
       if (options.verbose) {
         console.log('Password set successfully');
@@ -48,7 +59,7 @@ authCommand
 
     try {
       // Check if password is set
-      const passwordResult = await convex.query('auth:validatePassword', {
+      const passwordResult = await convex.query(queryRef('auth:validatePassword'), {
         password: 'dummy-check',
       });
 
@@ -82,7 +93,7 @@ authCommand
     const convex = new ConvexClient(ctx.deployUrl);
 
     try {
-      const result = await convex.mutation('auth:generateApiKey', {});
+      const result = await convex.mutation(mutationRef('auth:generateApiKey'), {});
 
       if (options.verbose) {
         console.log('API Key Generated:');
@@ -109,7 +120,7 @@ authCommand
     const convex = new ConvexClient(ctx.deployUrl);
 
     try {
-      const result = await convex.query('auth:validateApiKey', { apiKey: key });
+      const result = await convex.query(queryRef('auth:validateApiKey'), { apiKey: key });
 
       if (options.verbose) {
         console.log('Validation Result:', result);
@@ -137,7 +148,7 @@ authCommand
     const convex = new ConvexClient(ctx.deployUrl);
 
     try {
-      const result = await convex.mutation('auth:createSession', {});
+      const result = await convex.mutation(mutationRef('auth:createSession'), {});
 
       if (options.verbose) {
         console.log('Session Created:');
