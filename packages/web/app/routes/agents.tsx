@@ -1,8 +1,25 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, ChangeEvent, FormEvent } from 'react';
-import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X } from 'lucide-react';
+import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X, ChevronDown, ChevronUp, HardDrive, Container } from 'lucide-react';
 import { LLM_PROVIDERS, getModelsByProvider } from '../../../../convex/llmProviders';
+import * as Switch from '@radix-ui/react-switch';
+import * as Select from '@radix-ui/react-select';
+
+interface FailoverModel {
+  provider: string;
+  model: string;
+}
+
+interface WorkspaceStorage {
+  type: 'local' | 's3' | 'r2';
+  basePath?: string;
+  bucket?: string;
+  region?: string;
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+}
 
 interface Agent {
   id: string;
@@ -14,6 +31,10 @@ interface Agent {
   temperature: number;
   maxTokens: number;
   status: string;
+  sandboxEnabled?: boolean;
+  sandboxImage?: string;
+  workspaceStorage?: WorkspaceStorage;
+  failoverModels?: FailoverModel[];
 }
 
 // MOCK DATA (to be replaced by Convex)
@@ -28,6 +49,9 @@ const initialAgents: Agent[] = [
     temperature: 0.7,
     maxTokens: 4096,
     status: 'active',
+    sandboxEnabled: false,
+    workspaceStorage: { type: 'local' },
+    failoverModels: [],
   },
   {
     id: 'agent-2',
@@ -39,6 +63,10 @@ const initialAgents: Agent[] = [
     temperature: 0.5,
     maxTokens: 8192,
     status: 'inactive',
+    sandboxEnabled: true,
+    sandboxImage: 'node:20',
+    workspaceStorage: { type: 'local' },
+    failoverModels: [{ provider: 'openai', model: 'gpt-4.1-mini' }],
   },
   {
     id: 'agent-3',
@@ -50,6 +78,9 @@ const initialAgents: Agent[] = [
     temperature: 0.9,
     maxTokens: 2048,
     status: 'active',
+    sandboxEnabled: false,
+    workspaceStorage: { type: 'local' },
+    failoverModels: [],
   },
 ];
 
@@ -187,6 +218,14 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
     provider: agent?.provider || 'openai',
     temperature: agent?.temperature || 0.7,
     maxTokens: agent?.maxTokens || 4096,
+    sandboxEnabled: agent?.sandboxEnabled || false,
+    sandboxImage: agent?.sandboxImage || 'node:20',
+    storageType: (agent?.workspaceStorage?.type || 'local') as 'local' | 's3' | 'r2',
+    storageBucket: agent?.workspaceStorage?.bucket || '',
+    storageEndpoint: agent?.workspaceStorage?.endpoint || '',
+    storageAccessKeyId: agent?.workspaceStorage?.accessKeyId || '',
+    storageSecretAccessKey: agent?.workspaceStorage?.secretAccessKey || '',
+    failoverModels: agent?.failoverModels || [],
   });
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -200,7 +239,54 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    onSave(formData);
+
+    // Build workspace storage object based on type
+    const workspaceStorage: WorkspaceStorage = { type: formData.storageType };
+    if (formData.storageType === 's3' || formData.storageType === 'r2') {
+      if (formData.storageBucket) workspaceStorage.bucket = formData.storageBucket;
+      if (formData.storageEndpoint) workspaceStorage.endpoint = formData.storageEndpoint;
+      if (formData.storageAccessKeyId) workspaceStorage.accessKeyId = formData.storageAccessKeyId;
+      if (formData.storageSecretAccessKey) workspaceStorage.secretAccessKey = formData.storageSecretAccessKey;
+    }
+
+    const agentData = {
+      name: formData.name,
+      description: formData.description,
+      instructions: formData.instructions,
+      model: formData.model,
+      provider: formData.provider,
+      temperature: formData.temperature,
+      maxTokens: formData.maxTokens,
+      sandboxEnabled: formData.sandboxEnabled,
+      sandboxImage: formData.sandboxEnabled ? formData.sandboxImage : undefined,
+      workspaceStorage: formData.storageType !== 'local' ? workspaceStorage : undefined,
+      failoverModels: formData.failoverModels.length > 0 ? formData.failoverModels : undefined,
+    };
+
+    onSave(agentData);
+  };
+
+  const addFailoverModel = () => {
+    setFormData(prev => ({
+      ...prev,
+      failoverModels: [...prev.failoverModels, { provider: 'openai', model: 'gpt-4.1-mini' }],
+    }));
+  };
+
+  const removeFailoverModel = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      failoverModels: prev.failoverModels.filter((_, i) => i !== index),
+    }));
+  };
+
+  const updateFailoverModel = (index: number, field: 'provider' | 'model', value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      failoverModels: prev.failoverModels.map((fm, i) =>
+        i === index ? { ...fm, [field]: value } : fm
+      ),
+    }));
   };
 
   const providers = LLM_PROVIDERS;
@@ -277,6 +363,155 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
               <label className="block text-sm font-medium mb-1">Max Tokens</label>
               <input type="number" name="maxTokens" value={formData.maxTokens} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary" />
             </div>
+          </div>
+
+          {/* Sandbox Configuration */}
+          <div className="border-t border-border pt-4">
+            <h3 className="text-sm font-semibold mb-3 flex items-center">
+              <Container className="w-4 h-4 mr-2" /> Sandbox Configuration
+            </h3>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-medium">Enable Docker Sandbox</label>
+                <Switch.Root
+                  checked={formData.sandboxEnabled}
+                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, sandboxEnabled: checked }))}
+                  className="w-[42px] h-[25px] bg-gray-600 rounded-full relative data-[state=checked]:bg-primary outline-none cursor-pointer"
+                >
+                  <Switch.Thumb className="block w-[21px] h-[21px] bg-white rounded-full shadow-sm transition-transform duration-100 translate-x-0.5 data-[state=checked]:translate-x-[19px]" />
+                </Switch.Root>
+              </div>
+              {formData.sandboxEnabled && (
+                <div>
+                  <label className="block text-sm font-medium mb-1">Sandbox Image</label>
+                  <input
+                    type="text"
+                    name="sandboxImage"
+                    value={formData.sandboxImage}
+                    onChange={handleChange}
+                    placeholder="node:20"
+                    className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                  />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Workspace Storage Configuration */}
+          <div className="border-t border-border pt-4">
+            <h3 className="text-sm font-semibold mb-3 flex items-center">
+              <HardDrive className="w-4 h-4 mr-2" /> Workspace Storage
+            </h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Storage Backend</label>
+                <select
+                  value={formData.storageType}
+                  onChange={(e) => setFormData(prev => ({ ...prev, storageType: e.target.value as 'local' | 's3' | 'r2' }))}
+                  className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="local">Local (default)</option>
+                  <option value="s3">AWS S3</option>
+                  <option value="r2">Cloudflare R2</option>
+                </select>
+              </div>
+              {(formData.storageType === 's3' || formData.storageType === 'r2') && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Bucket Name</label>
+                    <input
+                      type="text"
+                      value={formData.storageBucket}
+                      onChange={(e) => setFormData(prev => ({ ...prev, storageBucket: e.target.value }))}
+                      placeholder="my-bucket"
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  {formData.storageType === 'r2' && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Endpoint</label>
+                      <input
+                        type="text"
+                        value={formData.storageEndpoint}
+                        onChange={(e) => setFormData(prev => ({ ...prev, storageEndpoint: e.target.value }))}
+                        placeholder="https://<account>.r2.cloudflarestorage.com"
+                        className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                      />
+                    </div>
+                  )}
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Access Key ID</label>
+                    <input
+                      type="text"
+                      value={formData.storageAccessKeyId}
+                      onChange={(e) => setFormData(prev => ({ ...prev, storageAccessKeyId: e.target.value }))}
+                      placeholder="AKIAIOSFODNN7EXAMPLE"
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Secret Access Key</label>
+                    <input
+                      type="password"
+                      value={formData.storageSecretAccessKey}
+                      onChange={(e) => setFormData(prev => ({ ...prev, storageSecretAccessKey: e.target.value }))}
+                      placeholder="••••••••••••••••"
+                      className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Model Failover Chain */}
+          <div className="border-t border-border pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-semibold">Model Fallbacks</h3>
+              <button
+                type="button"
+                onClick={addFailoverModel}
+                className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded hover:bg-primary/90"
+              >
+                + Add Fallback
+              </button>
+            </div>
+            <div className="bg-muted/50 rounded-lg p-3 mb-2">
+              <div className="text-xs text-muted-foreground mb-1">Primary Model</div>
+              <div className="text-sm font-medium">{formData.provider} / {formData.model}</div>
+            </div>
+            {formData.failoverModels.map((fm, index) => (
+              <div key={index} className="flex items-center gap-2 mb-2">
+                <div className="flex-1 grid grid-cols-2 gap-2">
+                  <select
+                    value={fm.provider}
+                    onChange={(e) => updateFailoverModel(index, 'provider', e.target.value)}
+                    className="bg-background border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    {LLM_PROVIDERS.map(p => <option key={p.key} value={p.key}>{p.displayName}</option>)}
+                  </select>
+                  <select
+                    value={fm.model}
+                    onChange={(e) => updateFailoverModel(index, 'model', e.target.value)}
+                    className="bg-background border border-border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    {getModelsByProvider(fm.provider).map(m => (
+                      <option key={m.id} value={m.id.split('/').slice(1).join('/')}>{m.displayName}</option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeFailoverModel(index)}
+                  className="p-1 rounded hover:bg-destructive/20 text-muted-foreground hover:text-destructive"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ))}
+            {formData.failoverModels.length === 0 && (
+              <div className="text-sm text-muted-foreground text-center py-4">No fallback models configured</div>
+            )}
           </div>
         </form>
         <div className="flex justify-end p-4 border-t border-border">

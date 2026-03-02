@@ -217,7 +217,7 @@ async function runProject(options) {
 
 // src/commands/deploy.ts
 import path4 from "path";
-import { execSync as execSync2, execFile } from "child_process";
+import { execSync as execSync2 } from "child_process";
 import fs4 from "fs-extra";
 import chalk from "chalk";
 import ora from "ora";
@@ -479,24 +479,6 @@ var CloudClient = class {
 };
 
 // src/commands/deploy.ts
-var ENV_VAR_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/i;
-function setConvexEnvVar(projectDir, key, value) {
-  return new Promise((resolve4, reject) => {
-    if (!ENV_VAR_NAME_PATTERN.test(key)) {
-      reject(new Error(`Invalid environment variable name: "${key}". Must match ${ENV_VAR_NAME_PATTERN}`));
-      return;
-    }
-    execFile("npx", ["convex", "env", "set", key, value], {
-      cwd: projectDir
-    }, (error3) => {
-      if (error3) {
-        reject(error3);
-      } else {
-        resolve4();
-      }
-    });
-  });
-}
 function parseEnvFile(filePath) {
   const content = fs4.readFileSync(filePath, "utf-8");
   const vars = {};
@@ -787,12 +769,13 @@ async function deployToConvex(options) {
     console.log("  Setting environment variables...");
     for (const [key, value] of Object.entries(envVars)) {
       try {
-        await setConvexEnvVar(projectDir, key, value);
+        execSync2(`npx convex env set ${key} "${value}"`, {
+          cwd: projectDir,
+          stdio: "pipe"
+        });
         console.log(`    \u2705 ${key}`);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error(`    \u274C Failed to set ${key}: ${errorMessage}`);
-        throw new Error(`Failed to set environment variable ${key}: ${errorMessage}`);
+      } catch {
+        console.error(`    \u274C Failed to set ${key}`);
       }
     }
     console.log("");
@@ -2951,7 +2934,7 @@ console.log('Hello from ${name}!');
     console.log();
     const startTime = Date.now();
     try {
-      const result = await bundledSkillRegistry.execute(name, args);
+      const result = await bundledledSkillRegistry.execute(name, args);
       const elapsed = Date.now() - startTime;
       success("Result:");
       console.log(result);
@@ -3301,14 +3284,8 @@ function registerCronCommand(program2) {
 }
 
 // src/commands/mcp.ts
-import { MCPExecutor } from "@agentforge-ai/core";
+import { MCPExecutor } from "@agentforge-ai/core/mcp-executor";
 import readline5 from "readline";
-function mutationRef(name) {
-  return name;
-}
-function queryRef(name) {
-  return name;
-}
 function prompt4(q) {
   const rl = readline5.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
@@ -3320,7 +3297,7 @@ function registerMcpCommand(program2) {
   const mcp = program2.command("mcp").description("Manage MCP connections");
   mcp.command("list").option("--json", "Output as JSON").description("List all MCP connections").action(async (opts) => {
     const client = await createClient();
-    const result = await safeCall(() => client.query(queryRef("mcpConnections:list"), {}), "Failed to list connections");
+    const result = await safeCall(() => client.query("mcpConnections:list", {}), "Failed to list connections");
     if (opts.json) {
       console.log(JSON.stringify(result, null, 2));
       return;
@@ -3350,7 +3327,7 @@ function registerMcpCommand(program2) {
     }
     const client = await createClient();
     await safeCall(
-      () => client.mutation(mutationRef("mcpConnections:create"), {
+      () => client.mutation("mcpConnections:create", {
         name,
         serverUrl: endpoint,
         protocol: type
@@ -3361,13 +3338,13 @@ function registerMcpCommand(program2) {
   });
   mcp.command("remove").argument("<id>", "Connection ID").description("Remove an MCP connection").action(async (id) => {
     const client = await createClient();
-    await safeCall(() => client.mutation(mutationRef("mcpConnections:remove"), { id }), "Failed");
+    await safeCall(() => client.mutation("mcpConnections:remove", { id }), "Failed");
     success(`Connection "${id}" removed.`);
   });
   mcp.command("test").argument("<id>", "Connection ID").description("Test an MCP connection").action(async (id) => {
     info(`Testing connection "${id}"...`);
     const client = await createClient();
-    const conns = await safeCall(() => client.query(queryRef("mcpConnections:list"), {}), "Failed");
+    const conns = await safeCall(() => client.query("mcpConnections:list", {}), "Failed");
     const conn = conns.find((c) => c._id === id || c._id?.endsWith(id));
     if (!conn) {
       error(`Connection "${id}" not found.`);
@@ -3378,7 +3355,7 @@ function registerMcpCommand(program2) {
         const res = await fetch(conn.serverUrl, { method: "HEAD", signal: AbortSignal.timeout(5e3) });
         if (res.ok) {
           success(`Connection "${conn.name}" is reachable (HTTP ${res.status}).`);
-          await client.mutation(mutationRef("mcpConnections:updateStatus"), { id: conn._id, isConnected: true });
+          await client.mutation("mcpConnections:updateStatus", { id: conn._id, isConnected: true });
         } else {
           error(`Connection "${conn.name}" returned HTTP ${res.status}.`);
         }
@@ -3392,12 +3369,12 @@ function registerMcpCommand(program2) {
   });
   mcp.command("enable").argument("<id>", "Connection ID").description("Enable a connection").action(async (id) => {
     const client = await createClient();
-    await safeCall(() => client.mutation(mutationRef("mcpConnections:update"), { id, isEnabled: true }), "Failed");
+    await safeCall(() => client.mutation("mcpConnections:update", { id, isEnabled: true }), "Failed");
     success(`Connection "${id}" enabled.`);
   });
   mcp.command("disable").argument("<id>", "Connection ID").description("Disable a connection").action(async (id) => {
     const client = await createClient();
-    await safeCall(() => client.mutation(mutationRef("mcpConnections:update"), { id, isEnabled: false }), "Failed");
+    await safeCall(() => client.mutation("mcpConnections:update", { id, isEnabled: false }), "Failed");
     success(`Connection "${id}" disabled.`);
   });
   mcp.command("list-tools").argument("<connection-name>", "Connection name").description("List available tools from an MCP server").action(async (connectionName) => {
@@ -6568,7 +6545,7 @@ function registerSandboxCommand(program2) {
   });
 }
 async function runSandbox(file, options) {
-  header("Sandbox");
+  header();
   const filePath = path15.resolve(file);
   if (!await fs15.pathExists(filePath)) {
     error(`File not found: ${file}`);
@@ -6582,8 +6559,8 @@ async function runSandbox(file, options) {
   dim(`Timeout: ${timeoutMs}ms`);
   let SandboxManager;
   try {
-    const coreModule = await import("@agentforge-ai/core");
-    SandboxManager = coreModule.DockerSandboxManager;
+    const sandboxModule = await import("@agentforge-ai/core/sandbox");
+    SandboxManager = sandboxModule.DockerSandboxManager;
   } catch (err) {
     error("Failed to load sandbox module. Make sure @agentforge-ai/core is installed.");
     process.exit(1);
@@ -6649,7 +6626,7 @@ function registerResearchCommand(program2) {
   });
 }
 async function runResearch(topic, options) {
-  header("Research");
+  header();
   const depth = options.depth || "standard";
   const provider = options.provider || "openai";
   const model = options.model || "gpt-4o-mini";
@@ -6739,8 +6716,143 @@ function formatReport(report) {
 
 // src/commands/auth.ts
 import { Command } from "commander";
+
+// src/lib/context.ts
+import { readFileSync } from "fs";
+import { join as join2 } from "path";
+function readEnvValue5(key) {
+  const cwd = process.cwd();
+  const envFiles = [".env.local", ".env", ".env.production"];
+  for (const envFile of envFiles) {
+    try {
+      const filePath = join2(cwd, envFile);
+      const content = readFileSync(filePath, "utf-8");
+      const lines = content.split("\n");
+      for (const line of lines) {
+        const [envKey, ...envValueParts] = line.split("=");
+        if (envKey.trim() === key && envValueParts.length > 0) {
+          return envValueParts.join("=").trim();
+        }
+      }
+    } catch {
+    }
+  }
+  return void 0;
+}
+function getContext() {
+  const deployUrl = readEnvValue5("CONVEX_URL") || process.env.CONVEX_URL;
+  if (!deployUrl) {
+    throw new Error(
+      "CONVEX_URL not found. Run `npx convex dev` first, or set CONVEX_URL in your .env file."
+    );
+  }
+  return { deployUrl };
+}
+
+// src/commands/auth.ts
+import { ConvexClient } from "convex/browser";
 var authCommand = new Command("auth");
 authCommand.description("Manage dashboard authentication");
+authCommand.command("set-password").description("Set the dashboard password (for local/self-hosted deployments)").argument("<password>", "Password to set").option("-v, --verbose", "Verbose output").action(async (password, options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const result = await convex.mutation("auth:setPassword", { password });
+    if (options.verbose) {
+      console.log("Password set successfully");
+      console.log("User ID:", result.userId);
+      console.log("Updated:", result.updated);
+    } else {
+      console.log("\u2713 Dashboard password set successfully");
+      console.log("  Access your dashboard at:", ctx.deployUrl.replace(".convex.cloud", ".convex.cloud"));
+    }
+  } catch (error3) {
+    console.error("Failed to set password:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
+authCommand.command("status").description("Check dashboard authentication status").option("-v, --verbose", "Verbose output").action(async (options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const passwordResult = await convex.query("auth:validatePassword", {
+      password: "dummy-check"
+    });
+    const hasPassword = passwordResult.valid === false;
+    if (options.verbose) {
+      console.log("Auth Status:");
+      console.log("  Password Set:", hasPassword);
+      console.log("  Deployment:", ctx.deployUrl);
+    } else {
+      if (hasPassword) {
+        console.log("\u2713 Dashboard is password protected");
+      } else {
+        console.log("\u26A0 Dashboard password not set");
+        console.log("  Run: agentforge auth set-password <password>");
+      }
+    }
+  } catch (error3) {
+    console.error("Failed to check auth status:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
+authCommand.command("generate-key").description("Generate an API key for dashboard access").option("-v, --verbose", "Verbose output").action(async (options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const result = await convex.mutation("auth:generateApiKey", {});
+    if (options.verbose) {
+      console.log("API Key Generated:");
+      console.log("  Key:", result.apiKey);
+    } else {
+      console.log("\u2713 API Key generated:");
+      console.log("  ", result.apiKey);
+      console.log("  Use this key in the Authorization header: Bearer", result.apiKey);
+    }
+  } catch (error3) {
+    console.error("Failed to generate API key:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
+authCommand.command("validate-key").description("Validate an API key").argument("<key>", "API key to validate").option("-v, --verbose", "Verbose output").action(async (key, options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const result = await convex.query("auth:validateApiKey", { apiKey: key });
+    if (options.verbose) {
+      console.log("Validation Result:", result);
+    } else {
+      if (result.valid) {
+        console.log("\u2713 API key is valid");
+      } else {
+        console.log("\u2717 API key is invalid");
+        process.exit(1);
+      }
+    }
+  } catch (error3) {
+    console.error("Failed to validate API key:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
+authCommand.command("create-session").description("Create a session token for dashboard access").option("-v, --verbose", "Verbose output").action(async (options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const result = await convex.mutation("auth:createSession", {});
+    if (options.verbose) {
+      console.log("Session Created:");
+      console.log("  Token:", result.token);
+      console.log("  Expires At:", new Date(result.expiresAt).toISOString());
+    } else {
+      console.log("\u2713 Session token created:");
+      console.log("  ", result.token);
+      console.log("  Expires:", new Date(result.expiresAt).toLocaleString());
+    }
+  } catch (error3) {
+    console.error("Failed to create session:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
 
 // src/commands/browser.ts
 import { Command as Command2 } from "commander";
@@ -6987,9 +7099,9 @@ function registerVoiceCommand(program2) {
       process.exit(1);
     }
     const outputFile = opts.output ? resolve2(opts.output) : resolve2(`speech-${Date.now()}.mp3`);
-    dim(`Provider: ElevenLabs`);
-    dim(`Voice: ${opts.voice || "21m00Tcm4TlvDq8ikWAM (default)"}`);
-    dim(`Text: "${text.substring(0, 60)}${text.length > 60 ? "..." : ""}"`);
+    info(dim(`Provider: ElevenLabs`));
+    info(dim(`Voice: ${opts.voice || "21m00Tcm4TlvDq8ikWAM (default)"}`));
+    info(dim(`Text: "${text.substring(0, 60)}${text.length > 60 ? "..." : ""}"`));
     console.log();
     try {
       const tts = new ElevenLabsTTS({
@@ -7016,7 +7128,7 @@ function registerVoiceCommand(program2) {
     console.log(`  ${colors.cyan}ErXwobaYi8WM5FbVDYjL${colors.reset}  - Elli`);
     console.log(`  ${colors.cyan}MF3mGyEYCl7XYWbV9V6O${colors.reset}  - Josh`);
     console.log();
-    dim("Browse more voices at: https://elevenlabs.io/voice-library");
+    info(dim("Browse more voices at: https://elevenlabs.io/voice-library"));
   });
 }
 
@@ -7091,7 +7203,7 @@ function registerWorkflowsCommand(program2) {
         "Failed to create workflow run"
       );
       success(`Created run: ${colors.cyan}${runId}${colors.reset}`);
-      dim("Executing workflow steps...");
+      info(dim("Executing workflow steps..."));
       const result = await safeCall(
         () => client.action("workflowEngine:executeWorkflow", { runId }),
         "Failed to execute workflow"
@@ -7100,7 +7212,7 @@ function registerWorkflowsCommand(program2) {
         success("Workflow completed successfully");
         if (result.output) {
           console.log();
-          dim("Output:");
+          info(dim("Output:"));
           console.log(`  ${result.output}`);
         }
       }
@@ -7147,12 +7259,12 @@ function registerWorkflowsCommand(program2) {
 }
 
 // src/index.ts
-import { readFileSync } from "fs";
+import { readFileSync as readFileSync2 } from "fs";
 import { fileURLToPath as fileURLToPath2 } from "url";
 import { dirname as dirname2, resolve as resolve3 } from "path";
 var __filename2 = fileURLToPath2(import.meta.url);
 var __dirname2 = dirname2(__filename2);
-var pkg = JSON.parse(readFileSync(resolve3(__dirname2, "..", "package.json"), "utf-8"));
+var pkg = JSON.parse(readFileSync2(resolve3(__dirname2, "..", "package.json"), "utf-8"));
 var program = new Command3();
 program.name("agentforge").description("AgentForge \u2014 NanoClaw: A minimalist agent framework powered by Mastra + Convex").version(pkg.version);
 program.command("create").argument("<project-name>", "Name of the project to create").description("Create a new AgentForge project").option("-t, --template <template>", "Project template to use", "default").action(async (projectName, options) => {
