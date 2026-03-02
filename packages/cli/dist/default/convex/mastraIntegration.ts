@@ -25,8 +25,7 @@
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
-import { Agent } from "@mastra/core/agent";
-import type { MessageListInput } from "@mastra/core/agent/message-list";
+import { Agent } from "./lib/agent";
 
 // AGE-158, AGE-177: Import context management functions
 import {
