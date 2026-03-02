@@ -14,8 +14,7 @@
     "dashboard:build": "cd dashboard && pnpm build"
   },
   "dependencies": {
-    "@agentforge-ai/core": "^0.4.0",
-    "@mastra/core": "^1.7.0",
+    "@agentforge-ai/core": "^0.10.1",
     "convex": "^1.17.0",
     "cron-parser": "^4.9.0",
     "zod": "^3.23.0"
