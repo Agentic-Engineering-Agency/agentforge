@@ -3,7 +3,7 @@
  */
 
 import { Command } from 'commander';
-import { getContext } from '../lib/cli-context.js';
+import { getContext } from '../lib/context.js';
 import { ConvexClient } from 'convex/browser';
 import type { FunctionReference } from 'convex/server';
 
