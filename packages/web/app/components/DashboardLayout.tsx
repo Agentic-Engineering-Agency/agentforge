@@ -4,6 +4,7 @@ import {
   MessageSquare, LayoutDashboard, Radio, Server, Activity, Clock,
   Bot, Sparkles, Network, Settings, Bug, FileText, Menu, X,
   ChevronLeft, ChevronRight, User, Heart, FolderKanban, Folder, Store,
+  Microscope, GitBranch,
 } from "lucide-react";
 
 const navItems = [
@@ -21,6 +22,7 @@ const navItems = [
       { href: "/usage", label: "Usage", icon: Clock },
       { href: "/observability", label: "Observability", icon: Activity },
       { href: "/cron", label: "Cron Jobs", icon: Clock },
+      { href: "/workflows", label: "Workflows", icon: GitBranch },
     ],
   },
   {
@@ -30,6 +32,12 @@ const navItems = [
       { href: "/skills", label: "Skills", icon: Sparkles },
       { href: "/skills-marketplace", label: "Marketplace", icon: Store },
       { href: "/connections", label: "Connections", icon: Network },
+    ],
+  },
+  {
+    section: "Research",
+    items: [
+      { href: "/research", label: "Research", icon: Microscope },
     ],
   },
   {
