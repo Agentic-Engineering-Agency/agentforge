@@ -1,0 +1,11 @@
+{
+  "functions": "convex",
+  "node": {
+    "externalPackages": ["@ai-sdk/openai-compatible", "ai", "@mastra/core"]
+  },
+  "generateCommonJSApi": true,
+  "codegen": {
+    "staticApi": true,
+    "staticDataModel": true
+  }
+}
