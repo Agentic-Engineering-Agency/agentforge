@@ -7,7 +7,7 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 });
 
 // src/index.ts
-import { Command } from "commander";
+import { Command as Command3 } from "commander";
 
 // src/commands/create.ts
 import path from "path";
@@ -247,7 +247,7 @@ async function readCredentials() {
       creds.cloudUrl = DEFAULT_CLOUD_URL;
     }
     return creds;
-  } catch (error4) {
+  } catch (error3) {
     return null;
   }
 }
@@ -331,8 +331,8 @@ var CloudClient = class {
    */
   getUrl(endpoint) {
     const base = this.baseUrl.replace(/\/$/, "");
-    const path16 = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-    return `${base}${path16}`;
+    const path17 = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    return `${base}${path17}`;
   }
   /**
    * Get request headers with authentication
@@ -363,9 +363,9 @@ var CloudClient = class {
     let response;
     try {
       response = await fetch(url, options);
-    } catch (error4) {
+    } catch (error3) {
       throw new CloudClientError(
-        `Network error: ${error4.message || "Failed to connect to AgentForge Cloud"}`,
+        `Network error: ${error3.message || "Failed to connect to AgentForge Cloud"}`,
         "NETWORK_ERROR"
       );
     }
@@ -403,15 +403,15 @@ var CloudClient = class {
     try {
       const user = await this.request("GET", "/api/auth/me");
       return user;
-    } catch (error4) {
-      if (error4.status === 401) {
+    } catch (error3) {
+      if (error3.status === 401) {
         throw new CloudClientError(
           'Invalid API key. Run "agentforge login" to re-authenticate.',
           "UNAUTHORIZED",
           401
         );
       }
-      throw error4;
+      throw error3;
     }
   }
   /**
@@ -665,7 +665,7 @@ async function deployToCloud(options, projectDir) {
         console.error();
         process.exit(1);
       }
-      await new Promise((resolve3) => setTimeout(resolve3, 3e3));
+      await new Promise((resolve4) => setTimeout(resolve4, 3e3));
       continue;
     }
     if (status.status === "completed") {
@@ -693,7 +693,7 @@ async function deployToCloud(options, projectDir) {
       };
       pollSpinner.text = statuses[status.status] || `Status: ${status.status}`;
     }
-    await new Promise((resolve3) => setTimeout(resolve3, 3e3));
+    await new Promise((resolve4) => setTimeout(resolve4, 3e3));
   }
   pollSpinner.fail("Deployment timed out");
   process.exit(1);
@@ -851,21 +851,21 @@ async function createClient() {
 async function safeCall(fn, errorMessage) {
   try {
     return await fn();
-  } catch (error4) {
-    if (error4.message?.includes("CONVEX_URL not found")) {
+  } catch (error3) {
+    if (error3.message?.includes("CONVEX_URL not found")) {
       console.error("\n\u274C Not connected to Convex.");
       console.error("   Run `npx convex dev` in your project directory first.\n");
-    } else if (error4.message?.includes("Current directory does not exist")) {
+    } else if (error3.message?.includes("Current directory does not exist")) {
       console.error(`
-\u274C ${error4.message}
+\u274C ${error3.message}
 `);
-    } else if (error4.message?.includes("fetch failed") || error4.message?.includes("ECONNREFUSED")) {
+    } else if (error3.message?.includes("fetch failed") || error3.message?.includes("ECONNREFUSED")) {
       console.error("\n\u274C Cannot reach Convex deployment.");
       console.error("   Make sure `npx convex dev` is running.\n");
     } else {
       console.error(`
 \u274C ${errorMessage}`);
-      console.error(`   ${error4.message}
+      console.error(`   ${error3.message}
 `);
     }
     process.exit(1);
@@ -948,9 +948,9 @@ function truncate(str, max) {
 import readline from "readline";
 function prompt(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve3) => rl.question(question, (ans) => {
+  return new Promise((resolve4) => rl.question(question, (ans) => {
     rl.close();
-    resolve3(ans.trim());
+    resolve4(ans.trim());
   }));
 }
 function registerAgentsCommand(program2) {
@@ -3863,7 +3863,7 @@ function prompt7(q) {
   }));
 }
 function promptSecret(q) {
-  return new Promise((resolve3) => {
+  return new Promise((resolve4) => {
     const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
     if (process.stdin.isTTY) {
       process.stdout.write(q);
@@ -3878,7 +3878,7 @@ function promptSecret(q) {
           process.stdin.removeListener("data", onData);
           console.log();
           rl.close();
-          resolve3(input);
+          resolve4(input);
         } else if (char === "") {
           process.exit();
         } else if (char === "\x7F") {
@@ -3895,7 +3895,7 @@ function promptSecret(q) {
     } else {
       rl.question(q, (ans) => {
         rl.close();
-        resolve3(ans.trim());
+        resolve4(ans.trim());
       });
     }
   });
@@ -4014,8 +4014,8 @@ function maskKey(key) {
   return key.substring(0, 8) + "..." + key.substring(key.length - 4);
 }
 function promptSecret2(question) {
-  return new Promise((resolve3) => {
-    const readline13 = __require("readline");
+  return new Promise((resolve4) => {
+    const readline14 = __require("readline");
     if (process.stdin.isTTY) {
       process.stdout.write(question);
       process.stdin.setRawMode(true);
@@ -4028,7 +4028,7 @@ function promptSecret2(question) {
           process.stdin.pause();
           process.stdin.removeListener("data", onData);
           process.stdout.write("\n");
-          resolve3(input);
+          resolve4(input);
         } else if (char === "") {
           process.exit(0);
         } else if (char === "\x7F" || char === "\b") {
@@ -4043,10 +4043,10 @@ function promptSecret2(question) {
       };
       process.stdin.on("data", onData);
     } else {
-      const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
+      const rl = readline14.createInterface({ input: process.stdin, output: process.stdout });
       rl.question(question, (ans) => {
         rl.close();
-        resolve3(ans.trim());
+        resolve4(ans.trim());
       });
     }
   });
@@ -4134,12 +4134,12 @@ function registerKeysCommand(program2) {
     }
     const target = items[0];
     if (!opts.force) {
-      const readline13 = __require("readline");
-      const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
-      const answer = await new Promise((resolve3) => {
+      const readline14 = __require("readline");
+      const rl = readline14.createInterface({ input: process.stdin, output: process.stdout });
+      const answer = await new Promise((resolve4) => {
         rl.question(`Delete "${target.keyName}" for ${provider}? (y/N): `, (ans) => {
           rl.close();
-          resolve3(ans.trim());
+          resolve4(ans.trim());
         });
       });
       if (answer.toLowerCase() !== "y") {
@@ -4310,9 +4310,9 @@ function registerStatusCommand(program2) {
         stdio: "inherit",
         shell: true
       });
-      await new Promise((resolve3, reject) => {
+      await new Promise((resolve4, reject) => {
         installChild.on("close", (code) => {
-          if (code === 0) resolve3();
+          if (code === 0) resolve4();
           else reject(new Error(`pnpm install exited with code ${code}`));
         });
         installChild.on("error", reject);
@@ -4596,6 +4596,7 @@ function registerModelsCommand(program2) {
 import { mkdir, readdir } from "fs/promises";
 import { existsSync } from "fs";
 import { resolve, join } from "path";
+import { createWorkspace } from "@agentforge-ai/core";
 function registerWorkspaceCommand(program2) {
   const ws = program2.command("workspace").description("Manage agent workspace and skills");
   ws.command("init").option("--dir <dir>", "Project directory", ".").description("Initialize workspace directories (workspace/ and skills/)").action(async (opts) => {
@@ -4640,6 +4641,99 @@ Skills: ${skillsDir}`);
     } else {
       info(`
 Skills: not initialized`);
+    }
+  });
+  ws.command("config").option("--storage <type>", "Storage backend: local, s3, r2").option("--bucket <name>", "Bucket name (for S3/R2)").option("--endpoint <url>", "S3-compatible endpoint URL (required for R2)").option("--region <region>", 'AWS region or "auto" for R2').option("--key <key>", "Access key ID").option("--secret <secret>", "Secret access key").description("Configure workspace storage backend").action(async (opts) => {
+    const { storage, bucket, endpoint, region, key, secret } = opts;
+    if (!storage) {
+      error("Storage type is required. Use --storage <local|s3|r2>");
+      info("\nExamples:");
+      dim("  agentforge workspace config --storage local");
+      dim("  agentforge workspace config --storage r2 --bucket my-bucket --endpoint https://example.com --key KEY --secret SECRET");
+      dim("  agentforge workspace config --storage s3 --bucket my-bucket --region us-east-1 --key KEY --secret SECRET");
+      return;
+    }
+    if (!["local", "s3", "r2"].includes(storage)) {
+      error(`Invalid storage type: ${storage}`);
+      info("Valid options: local, s3, r2");
+      return;
+    }
+    if (storage === "s3" || storage === "r2") {
+      if (!bucket) {
+        error("--bucket <name> is required for S3/R2 storage");
+        return;
+      }
+      if (!key || !secret) {
+        error("--key and --secret are required for S3/R2 storage");
+        return;
+      }
+      if (storage === "r2" && !endpoint) {
+        warn("R2 typically requires --endpoint URL");
+        info("Example: --endpoint https://<accountid>.r2.cloudflarestorage.com");
+      }
+    }
+    process.env.AGENTFORGE_STORAGE = storage;
+    header(`Workspace Storage Configured`);
+    info(`Storage type: ${storage}`);
+    if (storage === "local") {
+      info(`Base path: ./workspace (default)`);
+      dim(`
+To customize base path, set AGENTFORGE_BASE_PATH environment variable.`);
+    } else {
+      info(`Bucket: ${bucket}`);
+      if (region) info(`Region: ${region}`);
+      if (endpoint) info(`Endpoint: ${endpoint}`);
+      dim(`
+Configuration saved to AGENTFORGE_STORAGE environment variable.`);
+      dim(`Credentials should be stored in environment variables for production use.`);
+    }
+  });
+  ws.command("test").option("--storage <type>", "Storage backend to test").option("--bucket <name>", "Bucket name (for S3/R2)").option("--endpoint <url>", "S3-compatible endpoint URL").option("--region <region>", "AWS region").option("--key <key>", "Access key ID").option("--secret <secret>", "Secret access key").option("--base-path <path>", "Base path for local storage", "/tmp/agentforge-workspace-test").description("Test workspace storage by writing and reading a file").action(async (opts) => {
+    header("Workspace Storage Test");
+    const storage = opts.storage ?? process.env.AGENTFORGE_STORAGE ?? "local";
+    const config = { storage };
+    if (storage === "local") {
+      config.basePath = opts.basePath;
+    } else {
+      config.bucket = opts.bucket;
+      config.region = opts.region ?? (storage === "r2" ? "auto" : "us-east-1");
+      config.endpoint = opts.endpoint;
+      config.accessKeyId = opts.key;
+      config.secretAccessKey = opts.secret;
+    }
+    try {
+      info(`Creating ${storage} workspace...`);
+      const workspace = createWorkspace(config);
+      const testPath = `agentforge-test-${Date.now()}.txt`;
+      const testContent = `AgentForge workspace test at ${(/* @__PURE__ */ new Date()).toISOString()}`;
+      info(`Writing test file: ${testPath}`);
+      await workspace.write(testPath, testContent);
+      info(`Reading test file...`);
+      const readContent = await workspace.read(testPath);
+      if (readContent === testContent) {
+        success(`\u2713 Storage test passed!`);
+        info(`Written and read: "${testContent}"`);
+        info(`Cleaning up test file...`);
+        await workspace.delete(testPath);
+        success(`\u2713 Test file deleted`);
+        info(`
+\u2713 ${storage.toUpperCase()} storage is working correctly.`);
+      } else {
+        error(`\u2717 Content mismatch!`);
+        error(`Expected: ${testContent}`);
+        error(`Got: ${readContent}`);
+      }
+    } catch (err) {
+      error(`\u2717 Storage test failed!`);
+      error(err.message);
+      if (storage !== "local") {
+        info(`
+Troubleshooting:`);
+        dim(`\u2022 Verify bucket name and credentials are correct`);
+        dim(`\u2022 For R2, check that endpoint URL is correct`);
+        dim(`\u2022 For S3, check that region is correct`);
+        dim(`\u2022 Ensure your access key has write permissions`);
+      }
     }
   });
 }
@@ -6070,9 +6164,381 @@ async function runMinimalSlackBot(config) {
   });
 }
 
-// src/commands/sandbox.ts
+// src/commands/channel-discord.ts
 import fs14 from "fs-extra";
 import path14 from "path";
+import readline13 from "readline";
+function prompt11(q) {
+  const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((r) => rl.question(q, (a) => {
+    rl.close();
+    r(a.trim());
+  }));
+}
+function readEnvValue4(key) {
+  const cwd = process.cwd();
+  const envFiles = [".env.local", ".env", ".env.production"];
+  for (const envFile of envFiles) {
+    const envPath = path14.join(cwd, envFile);
+    if (fs14.existsSync(envPath)) {
+      const content = fs14.readFileSync(envPath, "utf-8");
+      const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
+      if (match) return match[1].trim().replace(/["']/g, "");
+    }
+  }
+  return void 0;
+}
+function writeEnvValue4(key, value, envFile = ".env.local") {
+  const envPath = path14.join(process.cwd(), envFile);
+  let content = "";
+  if (fs14.existsSync(envPath)) {
+    content = fs14.readFileSync(envPath, "utf-8");
+  }
+  const lines = content.split("\n");
+  const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
+  if (idx >= 0) {
+    lines[idx] = `${key}=${value}`;
+  } else {
+    lines.push(`${key}=${value}`);
+  }
+  fs14.writeFileSync(envPath, lines.join("\n"));
+}
+function registerChannelDiscordCommand(program2) {
+  const channel = program2.command("channel:discord").description("Manage the Discord messaging channel");
+  channel.command("start").description("Start the Discord bot and begin routing messages to an agent").option("-a, --agent <id>", "Agent ID to route messages to").option("-t, --token <token>", "Discord Bot Token (overrides .env)").option("--client-id <id>", "Discord Client ID (for slash commands)").option("--guild-id <id>", "Discord Guild ID for guild-specific commands").option("--mention-only", "Only respond to @mentions in servers", false).option("--no-dms", "Disable DM responses").option("--log-level <level>", "Log level: debug, info, warn, error", "info").action(async (opts) => {
+    header("Discord Channel");
+    const botToken = opts.token || readEnvValue4("DISCORD_BOT_TOKEN") || process.env.DISCORD_BOT_TOKEN;
+    if (!botToken) {
+      error("Discord Bot Token not found.");
+      info("Set it with: agentforge channel:discord configure");
+      info("Or pass it with: --token <bot-token>");
+      info("Or set DISCORD_BOT_TOKEN in your .env.local file");
+      process.exit(1);
+    }
+    if (!botToken.startsWith("Bot ")) {
+      warn('Bot token should start with "Bot ". Attempting to continue...');
+    }
+    const convexUrl = readEnvValue4("CONVEX_URL") || process.env.CONVEX_URL;
+    if (!convexUrl) {
+      error("CONVEX_URL not found. Run `npx convex dev` first.");
+      process.exit(1);
+    }
+    let agentId = opts.agent;
+    if (!agentId) {
+      agentId = readEnvValue4("AGENTFORGE_AGENT_ID") || process.env.AGENTFORGE_AGENT_ID;
+    }
+    if (!agentId) {
+      info("No agent specified. Fetching available agents...");
+      const client = await createClient();
+      const agents = await safeCall(
+        () => client.query("agents:list", {}),
+        "Failed to list agents"
+      );
+      if (!agents || agents.length === 0) {
+        error("No agents found. Create one first: agentforge agents create");
+        process.exit(1);
+      }
+      console.log();
+      agents.forEach((a, i) => {
+        console.log(
+          `  ${colors.cyan}${i + 1}.${colors.reset} ${a.name} ${colors.dim}(${a.id})${colors.reset} \u2014 ${a.model}`
+        );
+      });
+      console.log();
+      const choice = await prompt11("Select agent (number or ID): ");
+      const idx = parseInt(choice) - 1;
+      agentId = idx >= 0 && idx < agents.length ? agents[idx].id : choice;
+    }
+    info(`Agent:       ${agentId}`);
+    info(`Convex:      ${convexUrl}`);
+    info(`Mention Only:${opts.mentionOnly ? " Yes" : " No"}`);
+    info(`DMs:         ${opts.dms ? " Disabled" : " Enabled"}`);
+    info(`Log:         ${opts.logLevel}`);
+    console.log();
+    let startDiscordChannel;
+    try {
+      const discordPkg = "@agentforge-ai/core";
+      const mod = await import(
+        /* @vite-ignore */
+        discordPkg
+      );
+      startDiscordChannel = mod.startDiscordChannel;
+    } catch (importError) {
+      error("Could not import @agentforge-ai/core. Using built-in Discord runner.");
+      dim(`  Error: ${importError.message}`);
+      console.log();
+      await runMinimalDiscordBot({
+        botToken,
+        clientId: opts.clientId || readEnvValue4("DISCORD_CLIENT_ID") || "",
+        guildId: opts.guildId || readEnvValue4("DISCORD_GUILD_ID") || "",
+        agentId,
+        convexUrl,
+        mentionOnly: opts.mentionOnly,
+        respondToDMs: !opts.noDms,
+        logLevel: opts.logLevel
+      });
+      return;
+    }
+    try {
+      await startDiscordChannel({
+        botToken,
+        clientId: opts.clientId,
+        guildId: opts.guildId,
+        agentId,
+        convexUrl,
+        mentionOnly: opts.mentionOnly,
+        respondToDMs: !opts.noDms,
+        logLevel: opts.logLevel
+      });
+      success("Discord bot is running!");
+      dim("  Press Ctrl+C to stop.");
+      await new Promise(() => {
+      });
+    } catch (startError) {
+      error(`Failed to start Discord bot: ${startError.message}`);
+      process.exit(1);
+    }
+  });
+  channel.command("configure").description("Configure the Discord bot credentials and settings").action(async () => {
+    header("Configure Discord Channel");
+    console.log();
+    info("To set up a Discord bot:");
+    dim("  1. Go to https://discord.com/developers/applications and create a new application");
+    dim('  2. Create a bot user under the "Bot" section');
+    dim('  3. Enable "MESSAGE CONTENT INTENT" under Privileged Gateway Intents');
+    dim("  4. Copy the bot token");
+    dim("  5. (Optional) Copy the Client ID for slash commands");
+    console.log();
+    const currentBotToken = readEnvValue4("DISCORD_BOT_TOKEN");
+    if (currentBotToken) {
+      const masked = currentBotToken.slice(0, 10) + "****" + currentBotToken.slice(-4);
+      info(`Current bot token: ${masked}`);
+    }
+    const botToken = await prompt11("Discord Bot Token: ");
+    if (!botToken) {
+      error("Bot token is required.");
+      process.exit(1);
+    }
+    info("Validating bot token...");
+    try {
+      const response = await fetch("https://discord.com/api/v10/users/@me", {
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          "Content-Type": "application/json"
+        }
+      });
+      if (response.ok) {
+        const data = await response.json();
+        success(`Bot verified: ${data.username} (${data.id})`);
+      } else if (response.status === 401) {
+        error("Invalid bot token. Please check and try again.");
+        process.exit(1);
+      } else {
+        warn(`Token validation returned status ${response.status}. Saving anyway.`);
+      }
+    } catch (fetchError) {
+      warn(`Could not validate token (network error): ${fetchError.message}`);
+      info("Saving token anyway.");
+    }
+    const formattedToken = botToken.startsWith("Bot ") ? botToken : `Bot ${botToken}`;
+    writeEnvValue4("DISCORD_BOT_TOKEN", formattedToken);
+    success("Bot token saved to .env.local");
+    console.log();
+    const currentClientId = readEnvValue4("DISCORD_CLIENT_ID");
+    if (currentClientId) {
+      info(`Current client ID: ${currentClientId}`);
+    }
+    const clientId = await prompt11("Discord Client ID (optional, for slash commands, press Enter to skip): ");
+    if (clientId) {
+      writeEnvValue4("DISCORD_CLIENT_ID", clientId);
+      success("Client ID saved to .env.local");
+    }
+    console.log();
+    const guildId = await prompt11("Discord Guild ID (optional, for guild-specific commands, press Enter to skip): ");
+    if (guildId) {
+      writeEnvValue4("DISCORD_GUILD_ID", guildId);
+      success("Guild ID saved to .env.local");
+    }
+    console.log();
+    const defaultAgent = await prompt11("Default agent ID (optional, press Enter to skip): ");
+    if (defaultAgent) {
+      writeEnvValue4("AGENTFORGE_AGENT_ID", defaultAgent);
+      success(`Default agent set to: ${defaultAgent}`);
+    }
+    console.log();
+    success("Configuration complete!");
+    info("Start the bot with: agentforge channel:discord start");
+  });
+  channel.command("status").description("Check the Discord bot configuration and connectivity").action(async () => {
+    header("Discord Channel Status");
+    const botToken = readEnvValue4("DISCORD_BOT_TOKEN");
+    const clientId = readEnvValue4("DISCORD_CLIENT_ID");
+    const guildId = readEnvValue4("DISCORD_GUILD_ID");
+    const agentId = readEnvValue4("AGENTFORGE_AGENT_ID");
+    const convexUrl = readEnvValue4("CONVEX_URL");
+    const statusData = {
+      "Bot Token": botToken ? `${botToken.slice(0, 10)}****${botToken.slice(-4)}` : `${colors.red}Not configured${colors.reset}`,
+      "Client ID": clientId || `${colors.dim}Not set${colors.reset}`,
+      "Guild ID": guildId || `${colors.dim}Not set${colors.reset}`,
+      "Default Agent": agentId || `${colors.dim}Not set${colors.reset}`,
+      "Convex URL": convexUrl || `${colors.red}Not configured${colors.reset}`
+    };
+    details(statusData);
+    if (botToken) {
+      info("Checking Discord API connectivity...");
+      try {
+        const response = await fetch("https://discord.com/api/v10/users/@me", {
+          headers: {
+            Authorization: botToken.startsWith("Bot ") ? botToken : `Bot ${botToken}`,
+            "Content-Type": "application/json"
+          }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          success(`Discord API connected: ${data.username}${data.discriminator !== "0" ? `#${data.discriminator}` : ""} (${data.id})`);
+        } else if (response.status === 401) {
+          error("Invalid bot token.");
+        } else {
+          error(`Discord API error: ${response.status}`);
+        }
+      } catch {
+        warn("Could not reach Discord API (network error).");
+      }
+    }
+    if (convexUrl) {
+      info("Checking Convex connectivity...");
+      try {
+        const client = await createClient();
+        const agents = await client.query("agents:list", {});
+        success(`Convex connected. ${agents.length} agents available.`);
+      } catch {
+        warn("Could not reach Convex deployment.");
+      }
+    }
+  });
+}
+async function runMinimalDiscordBot(config) {
+  const { botToken, agentId, convexUrl, mentionOnly, respondToDMs } = config;
+  const convexBase = convexUrl.replace(/\/$/, "");
+  const threadMap = /* @__PURE__ */ new Map();
+  info("Verifying Discord bot token...");
+  try {
+    const res = await fetch("https://discord.com/api/v10/users/@me", {
+      headers: {
+        Authorization: botToken.startsWith("Bot ") ? botToken : `Bot ${botToken}`,
+        "Content-Type": "application/json"
+      }
+    });
+    const data = await res.json();
+    if (data.error) {
+      error(`Discord auth error: ${data.error}`);
+      process.exit(1);
+    }
+    success(`Discord bot connected: ${data.username} (${data.id})`);
+  } catch (fetchError) {
+    warn(`Could not verify bot token: ${fetchError.message}`);
+    info("Continuing anyway...");
+  }
+  async function convexMutation(fn, args) {
+    const res = await fetch(`${convexBase}/api/mutation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: fn, args })
+    });
+    const data = await res.json();
+    if (data.status === "error") throw new Error(data.errorMessage);
+    return data.value;
+  }
+  async function convexAction(fn, args) {
+    const res = await fetch(`${convexBase}/api/action`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: fn, args })
+    });
+    const data = await res.json();
+    if (data.status === "error") throw new Error(data.errorMessage);
+    return data.value;
+  }
+  async function sendDiscordMessage(channelId, text) {
+    const messages = text.match(/.{1,1900}/gs) || [""];
+    for (const msg of messages) {
+      await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+        method: "POST",
+        headers: {
+          Authorization: botToken.startsWith("Bot ") ? botToken : `Bot ${botToken}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ content: msg })
+      });
+    }
+  }
+  async function getOrCreateThread(channelThreadKey, senderName) {
+    const cached = threadMap.get(channelThreadKey);
+    if (cached) return cached;
+    const threadId = await convexMutation("chat:createThread", {
+      agentId,
+      name: senderName ? `Discord: ${senderName}` : `Discord ${channelThreadKey}`,
+      userId: `discord:${channelThreadKey}`
+    });
+    threadMap.set(channelThreadKey, threadId);
+    return threadId;
+  }
+  async function handleDiscordMessage(message) {
+    if (message.author.bot) return;
+    if (mentionOnly && message.guild) {
+      const botMentioned = message.mentions?.users?.some((u) => u.bot === true);
+      if (!botMentioned) {
+        return;
+      }
+      if (message.content) {
+        const mentionRegex = /<@!?[\d]+>/g;
+        message.content = message.content.replace(mentionRegex, "").trim();
+      }
+    }
+    if (!respondToDMs && !message.guild) {
+      return;
+    }
+    const channelId = message.channel_id;
+    const userId = message.author.id;
+    const username = message.author.username;
+    const content = (message.content || "").trim();
+    if (!content) return;
+    const threadKey = `${channelId}:${userId}`;
+    console.log(`[Discord:${channelId}] ${username}: ${content}`);
+    try {
+      const convexThreadId = await getOrCreateThread(threadKey, username);
+      const result = await convexAction("chat:sendMessage", {
+        agentId,
+        threadId: convexThreadId,
+        content,
+        userId: `discord:${userId}`
+      });
+      if (result?.response) {
+        const response = result.response;
+        await sendDiscordMessage(channelId, response);
+        console.log(`[Agent] ${response.substring(0, 100)}${response.length > 100 ? "..." : ""}`);
+      } else {
+        await sendDiscordMessage(channelId, "I couldn't generate a response. Please try again.");
+      }
+    } catch (routeError) {
+      console.error(`Error: ${routeError.message}`);
+      await sendDiscordMessage(channelId, "Sorry, I encountered an error. Please try again.");
+    }
+  }
+  info("Starting Discord bot polling mode...");
+  info("Note: For production use, install discord.js for full WebSocket support.");
+  dim("  npm install discord.js");
+  warn("Polling mode has limitations. Consider installing discord.js for full features.");
+  info("Starting minimal HTTP-based bot (limited functionality)...");
+  error("Discord bot requires discord.js package for full functionality.");
+  info("Install it with: npm install discord.js");
+  info("Then restart: agentforge channel:discord start");
+  process.exit(1);
+}
+
+// src/commands/sandbox.ts
+import fs15 from "fs-extra";
+import path15 from "path";
 function registerSandboxCommand(program2) {
   program2.command("sandbox").description("Run code in an isolated Docker sandbox").argument("<file>", "Path to the JavaScript/TypeScript file to execute").option("-i, --image <image>", "Docker image to use (default: node:22-slim)", "node:22-slim").option("-t, --timeout <ms>", "Execution timeout in milliseconds (default: 30000)", "30000").action(async (file, options) => {
     await runSandbox(file, options);
@@ -6080,8 +6546,8 @@ function registerSandboxCommand(program2) {
 }
 async function runSandbox(file, options) {
   header();
-  const filePath = path14.resolve(file);
-  if (!await fs14.pathExists(filePath)) {
+  const filePath = path15.resolve(file);
+  if (!await fs15.pathExists(filePath)) {
     error(`File not found: ${file}`);
     process.exit(1);
   }
@@ -6118,8 +6584,8 @@ async function runSandbox(file, options) {
     if (containerId) {
       dim(`Container ID: ${containerId}`);
     }
-    const fileContent = await fs14.readFile(filePath, "utf-8");
-    const fileName = path14.basename(filePath);
+    const fileContent = await fs15.readFile(filePath, "utf-8");
+    const fileName = path15.basename(filePath);
     await sandbox.writeFile(`/workspace/${fileName}`, fileContent);
     dim(`File written to sandbox: /workspace/${fileName}`);
     info("Executing file...");
@@ -6152,8 +6618,8 @@ async function runSandbox(file, options) {
 }
 
 // src/commands/research.ts
-import fs15 from "fs-extra";
-import path15 from "path";
+import fs16 from "fs-extra";
+import path16 from "path";
 function registerResearchCommand(program2) {
   program2.command("research").description("Deep Research Mode \u2014 parallel multi-agent research").argument("<topic>", "Research topic or question").option("-d, --depth <depth>", "Research depth: shallow, standard, or deep", "standard").option("-p, --provider <provider>", "LLM provider (default: openai)", "openai").option("-m, --model <model>", "Model to use (default: gpt-4o-mini)", "gpt-4o-mini").option("-k, --key <key>", "API key (default: from environment)").action(async (topic, options) => {
     await runResearch(topic, options);
@@ -6203,9 +6669,9 @@ async function runResearch(topic, options) {
     dim(`  Synthesized comprehensive report`);
     const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, -5);
     const filename = `research-${timestamp}.md`;
-    const filepath = path15.resolve(filename);
+    const filepath = path16.resolve(filename);
     const reportContent = formatReport(report);
-    await fs15.writeFile(filepath, reportContent, "utf-8");
+    await fs16.writeFile(filepath, reportContent, "utf-8");
     console.log("\n" + reportContent);
     success(`Report saved to: ${filename}`);
   } catch (err) {
@@ -6248,14 +6714,558 @@ function formatReport(report) {
   return lines.join("\n");
 }
 
-// src/index.ts
+// src/commands/auth.ts
+import { Command } from "commander";
+
+// src/lib/context.ts
 import { readFileSync } from "fs";
+import { join as join2 } from "path";
+function readEnvValue5(key) {
+  const cwd = process.cwd();
+  const envFiles = [".env.local", ".env", ".env.production"];
+  for (const envFile of envFiles) {
+    try {
+      const filePath = join2(cwd, envFile);
+      const content = readFileSync(filePath, "utf-8");
+      const lines = content.split("\n");
+      for (const line of lines) {
+        const [envKey, ...envValueParts] = line.split("=");
+        if (envKey.trim() === key && envValueParts.length > 0) {
+          return envValueParts.join("=").trim();
+        }
+      }
+    } catch {
+    }
+  }
+  return void 0;
+}
+function getContext() {
+  const deployUrl = readEnvValue5("CONVEX_URL") || process.env.CONVEX_URL;
+  if (!deployUrl) {
+    throw new Error(
+      "CONVEX_URL not found. Run `npx convex dev` first, or set CONVEX_URL in your .env file."
+    );
+  }
+  return { deployUrl };
+}
+
+// src/commands/auth.ts
+import { ConvexClient } from "convex/browser";
+var authCommand = new Command("auth");
+authCommand.description("Manage dashboard authentication");
+authCommand.command("set-password").description("Set the dashboard password (for local/self-hosted deployments)").argument("<password>", "Password to set").option("-v, --verbose", "Verbose output").action(async (password, options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const result = await convex.mutation("auth:setPassword", { password });
+    if (options.verbose) {
+      console.log("Password set successfully");
+      console.log("User ID:", result.userId);
+      console.log("Updated:", result.updated);
+    } else {
+      console.log("\u2713 Dashboard password set successfully");
+      console.log("  Access your dashboard at:", ctx.deployUrl.replace(".convex.cloud", ".convex.cloud"));
+    }
+  } catch (error3) {
+    console.error("Failed to set password:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
+authCommand.command("status").description("Check dashboard authentication status").option("-v, --verbose", "Verbose output").action(async (options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const passwordResult = await convex.query("auth:validatePassword", {
+      password: "dummy-check"
+    });
+    const hasPassword = passwordResult.valid === false;
+    if (options.verbose) {
+      console.log("Auth Status:");
+      console.log("  Password Set:", hasPassword);
+      console.log("  Deployment:", ctx.deployUrl);
+    } else {
+      if (hasPassword) {
+        console.log("\u2713 Dashboard is password protected");
+      } else {
+        console.log("\u26A0 Dashboard password not set");
+        console.log("  Run: agentforge auth set-password <password>");
+      }
+    }
+  } catch (error3) {
+    console.error("Failed to check auth status:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
+authCommand.command("generate-key").description("Generate an API key for dashboard access").option("-v, --verbose", "Verbose output").action(async (options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const result = await convex.mutation("auth:generateApiKey", {});
+    if (options.verbose) {
+      console.log("API Key Generated:");
+      console.log("  Key:", result.apiKey);
+    } else {
+      console.log("\u2713 API Key generated:");
+      console.log("  ", result.apiKey);
+      console.log("  Use this key in the Authorization header: Bearer", result.apiKey);
+    }
+  } catch (error3) {
+    console.error("Failed to generate API key:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
+authCommand.command("validate-key").description("Validate an API key").argument("<key>", "API key to validate").option("-v, --verbose", "Verbose output").action(async (key, options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const result = await convex.query("auth:validateApiKey", { apiKey: key });
+    if (options.verbose) {
+      console.log("Validation Result:", result);
+    } else {
+      if (result.valid) {
+        console.log("\u2713 API key is valid");
+      } else {
+        console.log("\u2717 API key is invalid");
+        process.exit(1);
+      }
+    }
+  } catch (error3) {
+    console.error("Failed to validate API key:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
+authCommand.command("create-session").description("Create a session token for dashboard access").option("-v, --verbose", "Verbose output").action(async (options) => {
+  const ctx = getContext();
+  const convex = new ConvexClient(ctx.deployUrl);
+  try {
+    const result = await convex.mutation("auth:createSession", {});
+    if (options.verbose) {
+      console.log("Session Created:");
+      console.log("  Token:", result.token);
+      console.log("  Expires At:", new Date(result.expiresAt).toISOString());
+    } else {
+      console.log("\u2713 Session token created:");
+      console.log("  ", result.token);
+      console.log("  Expires:", new Date(result.expiresAt).toLocaleString());
+    }
+  } catch (error3) {
+    console.error("Failed to create session:", error3 instanceof Error ? error3.message : error3);
+    process.exit(1);
+  }
+});
+
+// src/commands/browser.ts
+import { Command as Command2 } from "commander";
+import { createBrowserTool } from "@agentforge-ai/core";
+import { writeFile as writeFile2, mkdir as mkdir2 } from "fs/promises";
+import { dirname } from "path";
+var browserCommand = new Command2("browser");
+browserCommand.description("Browser automation for testing and web scraping");
+browserCommand.command("open").description("Open a URL in the browser and get page info").argument("<url>", "URL to open").option("-w, --wait <ms>", "Wait time after navigation in ms", "5000").option("-s, --screenshot", "Take a screenshot after loading").option("-o, --output <path>", "Screenshot output path").option("-t, --text", "Extract text content from page").option("--headed", "Run in headed mode (visible browser)").action(async (url, options) => {
+  const { tool, shutdown, sessionManager } = createBrowserTool({
+    headless: !options.headed
+  });
+  try {
+    console.log("Opening:", url);
+    const navResult = await tool.handler({
+      action: { kind: "navigate", url }
+    });
+    if (!navResult.success) {
+      console.error("Failed to navigate:", navResult.error);
+      process.exit(1);
+    }
+    console.log("\u2713 Page loaded");
+    console.log("  Title:", navResult.pageTitle);
+    console.log("  URL:", navResult.currentUrl);
+    if (options.wait !== "0") {
+      await tool.handler({
+        action: { kind: "wait", timeMs: parseInt(options.wait, 10) }
+      });
+    }
+    if (options.text) {
+      const textResult = await tool.handler({
+        action: { kind: "extractText" }
+      });
+      if (textResult.success && textResult.data) {
+        const text = typeof textResult.data === "string" ? textResult.data : JSON.stringify(textResult.data);
+        console.log("\n--- Page Text ---");
+        console.log(text.substring(0, 2e3));
+        if (text.length > 2e3) {
+          console.log("...(truncated)");
+        }
+      }
+    }
+    if (options.screenshot || options.output) {
+      const screenshotResult = await tool.handler({
+        action: { kind: "screenshot", fullPage: false }
+      });
+      if (screenshotResult.success && screenshotResult.screenshot) {
+        const outputPath = options.output || `screenshot-${Date.now()}.png`;
+        const buffer = Buffer.from(screenshotResult.screenshot, "base64");
+        const dir = dirname(outputPath);
+        await mkdir2(dir, { recursive: true });
+        await writeFile2(outputPath, buffer);
+        console.log("\n\u2713 Screenshot saved to:", outputPath);
+      }
+    }
+    const snapshotResult = await tool.handler({
+      action: { kind: "snapshot" }
+    });
+    if (snapshotResult.success && snapshotResult.data) {
+      console.log("\n--- Page Structure ---");
+      const snapshot = typeof snapshotResult.data === "string" ? snapshotResult.data : JSON.stringify(snapshotResult.data, null, 2);
+      console.log(snapshot.substring(0, 1e3));
+      if (snapshot.length > 1e3) {
+        console.log("...(truncated)");
+      }
+    }
+  } finally {
+    await shutdown();
+  }
+});
+browserCommand.command("screenshot").description("Take a screenshot of a webpage").argument("<url>", "URL to screenshot").option("-o, --output <path>", "Output file path", "screenshot.png").option("--full-page", "Capture full page (not just viewport)").option("--headed", "Run in headed mode (visible browser)").option("-w, --wait <ms>", "Wait time before screenshot in ms", "3000").action(async (url, options) => {
+  const { tool, shutdown } = createBrowserTool({
+    headless: !options.headed
+  });
+  try {
+    console.log("Navigating to:", url);
+    const navResult = await tool.handler({
+      action: { kind: "navigate", url }
+    });
+    if (!navResult.success) {
+      console.error("Failed to navigate:", navResult.error);
+      process.exit(1);
+    }
+    await tool.handler({
+      action: { kind: "wait", timeMs: parseInt(options.wait, 10) }
+    });
+    console.log("Taking screenshot...");
+    const screenshotResult = await tool.handler({
+      action: { kind: "screenshot", fullPage: options.fullPage }
+    });
+    if (!screenshotResult.success || !screenshotResult.screenshot) {
+      console.error("Failed to take screenshot:", screenshotResult.error);
+      process.exit(1);
+    }
+    const buffer = Buffer.from(screenshotResult.screenshot, "base64");
+    const dir = dirname(options.output);
+    await mkdir2(dir, { recursive: true });
+    await writeFile2(options.output, buffer);
+    console.log("\u2713 Screenshot saved to:", options.output);
+    console.log("  Size:", (buffer.length / 1024).toFixed(2), "KB");
+  } finally {
+    await shutdown();
+  }
+});
+browserCommand.command("extract").description("Extract text content from a webpage").argument("<url>", "URL to extract text from").option("-s, --selector <selector>", "CSS selector to extract text from").option("-o, --output <path>", "Save text to file").option("--headed", "Run in headed mode (visible browser)").action(async (url, options) => {
+  const { tool, shutdown } = createBrowserTool({
+    headless: !options.headed
+  });
+  try {
+    console.log("Extracting text from:", url);
+    const navResult = await tool.handler({
+      action: { kind: "navigate", url }
+    });
+    if (!navResult.success) {
+      console.error("Failed to navigate:", navResult.error);
+      process.exit(1);
+    }
+    await tool.handler({
+      action: { kind: "wait", timeMs: 3e3 }
+    });
+    const extractResult = await tool.handler({
+      action: { kind: "extractText", selector: options.selector }
+    });
+    if (!extractResult.success || !extractResult.data) {
+      console.error("Failed to extract text:", extractResult.error);
+      process.exit(1);
+    }
+    const text = typeof extractResult.data === "string" ? extractResult.data : JSON.stringify(extractResult.data);
+    if (options.output) {
+      const dir = dirname(options.output);
+      await mkdir2(dir, { recursive: true });
+      await writeFile2(options.output, text);
+      console.log("\u2713 Text saved to:", options.output);
+      console.log("  Characters:", text.length);
+    } else {
+      console.log("--- Extracted Text ---");
+      console.log(text);
+    }
+  } finally {
+    await shutdown();
+  }
+});
+browserCommand.command("interact").description("Interact with a webpage (click, type, etc.)").argument("<url>", "URL to open").option("--click <selector>", "Click an element").option("--type <selector:text>", "Type into an element (format: selector:text)").option("--wait <ms>", "Wait time in ms").option("--screenshot", "Take screenshot after interaction").option("--headed", "Run in headed mode").action(async (url, options) => {
+  const { tool, shutdown } = createBrowserTool({
+    headless: !options.headed
+  });
+  try {
+    console.log("Opening:", url);
+    const navResult = await tool.handler({
+      action: { kind: "navigate", url }
+    });
+    if (!navResult.success) {
+      console.error("Failed to navigate:", navResult.error);
+      process.exit(1);
+    }
+    if (options.wait) {
+      await tool.handler({
+        action: { kind: "wait", timeMs: parseInt(options.wait, 10) }
+      });
+    }
+    if (options.click) {
+      console.log("Clicking:", options.click);
+      const clickResult = await tool.handler({
+        action: { kind: "click", selector: options.click }
+      });
+      if (!clickResult.success) {
+        console.error("Failed to click:", clickResult.error);
+      } else {
+        console.log("\u2713 Clicked");
+      }
+    }
+    if (options.type) {
+      const [selector, text] = options.type.split(":");
+      if (!selector || !text) {
+        console.error("Invalid --type format. Use: selector:text");
+        process.exit(1);
+      }
+      console.log("Typing into:", selector);
+      const typeResult = await tool.handler({
+        action: { kind: "type", selector, text }
+      });
+      if (!typeResult.success) {
+        console.error("Failed to type:", typeResult.error);
+      } else {
+        console.log("\u2713 Typed");
+      }
+    }
+    if (options.screenshot) {
+      const screenshotPath = `interaction-${Date.now()}.png`;
+      const screenshotResult = await tool.handler({
+        action: { kind: "screenshot" }
+      });
+      if (screenshotResult.success && screenshotResult.screenshot) {
+        const buffer = Buffer.from(screenshotResult.screenshot, "base64");
+        await writeFile2(screenshotPath, buffer);
+        console.log("\u2713 Screenshot saved to:", screenshotPath);
+      }
+    }
+    console.log("\u2713 Interactions completed");
+  } finally {
+    await shutdown();
+  }
+});
+
+// src/commands/voice.ts
+import { ElevenLabsTTS, createTTSEngine } from "@agentforge-ai/core";
+import { writeFile as writeFile3 } from "fs/promises";
+import { resolve as resolve2 } from "path";
+var MAX_TEXT_LENGTH = 5e3;
+function validateText(text) {
+  if (!text) return { valid: false, error: "Text is required" };
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return { valid: false, error: "Text cannot be empty" };
+  if (trimmed.length > MAX_TEXT_LENGTH) {
+    return { valid: false, error: `Text exceeds maximum length of ${MAX_TEXT_LENGTH} characters` };
+  }
+  return { valid: true };
+}
+function registerVoiceCommand(program2) {
+  const voiceCmd = program2.command("voice").description("Voice synthesis commands");
+  voiceCmd.command("say").argument("<text>", "Text to synthesize to speech").option("-v, --voice <voiceId>", "ElevenLabs voice ID (default: 21m00Tcm4TlvDq8ikWAM)").option("-o, --output <file>", "Output MP3 file path (default: speech-<timestamp>.mp3)").option("--provider <provider>", "TTS provider (elevenlabs, webspeech)", "elevenlabs").description("Synthesize text to speech").action(async (text, opts) => {
+    const validation = validateText(text);
+    if (!validation.valid) {
+      error(validation.error);
+      process.exit(1);
+    }
+    header("Voice Synthesis");
+    if (opts.provider === "webspeech") {
+      info("Using Web Speech API (browser-only)");
+      const engine = createTTSEngine({ provider: "webspeech" });
+      const result = engine.synthesize(text);
+      console.log(result);
+      success("Generated browser script. Include in HTML to play.");
+      return;
+    }
+    const client = await createClient();
+    const apiKeyData = await safeCall(
+      () => client.query("apiKeys:getDecryptedForProvider", { provider: "elevenlabs" }),
+      "Failed to fetch ElevenLabs API key"
+    );
+    if (!apiKeyData || !apiKeyData.apiKey) {
+      error("ElevenLabs API key not configured");
+      info("Add it with: agentforge keys add elevenlabs");
+      process.exit(1);
+    }
+    const outputFile = opts.output ? resolve2(opts.output) : resolve2(`speech-${Date.now()}.mp3`);
+    info(dim(`Provider: ElevenLabs`));
+    info(dim(`Voice: ${opts.voice || "21m00Tcm4TlvDq8ikWAM (default)"}`));
+    info(dim(`Text: "${text.substring(0, 60)}${text.length > 60 ? "..." : ""}"`));
+    console.log();
+    try {
+      const tts = new ElevenLabsTTS({
+        apiKey: apiKeyData.apiKey,
+        voiceId: opts.voice
+      });
+      info("Synthesizing speech...");
+      const audioBuffer = await tts.synthesize(text);
+      await writeFile3(outputFile, audioBuffer);
+      success(`Saved audio to: ${colors.cyan}${outputFile}${colors.reset}`);
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      error(`Synthesis failed: ${errMsg}`);
+      process.exit(1);
+    }
+  });
+  voiceCmd.command("list-voices").description("List available ElevenLabs voices").action(async () => {
+    header("Available ElevenLabs Voices");
+    info("Common voice IDs:");
+    console.log();
+    console.log(`  ${colors.cyan}21m00Tcm4TlvDq8ikWAM${colors.reset}  - Rachel (Default)`);
+    console.log(`  ${colors.cyan}AZnzlk1XvdvUeBnXmlld${colors.reset}  - Dom`);
+    console.log(`  ${colors.cyan}EXAVITQu4vr4xnSDxMaL${colors.reset}  - Bella`);
+    console.log(`  ${colors.cyan}ErXwobaYi8WM5FbVDYjL${colors.reset}  - Elli`);
+    console.log(`  ${colors.cyan}MF3mGyEYCl7XYWbV9V6O${colors.reset}  - Josh`);
+    console.log();
+    info(dim("Browse more voices at: https://elevenlabs.io/voice-library"));
+  });
+}
+
+// src/commands/workflows.ts
+function registerWorkflowsCommand(program2) {
+  const workflowsCmd = program2.command("workflows").description("Multi-agent workflow commands");
+  workflowsCmd.command("list").option("-p, --project <projectId>", "Filter by project ID").option("--active", "Show only active workflows").option("--inactive", "Show only inactive workflows").description("List workflow definitions").action(async (opts) => {
+    const client = await createClient();
+    const args = {};
+    if (opts.project) args.projectId = opts.project;
+    if (opts.active) args.isActive = true;
+    if (opts.inactive) args.isActive = false;
+    const workflows = await safeCall(
+      () => client.query("workflows:list", args),
+      "Failed to fetch workflows"
+    );
+    if (!workflows || workflows.length === 0) {
+      info("No workflows found");
+      return;
+    }
+    header("Workflows");
+    workflows.forEach((w) => {
+      const statusColor = w.isActive ? colors.green : colors.dim;
+      console.log(`  ${statusColor}\u25CF${colors.reset} ${w.name} ${colors.dim}(${w._id})${colors.reset}`);
+      if (w.description) {
+        console.log(`    ${dim(w.description)}`);
+      }
+      console.log();
+    });
+  });
+  workflowsCmd.command("runs").option("-w, --workflow <workflowId>", "Filter by workflow ID").option("-s, --status <status>", "Filter by status (pending, running, completed, failed)").option("-p, --project <projectId>", "Filter by project ID").description("List workflow runs").action(async (opts) => {
+    const client = await createClient();
+    const args = {};
+    if (opts.workflow) args.workflowId = opts.workflow;
+    if (opts.status) args.status = opts.status;
+    if (opts.project) args.projectId = opts.project;
+    const runs = await safeCall(
+      () => client.query("workflows:listRuns", args),
+      "Failed to fetch workflow runs"
+    );
+    if (!runs || runs.length === 0) {
+      info("No workflow runs found");
+      return;
+    }
+    header("Workflow Runs");
+    runs.forEach((r) => {
+      const statusColors = {
+        pending: colors.yellow,
+        running: colors.blue,
+        completed: colors.green,
+        failed: colors.red,
+        suspended: colors.dim
+      };
+      const statusColor = statusColors[r.status] || colors.dim;
+      console.log(`  ${statusColor}\u25CF${colors.reset} ${r.workflowId} ${statusColor}(${r.status})${colors.reset}`);
+      console.log(`    ${dim(`Run ID: ${r._id}`)}`);
+      if (r.input) {
+        console.log(`    ${dim(`Input: "${r.input.substring(0, 60)}${r.input.length > 60 ? "..." : ""}"`)}`);
+      }
+      console.log();
+    });
+  });
+  workflowsCmd.command("run").argument("<workflowId>", "Workflow definition ID to run").option("-i, --input <text>", "Initial input for the workflow").description("Execute a workflow").action(async (workflowId, opts) => {
+    const client = await createClient();
+    header(`Running Workflow: ${workflowId}`);
+    try {
+      const runId = await safeCall(
+        () => client.mutation("workflows:createRun", {
+          workflowId,
+          input: opts.input
+        }),
+        "Failed to create workflow run"
+      );
+      success(`Created run: ${colors.cyan}${runId}${colors.reset}`);
+      info(dim("Executing workflow steps..."));
+      const result = await safeCall(
+        () => client.action("workflowEngine:executeWorkflow", { runId }),
+        "Failed to execute workflow"
+      );
+      if (result && result.success) {
+        success("Workflow completed successfully");
+        if (result.output) {
+          console.log();
+          info(dim("Output:"));
+          console.log(`  ${result.output}`);
+        }
+      }
+    } catch (err) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      error(`Workflow execution failed: ${errMsg}`);
+      process.exit(1);
+    }
+  });
+  workflowsCmd.command("steps").argument("<runId>", "Workflow run ID").description("Show steps for a workflow run").action(async (runId) => {
+    const client = await createClient();
+    const steps = await safeCall(
+      () => client.query("workflows:getRunSteps", { runId }),
+      "Failed to fetch workflow steps"
+    );
+    if (!steps || steps.length === 0) {
+      info("No steps found for this run");
+      return;
+    }
+    header(`Workflow Steps: ${runId}`);
+    steps.forEach((s, i) => {
+      const statusColors = {
+        pending: colors.yellow,
+        running: colors.blue,
+        completed: colors.green,
+        failed: colors.red,
+        skipped: colors.dim,
+        suspended: colors.dim
+      };
+      const statusColor = statusColors[s.status] || colors.dim;
+      console.log(`  ${i + 1}. ${s.name} ${statusColor}(${s.status})${colors.reset}`);
+      if (s.input) {
+        console.log(`     ${dim(`Input: "${s.input.substring(0, 50)}${s.input.length > 50 ? "..." : ""}"`)}`);
+      }
+      if (s.output) {
+        console.log(`     ${dim(`Output: "${s.output.substring(0, 50)}${s.output.length > 50 ? "..." : ""}"`)}`);
+      }
+      if (s.error) {
+        console.log(`     ${colors.red}Error: ${s.error}${colors.reset}`);
+      }
+      console.log();
+    });
+  });
+}
+
+// src/index.ts
+import { readFileSync as readFileSync2 } from "fs";
 import { fileURLToPath as fileURLToPath2 } from "url";
-import { dirname, resolve as resolve2 } from "path";
+import { dirname as dirname2, resolve as resolve3 } from "path";
 var __filename2 = fileURLToPath2(import.meta.url);
-var __dirname2 = dirname(__filename2);
-var pkg = JSON.parse(readFileSync(resolve2(__dirname2, "..", "package.json"), "utf-8"));
-var program = new Command();
+var __dirname2 = dirname2(__filename2);
+var pkg = JSON.parse(readFileSync2(resolve3(__dirname2, "..", "package.json"), "utf-8"));
+var program = new Command3();
 program.name("agentforge").description("AgentForge \u2014 NanoClaw: A minimalist agent framework powered by Mastra + Convex").version(pkg.version);
 program.command("create").argument("<project-name>", "Name of the project to create").description("Create a new AgentForge project").option("-t, --template <template>", "Project template to use", "default").action(async (projectName, options) => {
   await createProject(projectName, options);
@@ -6286,8 +7296,13 @@ registerKeysCommand(program);
 registerChannelTelegramCommand(program);
 registerChannelWhatsAppCommand(program);
 registerChannelSlackCommand(program);
+registerChannelDiscordCommand(program);
 registerSandboxCommand(program);
 registerResearchCommand(program);
+program.addCommand(authCommand);
+program.addCommand(browserCommand);
+registerVoiceCommand(program);
+registerWorkflowsCommand(program);
 registerStatusCommand(program);
 program.parse();
 //# sourceMappingURL=index.js.map
