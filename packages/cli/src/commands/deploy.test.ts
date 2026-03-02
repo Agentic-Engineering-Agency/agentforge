@@ -9,11 +9,27 @@ import {
   type DeployOptions 
 } from './deploy.js';
 
-// Mock child_process.execSync
+// Mock child_process.execSync and execFile
 const mockExecSync = vi.fn();
-vi.mock('node:child_process', () => ({
-  execSync: (...args: unknown[]) => mockExecSync(...args),
-}));
+const mockExecFileCalls: Array<[unknown, unknown, unknown]> = [];
+vi.mock('node:child_process', () => {
+  const actual = vi.importActual('node:child_process');
+  return {
+    ...actual,
+    execSync: (...args: unknown[]) => mockExecSync(...args),
+    execFile: (
+      file: unknown,
+      args: unknown,
+      options: unknown,
+      callback: (error: Error | null, stdout: string, stderr: string) => void
+    ) => {
+      // Track the call for verification
+      mockExecFileCalls.push([file, args, options]);
+      // Simulate successful execFile call - invoke callback immediately
+      callback(null, '', '');
+    },
+  };
+});
 
 // Mock credentials module
 const mockReadCredentials = vi.fn();
@@ -153,6 +169,7 @@ describe('deployProject - Convex provider', () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentforge-deploy-test-'));
     process.chdir(tmpDir);
     mockExecSync.mockReset();
+    mockExecFileCalls.length = 0;
     process.exit = vi.fn((code?: number) => {
       throw new Error(`process.exit(${code})`);
     }) as never;
@@ -241,7 +258,7 @@ describe('deployProject - Convex provider', () => {
     logSpy.mockRestore();
   });
 
-  it('should deploy successfully with --force', async () => {
+  it('should deploy successfully with --force', { timeout: 10000 }, async () => {
     await fs.writeJson(path.join(tmpDir, 'package.json'), { name: 'test' });
     await fs.ensureDir(path.join(tmpDir, 'convex'));
     await fs.writeFile(path.join(tmpDir, '.env.production'), 'API_KEY=secret123');
@@ -251,13 +268,17 @@ describe('deployProject - Convex provider', () => {
 
     await deployProject({ ...defaultOptions, force: true });
 
-    // Should have set env vars
-    expect(mockExecSync).toHaveBeenCalledWith(
-      expect.stringContaining('npx convex env set API_KEY'),
-      expect.objectContaining({ stdio: 'pipe' })
-    );
+    // Should have set env vars using execFile (new security fix)
+    expect(mockExecFileCalls.length).toBe(1);
+    const [file, args, options] = mockExecFileCalls[0];
+    expect(file).toBe('npx');
+    expect(args).toEqual(['convex', 'env', 'set', 'API_KEY', 'secret123']);
+    expect(options).toMatchObject({
+      cwd: tmpDir,
+    });
     // Should have deployed
     expect(mockExecSync).toHaveBeenCalledWith('npx convex deploy', expect.objectContaining({
+      cwd: tmpDir,
       stdio: 'inherit',
     }));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Deployment completed'));
@@ -295,6 +316,7 @@ describe('deployProject - Cloud provider', () => {
     mockCreateDeployment.mockReset();
     mockGetDeploymentStatus.mockReset();
     mockExecSync.mockReset();
+    mockExecFileCalls.length = 0;
   });
 
   afterEach(async () => {

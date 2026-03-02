@@ -5,8 +5,62 @@
  * These are shared between the CLI and Convex backend.
  */
 
+import { readFileSync } from 'fs';
+import { join } from 'path';
+
 /** Default token limit for context window */
 export const DEFAULT_TOKEN_LIMIT = 8000;
+
+/**
+ * CLI context interface for deployment configuration.
+ */
+export interface CliContext {
+  deployUrl: string;
+}
+
+/**
+ * Read a value from .env files in the current directory.
+ * Copied from channel commands for consistency.
+ */
+function readEnvValue(key: string): string | undefined {
+  const cwd = process.cwd();
+  const envFiles = ['.env.local', '.env', '.env.production'];
+  for (const envFile of envFiles) {
+    try {
+      const filePath = join(cwd, envFile);
+      const content = readFileSync(filePath, 'utf-8');
+      const lines = content.split('\n');
+      for (const line of lines) {
+        const [envKey, ...envValueParts] = line.split('=');
+        if (envKey.trim() === key && envValueParts.length > 0) {
+          return envValueParts.join('=').trim();
+        }
+      }
+    } catch {
+      // File doesn't exist or can't be read, continue
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Get the CLI context including Convex deployment URL.
+ * Reads from environment variables or .env files.
+ *
+ * @throws {Error} If CONVEX_URL is not found
+ * @returns The CLI context with deployment URL
+ */
+export function getContext(): CliContext {
+  const deployUrl = readEnvValue('CONVEX_URL') || process.env.CONVEX_URL;
+
+  if (!deployUrl) {
+    throw new Error(
+      'CONVEX_URL not found. Run `npx convex dev` first, or set CONVEX_URL in your .env file.'
+    );
+  }
+
+  return { deployUrl };
+}
 
 /** Supported context strategies */
 export type ContextStrategy = "sliding" | "truncate" | "summarize";

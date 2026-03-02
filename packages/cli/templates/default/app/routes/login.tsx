@@ -5,7 +5,7 @@
  */
 
 import { useState } from 'react';
-import { Link, useNavigate } from '@remix-run/react';
+import { Link, useNavigate } from '@tanstack/react-router';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -21,7 +21,7 @@ export default function LoginPage() {
     try {
       // For now, check environment variable
       // TODO: Call Convex auth:validatePassword mutation
-      const envPassword = import.meta.env.VITE_AGENTFORGE_PASSWORD;
+      const envPassword = (import.meta as any).env.VITE_AGENTFORGE_PASSWORD;
 
       if (envPassword && password === envPassword) {
         // Store session in localStorage
@@ -30,11 +30,11 @@ export default function LoginPage() {
         localStorage.setItem('agentforge_session_expires', String(Date.now() + 24 * 60 * 60 * 1000));
 
         // Redirect to dashboard
-        navigate('/');
+        navigate({ to: '/' });
       } else if (!envPassword) {
         // No password set - allow access for local dev
         localStorage.setItem('agentforge_session', 'dev-mode');
-        navigate('/');
+        navigate({ to: '/' });
       } else {
         setError('Invalid password');
       }
