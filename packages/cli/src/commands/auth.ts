@@ -3,7 +3,7 @@
  */
 
 import { Command } from 'commander';
-import { getContext } from '../context.js';
+import { getContext } from '../lib/context.js';
 import { ConvexClient } from 'convex/browser';
 
 export const authCommand = new Command('auth');
