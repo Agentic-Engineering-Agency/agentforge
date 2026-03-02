@@ -66,9 +66,9 @@ export function registerVoiceCommand(program: Command) {
         ? resolve(opts.output)
         : resolve(`speech-${Date.now()}.mp3`);
 
-      info(dim(`Provider: ElevenLabs`));
-      info(dim(`Voice: ${opts.voice || '21m00Tcm4TlvDq8ikWAM (default)'}`));
-      info(dim(`Text: "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}"`));
+      dim(`Provider: ElevenLabs`);
+      dim(`Voice: ${opts.voice || '21m00Tcm4TlvDq8ikWAM (default)'}`);
+      dim(`Text: "${text.substring(0, 60)}${text.length > 60 ? '...' : ''}"`);
       console.log();
 
       try {
@@ -102,6 +102,6 @@ export function registerVoiceCommand(program: Command) {
       console.log(`  ${colors.cyan}ErXwobaYi8WM5FbVDYjL${colors.reset}  - Elli`);
       console.log(`  ${colors.cyan}MF3mGyEYCl7XYWbV9V6O${colors.reset}  - Josh`);
       console.log();
-      info(dim('Browse more voices at: https://elevenlabs.io/voice-library'));
+      dim('Browse more voices at: https://elevenlabs.io/voice-library');
     });
 }

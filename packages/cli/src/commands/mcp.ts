@@ -1,8 +1,18 @@
 import { Command } from 'commander';
 import { createClient, safeCall } from '../lib/convex-client.js';
 import { header, table, details, success, error, info, formatDate } from '../lib/display.js';
-import { MCPExecutor } from '@agentforge-ai/core/mcp-executor';
+import { MCPExecutor } from '@agentforge-ai/core';
 import readline from 'node:readline';
+import type { FunctionReference } from 'convex/server';
+
+// Helper to create a FunctionReference from a string identifier
+function mutationRef(name: string): FunctionReference<'mutation'> {
+  return name as any;
+}
+
+function queryRef(name: string): FunctionReference<'query'> {
+  return name as any;
+}
 
 function prompt(q: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -18,7 +28,7 @@ export function registerMcpCommand(program: Command) {
     .description('List all MCP connections')
     .action(async (opts) => {
       const client = await createClient();
-      const result = await safeCall(() => client.query('mcpConnections:list' as any, {}), 'Failed to list connections');
+      const result = await safeCall(() => client.query(queryRef('mcpConnections:list'), {}), 'Failed to list connections');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
       header('MCP Connections');
       const items = (result as any[]) || [];
@@ -48,7 +58,7 @@ export function registerMcpCommand(program: Command) {
 
       const client = await createClient();
       await safeCall(
-        () => client.mutation('mcpConnections:create' as any, {
+        () => client.mutation(mutationRef('mcpConnections:create'), {
           name, serverUrl: endpoint, protocol: type,
         }),
         'Failed to add connection'
@@ -62,7 +72,7 @@ export function registerMcpCommand(program: Command) {
     .description('Remove an MCP connection')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('mcpConnections:remove' as any, { id }), 'Failed');
+      await safeCall(() => client.mutation(mutationRef('mcpConnections:remove'), { id }), 'Failed');
       success(`Connection "${id}" removed.`);
     });
 
@@ -73,7 +83,7 @@ export function registerMcpCommand(program: Command) {
     .action(async (id) => {
       info(`Testing connection "${id}"...`);
       const client = await createClient();
-      const conns = await safeCall(() => client.query('mcpConnections:list' as any, {}), 'Failed');
+      const conns = await safeCall(() => client.query(queryRef('mcpConnections:list'), {}), 'Failed');
       const conn = (conns as any[]).find((c: any) => c._id === id || c._id?.endsWith(id));
       if (!conn) { error(`Connection "${id}" not found.`); process.exit(1); }
 
@@ -83,7 +93,7 @@ export function registerMcpCommand(program: Command) {
           const res = await fetch(conn.serverUrl, { method: 'HEAD', signal: AbortSignal.timeout(5000) });
           if (res.ok) {
             success(`Connection "${conn.name}" is reachable (HTTP ${res.status}).`);
-            await client.mutation('mcpConnections:updateStatus' as any, { id: conn._id, isConnected: true });
+            await client.mutation(mutationRef('mcpConnections:updateStatus'), { id: conn._id, isConnected: true });
           } else {
             error(`Connection "${conn.name}" returned HTTP ${res.status}.`);
           }
@@ -102,7 +112,7 @@ export function registerMcpCommand(program: Command) {
     .description('Enable a connection')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('mcpConnections:update' as any, { id, isEnabled: true }), 'Failed');
+      await safeCall(() => client.mutation(mutationRef('mcpConnections:update'), { id, isEnabled: true }), 'Failed');
       success(`Connection "${id}" enabled.`);
     });
 
@@ -112,7 +122,7 @@ export function registerMcpCommand(program: Command) {
     .description('Disable a connection')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('mcpConnections:update' as any, { id, isEnabled: false }), 'Failed');
+      await safeCall(() => client.mutation(mutationRef('mcpConnections:update'), { id, isEnabled: false }), 'Failed');
       success(`Connection "${id}" disabled.`);
     });
 
