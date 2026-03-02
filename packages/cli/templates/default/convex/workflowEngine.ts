@@ -31,8 +31,8 @@ export const executeWorkflow = internalAction({
       name: string;
     }>;
 
-    // Import AgentPipeline dynamically (runs in Node environment)
-    const { AgentPipeline } = await import("@agentforge-ai/core");
+    // Import AgentPipeline from local lib
+    const { AgentPipeline } = await import("./lib/pipeline");
 
     // Build pipeline from workflow steps
     const pipeline = new AgentPipeline({

@@ -9,11 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WorkflowsRouteImport } from './routes/workflows'
 import { Route as UsageRouteImport } from './routes/usage'
 import { Route as SkillsMarketplaceRouteImport } from './routes/skills-marketplace'
 import { Route as SkillsRouteImport } from './routes/skills'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SessionsRouteImport } from './routes/sessions'
+import { Route as ResearchRouteImport } from './routes/research'
 import { Route as ProjectsRouteImport } from './routes/projects'
 import { Route as ObservabilityRouteImport } from './routes/observability'
 import { Route as FilesRouteImport } from './routes/files'
@@ -24,6 +26,11 @@ import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as RunsRunIdRouteImport } from './routes/runs.$runId'
 
+const WorkflowsRoute = WorkflowsRouteImport.update({
+  id: '/workflows',
+  path: '/workflows',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const UsageRoute = UsageRouteImport.update({
   id: '/usage',
   path: '/usage',
@@ -47,6 +54,11 @@ const SettingsRoute = SettingsRouteImport.update({
 const SessionsRoute = SessionsRouteImport.update({
   id: '/sessions',
   path: '/sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResearchRoute = ResearchRouteImport.update({
+  id: '/research',
+  path: '/research',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProjectsRoute = ProjectsRouteImport.update({
@@ -104,11 +116,13 @@ export interface FileRoutesByFullPath {
   '/files': typeof FilesRoute
   '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
+  '/research': typeof ResearchRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
+  '/workflows': typeof WorkflowsRoute
   '/runs/$runId': typeof RunsRunIdRoute
 }
 export interface FileRoutesByTo {
@@ -120,11 +134,13 @@ export interface FileRoutesByTo {
   '/files': typeof FilesRoute
   '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
+  '/research': typeof ResearchRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
+  '/workflows': typeof WorkflowsRoute
   '/runs/$runId': typeof RunsRunIdRoute
 }
 export interface FileRoutesById {
@@ -137,11 +153,13 @@ export interface FileRoutesById {
   '/files': typeof FilesRoute
   '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
+  '/research': typeof ResearchRoute
   '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
+  '/workflows': typeof WorkflowsRoute
   '/runs/$runId': typeof RunsRunIdRoute
 }
 export interface FileRouteTypes {
@@ -155,11 +173,13 @@ export interface FileRouteTypes {
     | '/files'
     | '/observability'
     | '/projects'
+    | '/research'
     | '/sessions'
     | '/settings'
     | '/skills'
     | '/skills-marketplace'
     | '/usage'
+    | '/workflows'
     | '/runs/$runId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -171,11 +191,13 @@ export interface FileRouteTypes {
     | '/files'
     | '/observability'
     | '/projects'
+    | '/research'
     | '/sessions'
     | '/settings'
     | '/skills'
     | '/skills-marketplace'
     | '/usage'
+    | '/workflows'
     | '/runs/$runId'
   id:
     | '__root__'
@@ -187,11 +209,13 @@ export interface FileRouteTypes {
     | '/files'
     | '/observability'
     | '/projects'
+    | '/research'
     | '/sessions'
     | '/settings'
     | '/skills'
     | '/skills-marketplace'
     | '/usage'
+    | '/workflows'
     | '/runs/$runId'
   fileRoutesById: FileRoutesById
 }
@@ -204,16 +228,25 @@ export interface RootRouteChildren {
   FilesRoute: typeof FilesRoute
   ObservabilityRoute: typeof ObservabilityRoute
   ProjectsRoute: typeof ProjectsRoute
+  ResearchRoute: typeof ResearchRoute
   SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SkillsRoute: typeof SkillsRoute
   SkillsMarketplaceRoute: typeof SkillsMarketplaceRoute
   UsageRoute: typeof UsageRoute
+  WorkflowsRoute: typeof WorkflowsRoute
   RunsRunIdRoute: typeof RunsRunIdRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/workflows': {
+      id: '/workflows'
+      path: '/workflows'
+      fullPath: '/workflows'
+      preLoaderRoute: typeof WorkflowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/usage': {
       id: '/usage'
       path: '/usage'
@@ -247,6 +280,13 @@ declare module '@tanstack/react-router' {
       path: '/sessions'
       fullPath: '/sessions'
       preLoaderRoute: typeof SessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/research': {
+      id: '/research'
+      path: '/research'
+      fullPath: '/research'
+      preLoaderRoute: typeof ResearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/projects': {
@@ -324,11 +364,13 @@ const rootRouteChildren: RootRouteChildren = {
   FilesRoute: FilesRoute,
   ObservabilityRoute: ObservabilityRoute,
   ProjectsRoute: ProjectsRoute,
+  ResearchRoute: ResearchRoute,
   SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SkillsRoute: SkillsRoute,
   SkillsMarketplaceRoute: SkillsMarketplaceRoute,
   UsageRoute: UsageRoute,
+  WorkflowsRoute: WorkflowsRoute,
   RunsRunIdRoute: RunsRunIdRoute,
 }
 export const routeTree = rootRouteImport
