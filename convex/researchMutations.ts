@@ -1,12 +1,12 @@
-import { v } from "convex/values";
-import { mutation, query, action } from "./_generated/server";
-import { internal } from "./_generated/api";
-
 /**
  * Research module — Parallel multi-agent research orchestration.
  *
- * Integrates with packages/core/src/research/orchestrator.ts (ResearchOrchestrator).
+ * Queries and mutations run in default Convex runtime.
+ * Actions are in researchActions.ts (with "use node").
  */
+
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
 
 // Query: Get research job by ID
 export const get = query({
@@ -110,44 +110,6 @@ export const update = mutation({
     const { jobId, ...updates } = args;
     await ctx.db.patch(jobId, updates);
     return jobId;
-  },
-});
-
-/**
- * Action: Start a research job using ResearchOrchestrator.
- *
- * NOTE: Temporarily disabled due to bundling issues with @agentforge-ai/core.
- * Re-enable once the ResearchOrchestrator is moved to a separate package or refactored.
- */
-export const start = action({
-  args: {
-    topic: v.string(),
-    depth: v.union(v.literal("shallow"), v.literal("medium"), v.literal("deep")),
-    userId: v.optional(v.string()),
-    projectId: v.optional(v.id("projects")),
-  },
-  handler: async (ctx, args) => {
-    // Determine agent count based on depth
-    const agentCount = args.depth === "shallow" ? 3 : args.depth === "medium" ? 5 : 10;
-
-    // Create the research job
-    const jobId = await ctx.runMutation(internal.research.createInternal, {
-      topic: args.topic,
-      depth: args.depth,
-      agentCount,
-      userId: args.userId,
-      projectId: args.projectId,
-    });
-
-    // Update job with error
-    await ctx.runMutation(internal.research.update, {
-      jobId,
-      status: "failed",
-      error: "Research endpoint temporarily disabled. ResearchOrchestrator will be re-enabled in a future update.",
-      completedAt: Date.now(),
-    });
-
-    throw new Error("Research endpoint temporarily disabled. ResearchOrchestrator will be re-enabled in a future update.");
   },
 });
 

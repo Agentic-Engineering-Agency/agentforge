@@ -861,6 +861,35 @@ export declare const api: {
       any
     >;
   };
+  models: {
+    getCachedModels: FunctionReference<
+      "query",
+      "public",
+      { provider?: string },
+      any
+    >;
+    getModelById: FunctionReference<
+      "query",
+      "public",
+      { modelId: string; provider: string },
+      any
+    >;
+    listProviders: FunctionReference<"query", "public", {}, any>;
+  };
+  modelsActions: {
+    fetchAndCacheModels: FunctionReference<
+      "action",
+      "public",
+      { providers?: Array<string> },
+      any
+    >;
+    fetchModels: FunctionReference<
+      "action",
+      "public",
+      { apiKey?: string; provider: string },
+      any
+    >;
+  };
   projects: {
     create: FunctionReference<
       "mutation",
@@ -894,7 +923,20 @@ export declare const api: {
       any
     >;
   };
-  research: {
+  researchActions: {
+    start: FunctionReference<
+      "action",
+      "public",
+      {
+        depth: "shallow" | "medium" | "deep";
+        projectId?: Id<"projects">;
+        topic: string;
+        userId?: string;
+      },
+      any
+    >;
+  };
+  researchMutations: {
     create: FunctionReference<
       "mutation",
       "public",
@@ -931,17 +973,6 @@ export declare const api: {
       {
         projectId?: Id<"projects">;
         status?: "pending" | "running" | "completed" | "failed";
-        userId?: string;
-      },
-      any
-    >;
-    start: FunctionReference<
-      "action",
-      "public",
-      {
-        depth: "shallow" | "medium" | "deep";
-        projectId?: Id<"projects">;
-        topic: string;
         userId?: string;
       },
       any
