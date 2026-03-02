@@ -307,6 +307,7 @@ describe('deployProject - Cloud provider', () => {
     mockCreateDeployment.mockReset();
     mockGetDeploymentStatus.mockReset();
     mockExecSync.mockReset();
+    mockExecFile.mockReset();
   });
 
   afterEach(async () => {

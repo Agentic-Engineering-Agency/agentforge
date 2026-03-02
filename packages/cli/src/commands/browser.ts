@@ -3,7 +3,7 @@
  */
 
 import { Command } from 'commander';
-import { getContext } from '../lib/context.js';
+import { getContext } from '../lib/cli-context.js';
 import { createBrowserTool } from '@agentforge-ai/core';
 import { writeFile, mkdir } from 'fs/promises';
 import { dirname } from 'path';
