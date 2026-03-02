@@ -9,10 +9,12 @@ import {
   type DeployOptions 
 } from './deploy.js';
 
-// Mock child_process.execSync
+// Mock child_process.execSync and execFile
 const mockExecSync = vi.fn();
+const mockExecFile = vi.fn();
 vi.mock('node:child_process', () => ({
   execSync: (...args: unknown[]) => mockExecSync(...args),
+  execFile: (...args: unknown[]) => mockExecFile(...args),
 }));
 
 // Mock credentials module
@@ -153,6 +155,7 @@ describe('deployProject - Convex provider', () => {
     tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'agentforge-deploy-test-'));
     process.chdir(tmpDir);
     mockExecSync.mockReset();
+    mockExecFile.mockReset();
     process.exit = vi.fn((code?: number) => {
       throw new Error(`process.exit(${code})`);
     }) as never;
@@ -220,6 +223,7 @@ describe('deployProject - Convex provider', () => {
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('Dry run'));
     expect(logSpy).toHaveBeenCalledWith(expect.stringContaining('API_KEY'));
     expect(mockExecSync).not.toHaveBeenCalled();
+    expect(mockExecFile).not.toHaveBeenCalled();
 
     logSpy.mockRestore();
   });
@@ -247,14 +251,22 @@ describe('deployProject - Convex provider', () => {
     await fs.writeFile(path.join(tmpDir, '.env.production'), 'API_KEY=secret123');
 
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    // Mock execFile to call the callback immediately
+    mockExecFile.mockImplementation((cmd: string, args: string[], options: unknown, callback: (error: Error | null, stdout: Buffer, stderr: Buffer) => void) => {
+      callback(null, Buffer.from(''), Buffer.from(''));
+    });
+
     mockExecSync.mockReturnValue(undefined);
 
     await deployProject({ ...defaultOptions, force: true });
 
-    // Should have set env vars
-    expect(mockExecSync).toHaveBeenCalledWith(
-      expect.stringContaining('npx convex env set API_KEY'),
-      expect.objectContaining({ stdio: 'pipe' })
+    // Should have set env vars using execFile
+    expect(mockExecFile).toHaveBeenCalledWith(
+      'npx',
+      ['convex', 'env', 'set', 'API_KEY', 'secret123'],
+      expect.any(Object),
+      expect.any(Function)
     );
     // Should have deployed
     expect(mockExecSync).toHaveBeenCalledWith('npx convex deploy', expect.objectContaining({
@@ -295,6 +307,7 @@ describe('deployProject - Cloud provider', () => {
     mockCreateDeployment.mockReset();
     mockGetDeploymentStatus.mockReset();
     mockExecSync.mockReset();
+    mockExecFile.mockReset();
   });
 
   afterEach(async () => {
