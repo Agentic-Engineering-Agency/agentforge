@@ -13,8 +13,6 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { Agent } from "@mastra/core/agent";
-import type { MessageListInput } from "@mastra/core/agent/message-list";
 
 // ─── Pure context management functions (inlined for portability) ───────────────
 
