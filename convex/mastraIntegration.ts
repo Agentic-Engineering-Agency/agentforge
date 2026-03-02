@@ -1,3 +1,5 @@
+"use node";
+
 /**
  * Mastra Integration Actions for Convex
  *
@@ -15,7 +17,7 @@
 import { action } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { Agent } from "@mastra/core/agent";
+import { Agent } from "./lib/agent";
 import { resolveMemoryConfig } from "./lib/memoryConfig";
 import { computeCost } from "./lib/costAnalytics";
 import { initTracing, recordSpan, sendTraceToOpik } from "./lib/tracing";

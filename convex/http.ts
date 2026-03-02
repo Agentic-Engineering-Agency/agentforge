@@ -279,8 +279,8 @@ http.route({
           });
 
           // Import Agent class for streaming
-          const { Agent: AgentClass } = await import("@agentforge-ai/core");
-          const { getBaseModelId, getProviderBaseUrl } = await import("./lib/apiKeys");
+          const { Agent: AgentClass } = await import("./lib/agent");
+          const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
 
           // Get API key for provider
           const apiKeyData = await ctx.runQuery(api.apiKeys.getDecryptedForProvider, {
@@ -368,7 +368,7 @@ http.route({
 });
 
 // POST /api/voice/synthesize — Text-to-speech synthesis endpoint
-// Streams ElevenLabs audio for the provided text
+// Uses ElevenLabs API directly
 http.route({
   path: "/api/voice/synthesize",
   method: "POST",
@@ -409,8 +409,8 @@ http.route({
     }
 
     try {
-      // Import TTS engine
-      const { ElevenLabsTTS, createTTSEngine } = await import("@agentforge-ai/core");
+      // Import TTS engine from local lib
+      const { ElevenLabsTTS } = await import("./lib/tts");
 
       // Get ElevenLabs API key
       const apiKeyData = await ctx.runQuery(api.apiKeys.getDecryptedForProvider, {

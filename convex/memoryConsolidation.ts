@@ -1,5 +1,13 @@
+"use node";
+
 /**
- * Memory Consolidation for AgentForge.
+ * Memory Consolidation Action for AgentForge
+ *
+ * This module provides the core consolidation action that runs in Node.js
+ * to perform LLM-based memory summarization.
+ *
+ * NOTE: Queries and mutations are in memoryConsolidationMutations.ts (non-Node runtime).
+ * This file only contains the action that runs in Node.js runtime.
  *
  * Provides short-term → long-term memory consolidation by:
  * 1. Fetching conversation memories older than shortTermTTL
@@ -10,10 +18,10 @@
  * 6. Deleting the original short-term memories
  */
 import { v } from "convex/values";
-import { mutation, action, query, internalMutation, internalQuery } from "./_generated/server";
+import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { Id } from "./_generated/dataModel";
-import { Agent } from "@mastra/core/agent";
+import { Agent } from "./lib/agent";
 
 const CONSOLIDATION_MODEL = "openrouter/openai/gpt-4o-mini";
 const CONSOLIDATION_SYSTEM_PROMPT =
@@ -21,82 +29,6 @@ const CONSOLIDATION_SYSTEM_PROMPT =
 
 const MIN_MESSAGES_TO_CONSOLIDATE = 10;
 const DEFAULT_SHORT_TERM_TTL = 24 * 60 * 60 * 1000; // 24 hours
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Fetch conversation memories for an agent older than a cutoff timestamp.
- * Used exclusively by the consolidate action.
- */
-export const listConversationMemoriesForConsolidation = internalQuery({
-  args: {
-    agentId: v.string(),
-    projectId: v.optional(v.id("projects")),
-    createdBefore: v.number(),
-  },
-  handler: async (ctx, args) => {
-    // Use take() with a reasonable limit instead of collect() to bound memory
-    const entries = await ctx.db
-      .query("memoryEntries")
-      .withIndex("byAgentAndType", (q) =>
-        q.eq("agentId", args.agentId).eq("type", "conversation")
-      )
-      .take(1000);
-
-    return entries.filter(
-      (e) =>
-        e.createdAt < args.createdBefore &&
-        (args.projectId === undefined || e.projectId === args.projectId)
-    );
-  },
-});
-
-/**
- * Delete a batch of memory entries by ID.
- * Used exclusively by the consolidate action after summarization.
- */
-export const bulkRemoveMemories = internalMutation({
-  args: {
-    ids: v.array(v.id("memoryEntries")),
-  },
-  handler: async (ctx, args) => {
-    await Promise.all(args.ids.map((id) => ctx.db.delete(id)));
-    return { deleted: args.ids.length };
-  },
-});
-
-/**
- * Insert a consolidation record into the memoryConsolidations table.
- */
-export const insertConsolidationRecord = internalMutation({
-  args: {
-    agentId: v.string(),
-    projectId: v.optional(v.id("projects")),
-    sourceMemoryIds: v.array(v.id("memoryEntries")),
-    resultMemoryId: v.id("memoryEntries"),
-    strategy: v.union(
-      v.literal("summarize"),
-      v.literal("merge"),
-      v.literal("deduplicate")
-    ),
-  },
-  handler: async (ctx, args) => {
-    return await ctx.db.insert("memoryConsolidations", {
-      agentId: args.agentId,
-      projectId: args.projectId,
-      sourceMemoryIds: args.sourceMemoryIds,
-      resultMemoryId: args.resultMemoryId,
-      strategy: args.strategy,
-      createdAt: Date.now(),
-    });
-  },
-});
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 /**
  * Consolidate old short-term memories into summaries.
@@ -114,7 +46,7 @@ export const consolidate = action({
 
     // 1. Fetch conversation-type memories older than shortTermTTL
     const allMemories = await ctx.runQuery(
-      internal.memoryConsolidation.listConversationMemoriesForConsolidation,
+      internal.memoryConsolidationMutations.listConversationMemoriesForConsolidation,
       {
         agentId: args.agentId,
         projectId: args.projectId,
@@ -141,7 +73,11 @@ export const consolidate = action({
     const consolidationAgent = new Agent({
       name: "agentforge-consolidator",
       instructions: CONSOLIDATION_SYSTEM_PROMPT,
-      model: CONSOLIDATION_MODEL,
+      model: {
+        providerId: "openrouter",
+        modelId: "openai/gpt-4o-mini",
+        apiKey: "", // Will use default API key from context
+      },
     });
 
     // 3. Process each group that has enough messages
@@ -157,7 +93,7 @@ export const consolidate = action({
         // 4. Use LLM to generate a summary
         const llmResult = await consolidationAgent.generate(
           [{ role: "user", content: memoryText }],
-          {}
+          {} as any
         );
         const summaryText = llmResult.text?.trim();
         if (!summaryText) continue;
@@ -178,7 +114,7 @@ export const consolidate = action({
         // 6. Record the consolidation
         const sourceIds = groupMemories.map((m) => m._id as Id<"memoryEntries">);
         await ctx.runMutation(
-          internal.memoryConsolidation.insertConsolidationRecord,
+          internal.memoryConsolidationMutations.insertConsolidationRecord,
           {
             agentId: args.agentId,
             projectId: args.projectId,
@@ -189,7 +125,7 @@ export const consolidate = action({
         );
 
         // 7. Delete the original short-term memories
-        await ctx.runMutation(internal.memoryConsolidation.bulkRemoveMemories, {
+        await ctx.runMutation(internal.memoryConsolidationMutations.bulkRemoveMemories, {
           ids: sourceIds,
         });
 
@@ -202,56 +138,5 @@ export const consolidate = action({
     }
 
     return { consolidated: totalConsolidated, summariesCreated };
-  },
-});
-
-/**
- * Clean up expired memories for an agent.
- */
-export const cleanupExpired = mutation({
-  args: {
-    agentId: v.string(),
-  },
-  handler: async (ctx, args): Promise<{ deleted: number }> => {
-    const now = Date.now();
-    // Use take() instead of collect() to bound the query
-    const entries = await ctx.db
-      .query("memoryEntries")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-      .take(500);
-
-    let deleted = 0;
-    for (const memory of entries) {
-      if (memory.expiresAt !== undefined && memory.expiresAt < now) {
-        await ctx.db.delete(memory._id);
-        deleted++;
-      }
-    }
-    return { deleted };
-  },
-});
-
-/**
- * Get consolidation history for an agent.
- */
-export const getConsolidationHistory = query({
-  args: {
-    agentId: v.string(),
-    projectId: v.optional(v.id("projects")),
-  },
-  handler: async (ctx, args) => {
-    if (args.projectId) {
-      return await ctx.db
-        .query("memoryConsolidations")
-        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
-        .order("desc")
-        .take(100);
-    }
-
-    return await ctx.db
-      .query("memoryConsolidations")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-      .order("desc")
-      .take(100);
   },
 });
