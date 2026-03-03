@@ -1,14 +1,13 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 // import { useQuery, useMutation } from 'convex/react';
 // import { api } from '../../convex/_generated/api';
 import { FolderKanban, Plus, Settings, Users, FileText, Trash2, Edit, X, Search, MoreVertical } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tabs from '@radix-ui/react-tabs';
 import { LLM_PROVIDERS, getModelsByProvider } from '../../../../convex/llmProviders';
-import { useAction } from 'convex/react';
-import { api } from '../../../../convex/_generated/api';
+
 
 
 // --- MOCK DATA & TYPES ---

@@ -1470,6 +1470,14 @@ export declare const api: {
  * ```
  */
 export declare const internal: {
+  apiKeys: {
+    getDecryptedForProvider: FunctionReference<
+      "query",
+      "internal",
+      { provider: string; userId?: string },
+      any
+    >;
+  };
   cronJobs: {
     executeDueJobs: FunctionReference<"mutation", "internal", {}, any>;
     executeJob: FunctionReference<

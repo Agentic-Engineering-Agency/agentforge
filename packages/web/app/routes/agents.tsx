@@ -1,9 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState, useMemo, useEffect, useCallback, ChangeEvent, FormEvent } from 'react';
+import { useState, useMemo, useEffect, ChangeEvent, FormEvent } from 'react';
 import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X, ChevronDown, ChevronUp, HardDrive, Container } from 'lucide-react';
 import { LLM_PROVIDERS, getModelsByProvider } from '../../../../convex/llmProviders';
-import { useAction, useQuery, useMutation } from 'convex/react';
+import { useAction } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import * as Switch from '@radix-ui/react-switch';
 import * as Select from '@radix-ui/react-select';
@@ -96,11 +96,36 @@ function useProviderModels(provider: string) {
 
   useEffect(() => {
     if (!provider) return;
+    // Immediately reset to static models for this provider (avoids showing stale data)
+    setModels(getModelsByProvider(provider));
     setLoading(true);
+    let cancelled = false;
+
     fetchModels({ provider })
-      .then(live => setModels(live.length > 0 ? (live as any as import('../../../../convex/llmProviders').LLMModel[]) : staticModels))
-      .catch(() => setModels(staticModels))
-      .finally(() => setLoading(false));
+      .then(live => {
+        if (cancelled) return;
+        // Merge: start with static entry for full LLMModel shape, override with live data
+        const merged = live.length > 0
+          ? live.map(m => {
+              const staticEntry = getModelsByProvider(m.provider).find(s => s.id === m.id);
+              return {
+                pricingTier: 'standard' as const,
+                ...staticEntry,
+                id: m.id,
+                displayName: m.displayName,
+                provider: m.provider,
+                contextWindow: m.contextWindow,
+                capabilities: m.capabilities as import('../../../../convex/llmProviders').ModelCapability[],
+                isGA: m.isGA,
+              };
+            })
+          : getModelsByProvider(provider);
+        setModels(merged as import('../../../../convex/llmProviders').LLMModel[]);
+      })
+      .catch(() => { if (!cancelled) setModels(getModelsByProvider(provider)); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
   }, [provider]);
 
   return { models, loading };
@@ -312,6 +337,25 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
   const providers = LLM_PROVIDERS;
   const { models: modelsForProvider, loading: modelsLoading } = useProviderModels(formData.provider);
 
+  // Reconcile: if current model not in fetched list, auto-select first available
+  useEffect(() => {
+    if (modelsLoading || modelsForProvider.length === 0) return;
+    const modelIds = modelsForProvider.map(m => m.id.split('/').slice(1).join('/'));
+    if (formData.model && !modelIds.includes(formData.model) && !modelsForProvider.find(m => m.id === formData.model)) {
+      const first = modelsForProvider[0];
+      setFormData(prev => ({ ...prev, model: first.id.split('/').slice(1).join('/') || first.id }));
+    }
+  }, [modelsForProvider, modelsLoading]);
+
+  // Reconcile: if current model not in fetched list, default to first available
+  useEffect(() => {
+    if (modelsLoading || modelsForProvider.length === 0) return;
+    const modelIds = modelsForProvider.map(m => m.id.split('/').slice(1).join('/'));
+    if (formData.model && !modelIds.includes(formData.model)) {
+      setFormData(prev => ({ ...prev, model: modelsForProvider[0].id.split('/').slice(1).join('/') }));
+    }
+  }, [modelsForProvider, modelsLoading]);
+
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center">
       <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
@@ -348,8 +392,8 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Model</label>
-              <select name="model" value={formData.model} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+              <label className="block text-sm font-medium mb-1">Model {modelsLoading && <span className="text-xs text-muted-foreground ml-1">(loading…)</span>}</label>
+              <select name="model" value={formData.model} onChange={handleChange} disabled={modelsLoading} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-60">
                 {modelsForProvider.map(m => (
                   <option key={m.id} value={m.id.split('/').slice(1).join('/')}>
                     {m.displayName} ({Math.round(m.contextWindow / 1000)}K ctx)

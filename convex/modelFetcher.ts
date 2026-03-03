@@ -8,24 +8,20 @@
 import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
-import { LLM_MODELS, LLM_PROVIDERS, type LLMModel } from "./llmProviders";
+import { LLM_MODELS, LLM_PROVIDERS } from "./llmProviders";  // LLMModel removed (unused)
 
 // ---------------------------------------------------------------------------
-// Types
+// Provider-specific fetchers
 // ---------------------------------------------------------------------------
 
 interface FetchedModel {
-  id: string;          // Mastra-style "provider/model-id"
+  id: string;
   displayName: string;
   provider: string;
   contextWindow: number;
   capabilities: string[];
   isGA: boolean;
 }
-
-// ---------------------------------------------------------------------------
-// Provider-specific fetchers
-// ---------------------------------------------------------------------------
 
 async function fetchOpenAIModels(apiKey: string): Promise<FetchedModel[]> {
   const res = await fetch("https://api.openai.com/v1/models", {
@@ -34,17 +30,24 @@ async function fetchOpenAIModels(apiKey: string): Promise<FetchedModel[]> {
   if (!res.ok) throw new Error(`OpenAI models API: ${res.status}`);
   const { data } = await res.json() as { data: Array<{ id: string; object: string }> };
 
-  // Only include chat-capable GPT / o-series models
   const chatModels = data.filter(m =>
     m.object === "model" &&
-    (m.id.startsWith("gpt-") || m.id.startsWith("o1") || m.id.startsWith("o3") || m.id.startsWith("chatgpt-"))
+    (m.id.startsWith("gpt-") ||
+     m.id.startsWith("o1") ||
+     m.id.startsWith("o2") ||
+     m.id.startsWith("o3") ||
+     m.id.startsWith("o4") ||
+     m.id.startsWith("chatgpt-"))
   );
 
   return chatModels.map(m => ({
     id: `openai/${m.id}`,
     displayName: m.id,
     provider: "openai",
-    contextWindow: m.id.includes("32k") ? 32768 : m.id.includes("128k") || m.id.includes("4o") || m.id.includes("4.1") ? 128000 : 8192,
+    contextWindow:
+      m.id.includes("32k") ? 32768
+      : m.id.includes("128k") || m.id.includes("4o") || m.id.includes("4.1") || m.id.startsWith("o") ? 128000
+      : 8192,
     capabilities: ["chat", "function_calling"],
     isGA: !m.id.includes("preview") && !m.id.includes("instruct"),
   }));
@@ -64,7 +67,7 @@ async function fetchAnthropicModels(apiKey: string): Promise<FetchedModel[]> {
     id: `anthropic/${m.id}`,
     displayName: m.display_name || m.id,
     provider: "anthropic",
-    contextWindow: m.id.includes("opus") ? 200000 : 200000,
+    contextWindow: 200000,  // All current Anthropic models support 200K
     capabilities: ["chat", "vision"],
     isGA: true,
   }));
@@ -75,7 +78,14 @@ async function fetchGoogleModels(apiKey: string): Promise<FetchedModel[]> {
     `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
   );
   if (!res.ok) throw new Error(`Google models API: ${res.status}`);
-  const { models } = await res.json() as { models: Array<{ name: string; displayName: string; inputTokenLimit?: number; supportedGenerationMethods?: string[] }> };
+  const { models } = await res.json() as {
+    models: Array<{
+      name: string;
+      displayName: string;
+      inputTokenLimit?: number;
+      supportedGenerationMethods?: string[];
+    }>;
+  };
 
   return models
     .filter(m =>
@@ -100,7 +110,14 @@ async function fetchMistralModels(apiKey: string): Promise<FetchedModel[]> {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
   if (!res.ok) throw new Error(`Mistral models API: ${res.status}`);
-  const { data } = await res.json() as { data: Array<{ id: string; name?: string; max_context_length?: number; capabilities?: { completion_chat?: boolean } }> };
+  const { data } = await res.json() as {
+    data: Array<{
+      id: string;
+      name?: string;
+      max_context_length?: number;
+      capabilities?: { completion_chat?: boolean };
+    }>;
+  };
 
   return data
     .filter(m => m.capabilities?.completion_chat !== false)
@@ -119,7 +136,14 @@ async function fetchOpenRouterModels(apiKey: string): Promise<FetchedModel[]> {
     headers: { Authorization: `Bearer ${apiKey}` },
   });
   if (!res.ok) throw new Error(`OpenRouter models API: ${res.status}`);
-  const { data } = await res.json() as { data: Array<{ id: string; name: string; context_length?: number; architecture?: { modality?: string } }> };
+  const { data } = await res.json() as {
+    data: Array<{
+      id: string;
+      name: string;
+      context_length?: number;
+      architecture?: { modality?: string };
+    }>;
+  };
 
   return data
     .filter(m => m.architecture?.modality?.includes("text"))
@@ -133,10 +157,6 @@ async function fetchOpenRouterModels(apiKey: string): Promise<FetchedModel[]> {
     }));
 }
 
-// ---------------------------------------------------------------------------
-// Main fetcher dispatcher
-// ---------------------------------------------------------------------------
-
 async function fetchModelsForProvider(provider: string, apiKey: string): Promise<FetchedModel[]> {
   switch (provider) {
     case "openai":     return fetchOpenAIModels(apiKey);
@@ -147,6 +167,20 @@ async function fetchModelsForProvider(provider: string, apiKey: string): Promise
     default:           return [];
   }
 }
+
+// ---------------------------------------------------------------------------
+// Return type (matches Convex validator shape)
+// ---------------------------------------------------------------------------
+
+type ModelResult = {
+  id: string;
+  displayName: string;
+  provider: string;
+  contextWindow: number;
+  capabilities: string[];
+  isGA: boolean;
+  isFromAPI: boolean;
+};
 
 // ---------------------------------------------------------------------------
 // Public Convex action — called by the frontend
@@ -163,15 +197,19 @@ export const getModelsForProvider = action({
     isGA: v.boolean(),
     isFromAPI: v.boolean(),
   })),
-  handler: async (ctx, { provider }): Promise<Array<{
-    id: string; displayName: string; provider: string;
-    contextWindow: number; capabilities: string[]; isGA: boolean; isFromAPI: boolean;
-  }>> => {
-    const staticModels = LLM_MODELS
+  handler: async (ctx, { provider }): Promise<ModelResult[]> => {
+    const staticModels: ModelResult[] = LLM_MODELS
       .filter(m => m.provider === provider)
-      .map(m => ({ ...m, capabilities: [...m.capabilities], isFromAPI: false }));
+      .map(m => ({
+        id: m.id,
+        displayName: m.displayName,
+        provider: m.provider,
+        contextWindow: m.contextWindow,
+        capabilities: [...m.capabilities],
+        isGA: m.isGA,
+        isFromAPI: false,
+      }));
 
-    // Try to get the user's API key for this provider
     try {
       const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
       if (!keyData?.apiKey) return staticModels;
