@@ -1,26 +1,27 @@
-import type { WorkspaceProvider, WorkspaceConfig } from './workspace.js';
-import { LocalWorkspaceProvider } from './workspace.js';
+/**
+ * @module workspace-factory
+ * Creates workspace providers based on config or environment.
+ */
 
-export function createWorkspaceProvider(config: WorkspaceConfig): WorkspaceProvider {
-  switch (config.type) {
+import { LocalWorkspaceProvider, type WorkspaceConfig, type WorkspaceProvider } from './workspace.js';
+import { R2WorkspaceProvider } from './providers/r2-provider.js';
+
+export function createWorkspaceProvider(config: WorkspaceConfig = {}): WorkspaceProvider {
+  const storage = config.storage ?? (process.env.AGENTFORGE_STORAGE as WorkspaceConfig['storage']) ?? 'local';
+
+  switch (storage) {
     case 'local':
       return new LocalWorkspaceProvider(config.basePath ?? './workspace');
-    case 'r2': {
-      try {
-        const { R2WorkspaceProvider } = require('./providers/r2-provider.js');
-        return new R2WorkspaceProvider({
-          bucket: config.bucket!,
-          region: config.region ?? 'auto',
-          accessKeyId: config.credentials?.accessKeyId,
-          secretAccessKey: config.credentials?.secretAccessKey,
-        });
-      } catch {
-        throw new Error(
-          'R2 workspace provider not available. Check that @agentforge-ai/core is properly built.'
-        );
-      }
-    }
+    case 'r2':
+    case 's3':
+      return new R2WorkspaceProvider({
+        bucket: config.bucket ?? '',
+        region: config.region,
+        endpoint: config.endpoint,
+        accessKeyId: config.accessKeyId,
+        secretAccessKey: config.secretAccessKey,
+      });
     default:
-      throw new Error(`Unknown workspace type: ${(config as WorkspaceConfig).type}`);
+      throw new Error(`Unknown storage type: ${storage as string}`);
   }
 }
