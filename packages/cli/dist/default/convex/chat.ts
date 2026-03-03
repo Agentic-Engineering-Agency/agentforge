@@ -22,7 +22,7 @@ import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { Agent } from "./lib/agent";
+import { Agent, getBaseModelId, getProviderBaseUrl } from "./lib/agent";
 
 // ============================================================
 // Default Failover Chain Configuration
@@ -121,7 +121,7 @@ function shouldFailover(category: string): boolean {
  * Returns the response from the first successful provider.
  */
 async function executeWithFailover(
-  chain: Array<{ provider: string; model: string }>,
+  chain: Array<{ provider: string; model: string; apiKey?: string }>,
   systemPrompt: string,
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
   options: { temperature?: number; maxTokens?: number; maxRetries?: number; backoffMs?: number }
@@ -151,9 +151,17 @@ async function executeWithFailover(
 
       try {
         const mastraAgent = new Agent({
+          id: `exec-${chainPos}-${attempt}`,
           name: "agentforge-executor",
           instructions: systemPrompt,
-          model: modelKey,
+          model: {
+            providerId: provider,
+            modelId: getBaseModelId(provider, modelId),
+            apiKey: chain[chainPos].apiKey || process.env[`${provider.toUpperCase()}_API_KEY`] || "",
+            url: getProviderBaseUrl(provider),
+          },
+          temperature: options.temperature,
+          maxTokens: options.maxTokens,
         });
 
         const result = await mastraAgent.generate(messages);
@@ -271,13 +279,13 @@ export const sendMessage = action({
     }
 
     // 2. Store the user message
-    await ctx.runMutation(api.chat.addUserMessage, {
+    await ctx.runMutation(api.chatMutations.addUserMessage, {
       threadId: args.threadId,
       content: args.content,
     });
 
     // 3. Get conversation history for context
-    const history = await ctx.runQuery(api.chat.getThreadMessages, {
+    const history = await ctx.runQuery(api.chatMutations.getThreadMessages, {
       threadId: args.threadId,
     });
 
@@ -354,7 +362,9 @@ ${toolList}`);
     let latencyMs = 0;
 
     try {
-      // Inject BYOK API keys for each provider in the failover chain
+      // Inject BYOK API keys — build a per-provider key map and attach to chain entries
+      const { LLM_PROVIDERS } = await import("./llmProviders");
+      const keyMap: Record<string, string> = {};
       const providersSeen = new Set<string>();
       for (const { provider } of failoverChain) {
         if (providersSeen.has(provider)) continue;
@@ -362,18 +372,27 @@ ${toolList}`);
         try {
           const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
           if (keyData?.apiKey) {
-            const { LLM_PROVIDERS } = await import("./llmProviders");
+            keyMap[provider] = keyData.apiKey;
+            // Also inject into process.env as belt-and-suspenders for Mastra's env reader
             const providerCfg = LLM_PROVIDERS.find(p => p.key === provider);
             const envVar = providerCfg?.envVar ?? `${provider.toUpperCase()}_API_KEY`;
             process.env[envVar] = keyData.apiKey;
           }
         } catch {
-          // Key not found — model will use env default if available
+          // Key not found for this provider — will fail with 401 and trigger failover
         }
       }
 
+      // Attach apiKey to each chain entry for explicit injection into Agent constructor
+      const chainWithKeys = failoverChain.map(entry => ({
+        ...entry,
+        apiKey: keyMap[entry.provider] ?? process.env[
+          (LLM_PROVIDERS.find(p => p.key === entry.provider)?.envVar ?? `${entry.provider.toUpperCase()}_API_KEY`)
+        ] ?? "",
+      }));
+
       const result = await executeWithFailover(
-        failoverChain,
+        chainWithKeys,
         systemPrompt,
         conversationMessages,
         {
@@ -410,7 +429,7 @@ ${toolList}`);
     }
     metadata.latencyMs = latencyMs;
 
-    await ctx.runMutation(api.chat.addAssistantMessage, {
+    await ctx.runMutation(api.chatMutations.addAssistantMessage, {
       threadId: args.threadId,
       content: responseText,
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
@@ -503,7 +522,7 @@ export const startNewChat = action({
   },
   handler: async (ctx, args) => {
     // Create a new thread
-    const threadId = await ctx.runMutation(api.chat.createThread, {
+    const threadId = await ctx.runMutation(api.chatMutations.createThread, {
       agentId: args.agentId,
       name: args.threadName || "New Chat",
       userId: args.userId,
