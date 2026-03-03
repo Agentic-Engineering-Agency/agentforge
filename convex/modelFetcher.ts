@@ -157,6 +157,67 @@ async function fetchOpenRouterModels(apiKey: string): Promise<FetchedModel[]> {
     }));
 }
 
+
+async function fetchDeepSeekModels(apiKey: string): Promise<FetchedModel[]> {
+  const res = await fetch("https://api.deepseek.com/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(`DeepSeek models API: ${res.status}`);
+  const { data } = await res.json() as { data: Array<{ id: string; owned_by?: string }> };
+
+  return data
+    .filter(m => m.id.startsWith("deepseek-"))
+    .map(m => ({
+      id: `deepseek/${m.id}`,
+      displayName: m.id.replace("deepseek-", "DeepSeek ").replace(/-/g, " "),
+      provider: "deepseek",
+      contextWindow: m.id.includes("reasoner") ? 64000 : 64000,
+      capabilities: m.id.includes("reasoner") ? ["chat", "reasoning"] : ["chat", "code"],
+      isGA: true,
+    }));
+}
+
+async function fetchXAIModels(apiKey: string): Promise<FetchedModel[]> {
+  const res = await fetch("https://api.x.ai/v1/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(`xAI models API: ${res.status}`);
+  const { data } = await res.json() as { data: Array<{ id: string; created?: number }> };
+
+  return data
+    .filter(m => m.id.startsWith("grok-"))
+    .map(m => ({
+      id: `xai/${m.id}`,
+      displayName: m.id.replace(/-/g, " ").replace(/\w/g, c => c.toUpperCase()),
+      provider: "xai",
+      contextWindow: m.id.includes("vision") ? 32768 : 131072,
+      capabilities: m.id.includes("vision") ? ["chat", "vision"] : ["chat"],
+      isGA: !m.id.includes("mini") && !m.id.includes("beta"),
+    }));
+}
+
+async function fetchCohereModels(apiKey: string): Promise<FetchedModel[]> {
+  const res = await fetch("https://api.cohere.com/v2/models?default_only=false&endpoint=chat&page_size=50", {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) throw new Error(`Cohere models API: ${res.status}`);
+  const { models } = await res.json() as { models: Array<{ name: string; endpoints?: string[]; context_length?: number }> };
+
+  return models
+    .filter(m => m.endpoints?.includes("chat"))
+    .map(m => ({
+      id: `cohere/${m.name}`,
+      displayName: m.name.replace(/-/g, " ").replace(/\w/g, c => c.toUpperCase()),
+      provider: "cohere",
+      contextWindow: m.context_length ?? 128000,
+      capabilities: ["chat"],
+      isGA: !m.name.includes("trial") && !m.name.includes("beta"),
+    }));
+}
+
 async function fetchModelsForProvider(provider: string, apiKey: string): Promise<FetchedModel[]> {
   switch (provider) {
     case "openai":     return fetchOpenAIModels(apiKey);
@@ -164,6 +225,9 @@ async function fetchModelsForProvider(provider: string, apiKey: string): Promise
     case "google":     return fetchGoogleModels(apiKey);
     case "mistral":    return fetchMistralModels(apiKey);
     case "openrouter": return fetchOpenRouterModels(apiKey);
+    case "deepseek":    return fetchDeepSeekModels(apiKey);
+    case "xai":         return fetchXAIModels(apiKey);
+    case "cohere":      return fetchCohereModels(apiKey);
     default:           return [];
   }
 }
