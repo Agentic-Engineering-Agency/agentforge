@@ -260,6 +260,7 @@ export default defineSchema({
     provider: v.string(), // "openai", "openrouter", "anthropic", etc.
     keyName: v.string(),
     encryptedKey: v.string(),
+    iv: v.string(), // Initialization vector for AES-256-GCM encryption
     isActive: v.boolean(),
     userId: v.optional(v.string()),
     createdAt: v.number(),
