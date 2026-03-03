@@ -861,20 +861,30 @@ export declare const api: {
       any
     >;
   };
+  modelFetcher: {
+    getModelsForProvider: FunctionReference<
+      "action",
+      "public",
+      { provider: string },
+      Array<{
+        capabilities: Array<string>;
+        contextWindow: number;
+        displayName: string;
+        id: string;
+        isFromAPI: boolean;
+        isGA: boolean;
+        provider: string;
+      }>
+    >;
+  };
   models: {
-    getCachedModels: FunctionReference<
-      "query",
+    fetchAll: FunctionReference<"action", "public", {}, any>;
+    fetchForProvider: FunctionReference<
+      "action",
       "public",
-      { provider?: string },
+      { provider: string },
       any
     >;
-    getModelById: FunctionReference<
-      "query",
-      "public",
-      { modelId: string; provider: string },
-      any
-    >;
-    listProviders: FunctionReference<"query", "public", {}, any>;
   };
   modelsActions: {
     fetchAndCacheModels: FunctionReference<
@@ -1507,6 +1517,9 @@ export declare const internal: {
     };
     migrateProjectScoping: FunctionReference<"mutation", "internal", {}, any>;
     validateProjectScoping: FunctionReference<"mutation", "internal", {}, any>;
+  };
+  modelFetcher: {
+    refreshAllModels: FunctionReference<"action", "internal", {}, any>;
   };
   projects: {
     _deleteProjectCascade: FunctionReference<

@@ -1,8 +1,10 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState, useMemo, ChangeEvent, FormEvent } from 'react';
+import { useState, useMemo, useEffect, useCallback, ChangeEvent, FormEvent } from 'react';
 import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X, ChevronDown, ChevronUp, HardDrive, Container } from 'lucide-react';
 import { LLM_PROVIDERS, getModelsByProvider } from '../../../../convex/llmProviders';
+import { useAction, useQuery, useMutation } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import * as Switch from '@radix-ui/react-switch';
 import * as Select from '@radix-ui/react-select';
 
@@ -85,6 +87,24 @@ const initialAgents: Agent[] = [
 ];
 
 export const Route = createFileRoute('/agents')({ component: AgentsPage });
+
+function useProviderModels(provider: string) {
+  const fetchModels = useAction(api.modelFetcher.getModelsForProvider);
+  const staticModels = getModelsByProvider(provider);
+  const [models, setModels] = useState(staticModels);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!provider) return;
+    setLoading(true);
+    fetchModels({ provider })
+      .then(live => setModels(live.length > 0 ? (live as any as import('../../../../convex/llmProviders').LLMModel[]) : staticModels))
+      .catch(() => setModels(staticModels))
+      .finally(() => setLoading(false));
+  }, [provider]);
+
+  return { models, loading };
+}
 
 function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>(initialAgents);
@@ -290,7 +310,7 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
   };
 
   const providers = LLM_PROVIDERS;
-  const modelsForProvider = getModelsByProvider(formData.provider);
+  const { models: modelsForProvider, loading: modelsLoading } = useProviderModels(formData.provider);
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center">
