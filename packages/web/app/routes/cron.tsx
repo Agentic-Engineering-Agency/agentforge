@@ -46,7 +46,6 @@ function CronPageComponent() {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<CronJob | null>(null);
-  const [selectedJobHistory, setSelectedJobHistory] = useState<CronJob | null>(null);
 
   const isLoading = jobsQuery === undefined;
 

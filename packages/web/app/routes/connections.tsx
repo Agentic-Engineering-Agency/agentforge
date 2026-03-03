@@ -195,7 +195,8 @@ export const Route = createFileRoute('/connections')({ component: ConnectionsPag
 
 function ConnectionsPage() {
     // --- Convex Hooks ---
-    const connections = useQuery(api.mcpConnections.list, {}) ?? [];
+    const connectionsQuery = useQuery(api.mcpConnections.list, {});
+    const connections = connectionsQuery ?? [];
     const createConnection = useMutation(api.mcpConnections.create);
     const updateConnection = useMutation(api.mcpConnections.update);
     const updateStatusConnection = useMutation(api.mcpConnections.updateStatus);
@@ -208,11 +209,19 @@ function ConnectionsPage() {
     const [editingConnection, setEditingConnection] = useState<Connection | null>(null);
     const [testingId, setTestingId] = useState<string | null>(null);
 
-    const isLoading = !connections;
+    const isLoading = connectionsQuery === undefined;
 
-    const filteredConnections = useMemo(() => (uiConnections.length ? uiConnections :
+    // Map Convex data to UI format first, then filter
+    const uiConnections = (connections as typeof connections).map(c => ({
+        ...c,
+        status: c.isConnected ? 'connected' : 'disconnected' as ConnectionStatus,
+        lastConnected: c.lastConnectedAt ? new Date(c.lastConnectedAt).toISOString() : null,
+        enabled: c.isEnabled,
+    }));
+
+    const filteredConnections = useMemo(() =>
         uiConnections.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())),
-        [connections, searchTerm]
+        [uiConnections, searchTerm]
     );
 
     const handleAdd = () => {
@@ -251,14 +260,6 @@ function ConnectionsPage() {
     const handleToggle = async (id: Id<'mcpConnections'>) => {
         await toggleConnection({ id });
     };
-
-    // Map Convex data to UI format
-    const uiConnections = connections.map(c => ({
-        ...c,
-        status: c.isConnected ? 'connected' : 'disconnected' as ConnectionStatus,
-        lastConnected: c.lastConnectedAt ? new Date(c.lastConnectedAt).toISOString() : null,
-        enabled: c.isEnabled,
-    }));
 
     return (
         <DashboardLayout>

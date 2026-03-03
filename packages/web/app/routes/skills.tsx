@@ -132,7 +132,9 @@ export const Route = createFileRoute('/skills')({ component: SkillsPage });
 
 function SkillsPage() {
   // Convex hooks
-  const skills = useQuery(api.skills.list, {}) ?? [];
+  const skillsQuery = useQuery(api.skills.list, {});
+  const skills = skillsQuery ?? [];
+  const isLoading = skillsQuery === undefined;
   const createSkillMutation = useMutation(api.skills.create);
   const installSkillMutation = useMutation(api.skills.install);
   const uninstallSkillMutation = useMutation(api.skills.uninstall);
@@ -140,10 +142,6 @@ function SkillsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<SkillCategory[]>([]);
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
-
-  const skillsQuery = useQuery(api.skills.list, {});
-  const skills = skillsQuery ?? [];
-  const isLoading = skillsQuery === undefined;
 
   const handleToggleCategory = (category: SkillCategory) => {
     setSelectedCategories(prev =>
