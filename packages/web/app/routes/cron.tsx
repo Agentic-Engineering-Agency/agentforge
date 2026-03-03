@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState } from 'react';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { api } from '../../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -32,24 +32,31 @@ type CronJob = {
 
 function CronPageComponent() {
   // Convex hooks
-  const jobs = useQuery(api.cronJobs.list, {}) ?? [];
+  const jobsQuery = useQuery(api.cronJobs.list, {});
+  const jobs = jobsQuery ?? [];
   const createJob = useMutation(api.cronJobs.create);
   const updateJob = useMutation(api.cronJobs.update);
   const deleteJob = useMutation(api.cronJobs.remove);
   const toggleJob = useMutation(api.cronJobs.toggleEnabled);
-  const runHistory = useQuery(api.cronJobs.getRunHistory, { cronJobId: undefined as any, limit: 10 });
+  const [selectedJobHistory, setSelectedJobHistory] = useState<CronJob | null>(null);
+  const runHistory = useQuery(
+    api.cronJobs.getRunHistory,
+    selectedJobHistory ? { cronJobId: selectedJobHistory._id, limit: 10 } : 'skip' as any
+  );
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<CronJob | null>(null);
   const [selectedJobHistory, setSelectedJobHistory] = useState<CronJob | null>(null);
 
-  const isLoading = jobs === undefined;
+  const isLoading = jobsQuery === undefined;
 
   const handleSaveJob = async (jobData: Omit<CronJob, '_id' | 'createdAt' | 'updatedAt' | 'lastRun' | 'nextRun'>) => {
     if (editingJob) {
-      await updateJob({ id: editingJob._id, ...jobData });
+      const { agentId, ...updatePayload } = jobData;
+      await updateJob({ id: editingJob._id, ...updatePayload });
     } else {
-      await createJob(jobData);
+      const { isEnabled, ...createPayload } = jobData as any;
+      await createJob(createPayload);
     }
     setIsModalOpen(false);
     setEditingJob(null);
@@ -112,7 +119,7 @@ function CronPageComponent() {
               <CardTitle>Scheduled Jobs</CardTitle>
             </CardHeader>
             <CardContent>
-              {cronJobs.length > 0 ? (
+              {jobs.length > 0 ? (
                 <Table>
                   <TableHeader>
                     <TableRow>

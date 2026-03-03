@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { api } from '../../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { Sparkles, Download, Trash2, Plus, Search, Filter, X } from 'lucide-react';
 
@@ -42,8 +42,9 @@ function CreateSkillDialog({ open, onOpenChange, onCreateSkill }: { open: boolea
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !description || !version) return;
-    onCreateSkill({ name: name.toLowerCase().replace(/\s+/g, '-'), displayName: displayName || name, description, category, version, code: code || '// Skill code', isInstalled: false, isEnabled: false });
+    const derivedName = displayName.toLowerCase().replace(/\s+/g, '-');
+    if (!displayName || !description || !version) return;
+    onCreateSkill({ name: derivedName, displayName, description, category, version, code: code || '// Skill code' });
     onOpenChange(false);
     setName('');
     setDisplayName('');
@@ -140,7 +141,9 @@ function SkillsPage() {
   const [selectedCategories, setSelectedCategories] = useState<SkillCategory[]>([]);
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
 
-  const isLoading = skills === undefined;
+  const skillsQuery = useQuery(api.skills.list, {});
+  const skills = skillsQuery ?? [];
+  const isLoading = skillsQuery === undefined;
 
   const handleToggleCategory = (category: SkillCategory) => {
     setSelectedCategories(prev =>

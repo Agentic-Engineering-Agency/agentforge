@@ -3,7 +3,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
-import { api } from '../../../convex/_generated/api';
+import { api } from '../../../../convex/_generated/api';
 import { Id } from '../../../convex/_generated/dataModel';
 import { Plug, Plus, RefreshCw, CheckCircle, XCircle, Trash2, MoreVertical, Edit, Search } from 'lucide-react';
 
@@ -208,10 +208,10 @@ function ConnectionsPage() {
     const [editingConnection, setEditingConnection] = useState<Connection | null>(null);
     const [testingId, setTestingId] = useState<string | null>(null);
 
-    const isLoading = connections === undefined;
+    const isLoading = !connections;
 
-    const filteredConnections = useMemo(() =>
-        connections.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())),
+    const filteredConnections = useMemo(() => (uiConnections.length ? uiConnections :
+        uiConnections.filter(c => c.name.toLowerCase().includes(searchTerm.toLowerCase())),
         [connections, searchTerm]
     );
 
@@ -231,7 +231,8 @@ function ConnectionsPage() {
 
     const handleSave = async (data: Omit<Connection, '_id'> & { _id?: Id<'mcpConnections'> }) => {
         if (data._id) {
-            await updateConnection({ id: data._id, ...data });
+            const { _id, protocol, ...updatePayload } = data;
+            await updateConnection({ id: _id!, ...updatePayload });
         } else {
             await createConnection(data);
         }
