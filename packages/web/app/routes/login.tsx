@@ -25,6 +25,17 @@ export default function LoginPage() {
 
       if (envPassword && password === envPassword) {
         // Store session in localStorage
+        //
+        // SECURITY NOTE: localStorage is accessible to any JavaScript code.
+        // This creates an XSS vulnerability risk: malicious scripts can steal session tokens.
+        //
+        // For production, use httpOnly cookies which are:
+        // - Not accessible via JavaScript
+        // - Automatically sent with requests
+        // - More secure against XSS attacks
+        //
+        // Current limitation: This is a local-first framework without full auth implemented.
+        // TODO: Integrate Convex http actions with proper cookie-based session management.
         const token = `sess_${crypto.randomUUID().replace(/-/g, '')}`;
         localStorage.setItem('agentforge_session', token);
         localStorage.setItem('agentforge_session_expires', String(Date.now() + 24 * 60 * 60 * 1000));
@@ -33,6 +44,7 @@ export default function LoginPage() {
         navigate({ to: '/' });
       } else if (!envPassword) {
         // No password set - allow access for local dev
+        // SECURITY: Same localStorage XSS considerations apply
         localStorage.setItem('agentforge_session', 'dev-mode');
         navigate({ to: '/' });
       } else {

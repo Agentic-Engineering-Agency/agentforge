@@ -19,8 +19,19 @@ const DASHBOARD_USER_ID = 'dashboard';
 const PASSWORD_KEY = 'password';
 const SESSION_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// In-memory session store (for single-instance deployment)
-// For multi-instance, use Redis or Convex storage
+/**
+ * In-memory session store for single-instance deployment.
+ *
+ * SECURITY NOTE: This approach has limitations:
+ * - Sessions are not shared across multiple server instances
+ * - Server restarts will clear active sessions (though DB persists them)
+ * - For production multi-instance deployments, use:
+ *   - Convex database storage (already implemented as fallback)
+ *   - Redis or similar distributed cache
+ *
+ * The current implementation uses a hybrid approach: in-memory cache
+ * for fast validation, with automatic fallback to Convex database storage.
+ */
 const sessionStore = new Map<string, { createdAt: number; expiresAt: number }>();
 
 // =====================================================

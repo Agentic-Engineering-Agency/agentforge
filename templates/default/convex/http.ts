@@ -4,11 +4,34 @@ import { api } from "./_generated/api";
 
 const http = httpRouter();
 
-function corsHeaders(): Record<string, string> {
+// Default allowed origins for local-first development
+// Extend via environment variable: CONVEX_ALLOWED_ORIGINS=http://example.com,https://app.example.com
+const DEFAULT_ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:4173",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:3000",
+  "http://localhost:4321",
+];
+
+function corsHeaders(origin: string | null): Record<string, string> {
+  // Parse allowed origins from env or use defaults
+  const allowedOrigins = process.env.CONVEX_ALLOWED_ORIGINS
+    ? process.env.CONVEX_ALLOWED_ORIGINS.split(",").map((o) => o.trim())
+    : DEFAULT_ALLOWED_ORIGINS;
+
+  // Validate origin against allowed list
+  const allowedOrigin =
+    origin && allowedOrigins.includes(origin)
+      ? origin
+      : allowedOrigins[0]; // Fallback to first allowed origin
+
   return {
-    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    "Vary": "Origin", // Signal that response varies by Origin header
   };
 }
 
@@ -16,10 +39,11 @@ function corsHeaders(): Record<string, string> {
 http.route({
   path: "/api/files/download",
   method: "OPTIONS",
-  handler: httpAction(async (_ctx, _request) => {
+  handler: httpAction(async (_ctx, request) => {
+    const origin = request.headers.get("Origin");
     return new Response(null, {
       status: 204,
-      headers: corsHeaders(),
+      headers: corsHeaders(origin),
     });
   }),
 });
@@ -29,11 +53,12 @@ http.route({
   path: "/api/files/download",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    const origin = request.headers.get("Origin");
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       return new Response("Unauthorized", {
         status: 401,
-        headers: corsHeaders(),
+        headers: corsHeaders(origin),
       });
     }
 
@@ -42,7 +67,7 @@ http.route({
     if (!fileId) {
       return new Response("Missing file id", {
         status: 400,
-        headers: corsHeaders(),
+        headers: corsHeaders(origin),
       });
     }
 
@@ -53,7 +78,7 @@ http.route({
     return new Response(null, {
       status: 302,
       headers: {
-        ...corsHeaders(),
+        ...corsHeaders(origin),
         Location: file.url,
       },
     });
@@ -64,10 +89,11 @@ http.route({
 http.route({
   path: "/a2a/task",
   method: "OPTIONS",
-  handler: httpAction(async (_ctx, _request) => {
+  handler: httpAction(async (_ctx, request) => {
+    const origin = request.headers.get("Origin");
     return new Response(null, {
       status: 204,
-      headers: corsHeaders(),
+      headers: corsHeaders(origin),
     });
   }),
 });
@@ -77,11 +103,12 @@ http.route({
   path: "/a2a/task",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    const origin = request.headers.get("Origin");
     const authHeader = request.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401,
-        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
       });
     }
 
@@ -91,7 +118,7 @@ http.route({
     } catch {
       return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
         status: 400,
-        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
       });
     }
 
@@ -110,7 +137,7 @@ http.route({
         JSON.stringify({ error: "Missing required fields: from, to, instruction" }),
         {
           status: 400,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
         }
       );
     }
@@ -120,7 +147,7 @@ http.route({
         JSON.stringify({ error: "instruction exceeds maximum length of 10000 characters" }),
         {
           status: 400,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
         }
       );
     }
@@ -131,7 +158,7 @@ http.route({
         JSON.stringify({ error: "Invalid from agent ID format" }),
         {
           status: 400,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
         }
       );
     }
@@ -140,7 +167,7 @@ http.route({
         JSON.stringify({ error: "Invalid to agent ID format" }),
         {
           status: 400,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
         }
       );
     }
@@ -160,7 +187,7 @@ http.route({
 
     return new Response(JSON.stringify({ taskId, status: "pending" }), {
       status: 202,
-      headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
   }),
 });
@@ -170,12 +197,13 @@ http.route({
   path: "/a2a/task",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
+    const origin = request.headers.get("Origin");
     const url = new URL(request.url);
     const taskId = url.searchParams.get("id");
     if (!taskId) {
       return new Response(JSON.stringify({ error: "Missing query param: id" }), {
         status: 400,
-        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
       });
     }
 
@@ -183,13 +211,13 @@ http.route({
     if (!task) {
       return new Response(JSON.stringify({ error: "Task not found" }), {
         status: 404,
-        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
       });
     }
 
     return new Response(JSON.stringify(task), {
       status: 200,
-      headers: { ...corsHeaders(), "Content-Type": "application/json" },
+      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
     });
   }),
 });
@@ -198,10 +226,11 @@ http.route({
 http.route({
   path: "/api/stream",
   method: "OPTIONS",
-  handler: httpAction(async (_ctx, _request) => {
+  handler: httpAction(async (_ctx, request) => {
+    const origin = request.headers.get("Origin");
     return new Response(null, {
       status: 204,
-      headers: corsHeaders(),
+      headers: corsHeaders(origin),
     });
   }),
 });
@@ -212,13 +241,14 @@ http.route({
   path: "/api/stream",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    const origin = request.headers.get("Origin");
     let body: Record<string, unknown>;
     try {
       body = await request.json();
     } catch {
       return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
         status: 400,
-        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
       });
     }
 
@@ -234,7 +264,7 @@ http.route({
         JSON.stringify({ error: "Missing required fields: agentId, message" }),
         {
           status: 400,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
         }
       );
     }
@@ -346,7 +376,7 @@ http.route({
 
     return new Response(stream, {
       headers: {
-        ...corsHeaders(),
+        ...corsHeaders(origin),
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
@@ -359,10 +389,11 @@ http.route({
 http.route({
   path: "/api/voice/synthesize",
   method: "OPTIONS",
-  handler: httpAction(async (_ctx, _request) => {
+  handler: httpAction(async (_ctx, request) => {
+    const origin = request.headers.get("Origin");
     return new Response(null, {
       status: 204,
-      headers: corsHeaders(),
+      headers: corsHeaders(origin),
     });
   }),
 });
@@ -373,13 +404,14 @@ http.route({
   path: "/api/voice/synthesize",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
+    const origin = request.headers.get("Origin");
     let body: Record<string, unknown>;
     try {
       body = await request.json();
     } catch {
       return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
         status: 400,
-        headers: { ...corsHeaders(), "Content-Type": "application/json" },
+        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
       });
     }
 
@@ -393,7 +425,7 @@ http.route({
         JSON.stringify({ error: "Missing required field: text" }),
         {
           status: 400,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
         }
       );
     }
@@ -403,7 +435,7 @@ http.route({
         JSON.stringify({ error: "Text exceeds maximum length of 5000 characters" }),
         {
           status: 400,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
         }
       );
     }
@@ -422,7 +454,7 @@ http.route({
           JSON.stringify({ error: "ElevenLabs API key not configured" }),
           {
             status: 500,
-            headers: { ...corsHeaders(), "Content-Type": "application/json" },
+            headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
           }
         );
       }
@@ -438,7 +470,7 @@ http.route({
       return new Response(audioBuffer, {
         status: 200,
         headers: {
-          ...corsHeaders(),
+          ...corsHeaders(origin),
           "Content-Type": "audio/mpeg",
           "Content-Disposition": `attachment; filename="speech-${Date.now()}.mp3"`,
         },
@@ -449,7 +481,7 @@ http.route({
         JSON.stringify({ error: `TTS synthesis failed: ${errorMessage}` }),
         {
           status: 500,
-          headers: { ...corsHeaders(), "Content-Type": "application/json" },
+          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
         }
       );
     }
