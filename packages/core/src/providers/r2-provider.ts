@@ -1,31 +1,10 @@
 /**
  * @module providers/r2-provider
- *
- * Cloudflare R2 WorkspaceProvider implementation.
- *
- * Uses native `fetch()` with AWS SigV4 signing via `./s3-signer.ts`.
- * No external SDK dependencies required. Runtime-agnostic (Workers, Node, Deno, Bun).
- *
- * @deprecated The SigV4 signing layer will be replaced by native Cloudflare Workers
- * R2 bindings (`env.BUCKET.get()`) in Phase 3 (Sprint 3.2, AGE-17).
- *
- * @example
- * ```typescript
- * import { R2WorkspaceProvider } from '@agentforge-ai/core/providers/r2-provider';
- *
- * const provider = new R2WorkspaceProvider({
- *   bucket: 'my-agent-files',
- *   endpoint: process.env.R2_ENDPOINT,
- *   accessKeyId: process.env.R2_ACCESS_KEY_ID,
- *   secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
- * });
- * ```
+ * R2/S3-compatible workspace provider using native fetch + SigV4.
+ * No AWS SDK — uses Web Crypto API per project conventions (Lesson 11/12).
  */
 
-import { signRequest, createPresignedUrl } from './s3-signer.js';
 import type { WorkspaceProvider } from '../workspace.js';
-
-const encoder = new TextEncoder();
 
 export interface R2ProviderConfig {
   bucket: string;
@@ -39,277 +18,132 @@ export interface LifecycleRule {
   id: string;
   prefix?: string;
   expirationDays?: number;
-  status?: 'Enabled' | 'Disabled';
+}
+
+async function hmacSha256(key: ArrayBuffer, data: string): Promise<ArrayBuffer> {
+  const cryptoKey = await crypto.subtle.importKey(
+    'raw', key, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
+  );
+  return crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(data));
+}
+
+async function sha256Hex(data: string): Promise<string> {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(data));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function buildSigV4Headers(
+  method: string,
+  url: URL,
+  body: string | Uint8Array,
+  region: string,
+  accessKeyId: string,
+  secretAccessKey: string
+): Promise<Record<string, string>> {
+  const now = new Date();
+  const amzDate = now.toISOString().replace(/[:\-]|\.\d{3}/g, '').slice(0, 15) + 'Z';
+  const dateStamp = amzDate.slice(0, 8);
+  const bodyStr = typeof body === 'string' ? body : new TextDecoder().decode(body);
+  const payloadHash = await sha256Hex(bodyStr);
+
+  const headers: Record<string, string> = {
+    host: url.host,
+    'x-amz-date': amzDate,
+    'x-amz-content-sha256': payloadHash,
+  };
+
+  const signedHeaders = Object.keys(headers).sort().join(';');
+  const canonicalHeaders = Object.entries(headers).sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}:${v.trim()}`).join('\n') + '\n';
+  const canonicalRequest = [method, url.pathname, url.search.slice(1),
+    canonicalHeaders, signedHeaders, payloadHash].join('\n');
+
+  const credentialScope = `${dateStamp}/${region}/s3/aws4_request`;
+  const stringToSign = ['AWS4-HMAC-SHA256', amzDate, credentialScope,
+    await sha256Hex(canonicalRequest)].join('\n');
+
+  const encoder = new TextEncoder();
+  let sigKey: ArrayBuffer = encoder.encode(`AWS4${secretAccessKey}`).buffer as ArrayBuffer;
+  for (const part of [dateStamp, region, 's3', 'aws4_request']) {
+    sigKey = await hmacSha256(sigKey, part);
+  }
+  const signature = Array.from(new Uint8Array(await hmacSha256(sigKey, stringToSign)))
+    .map(b => b.toString(16).padStart(2, '0')).join('');
+
+  return {
+    ...headers,
+    Authorization: `AWS4-HMAC-SHA256 Credential=${accessKeyId}/${credentialScope},SignedHeaders=${signedHeaders},Signature=${signature}`,
+  };
 }
 
 export class R2WorkspaceProvider implements WorkspaceProvider {
-  private config: R2ProviderConfig;
+  private config: Required<R2ProviderConfig>;
 
   constructor(config: R2ProviderConfig) {
-    this.config = config;
-  }
-
-  /** Builds the full HTTPS URL for a given object key. */
-  private objectUrl(key: string): string {
-    const endpoint =
-      this.config.endpoint ?? `https://s3.${this.config.region ?? 'auto'}.amazonaws.com`;
-    const base = endpoint.replace(/\/$/, '');
-    const encodedKey = key
-      .split('/')
-      .map(encodeURIComponent)
-      .join('/');
-    return `${base}/${this.config.bucket}/${encodedKey}`;
-  }
-
-  /** Builds the bucket-level URL (for list, lifecycle, etc.) */
-  private bucketUrl(): string {
-    const endpoint =
-      this.config.endpoint ?? `https://s3.${this.config.region ?? 'auto'}.amazonaws.com`;
-    return endpoint.replace(/\/$/, '') + `/${this.config.bucket}`;
-  }
-
-  private get accessKeyId(): string {
-    return this.config.accessKeyId ?? '';
-  }
-
-  private get secretAccessKey(): string {
-    return this.config.secretAccessKey ?? '';
-  }
-
-  private get region(): string {
-    return this.config.region ?? 'auto';
-  }
-
-  /**
-   * Builds signed fetch options for a request.
-   * Uses Web Crypto API (async) for SigV4 signing.
-   */
-  private async buildSignedRequest(
-    method: string,
-    url: string,
-    body?: string | Uint8Array,
-    extraHeaders?: Record<string, string>,
-  ): Promise<{ url: string; init: RequestInit }> {
-    const signed = await signRequest({
-      method,
-      url,
-      body,
-      headers: extraHeaders,
-      accessKeyId: this.accessKeyId,
-      secretAccessKey: this.secretAccessKey,
-      region: this.region,
-    });
-
-    const headers: Record<string, string> = {
-      host: signed.host,
-      'x-amz-date': signed['x-amz-date'],
-      'x-amz-content-sha256': signed['x-amz-content-sha256'],
-      authorization: signed.authorization,
-      ...extraHeaders,
+    this.config = {
+      bucket: config.bucket,
+      region: config.region ?? 'auto',
+      endpoint: config.endpoint ?? `https://s3.${config.region ?? 'us-east-1'}.amazonaws.com`,
+      accessKeyId: config.accessKeyId ?? process.env.AWS_ACCESS_KEY_ID ?? '',
+      secretAccessKey: config.secretAccessKey ?? process.env.AWS_SECRET_ACCESS_KEY ?? '',
     };
+  }
 
-    const init: RequestInit = { method, headers };
-    if (body !== undefined) {
-      init.body = typeof body === 'string' ? body : body.buffer as ArrayBuffer;
-    }
-
-    return { url, init };
+  private objectUrl(key: string): URL {
+    return new URL(`/${this.config.bucket}/${key}`, this.config.endpoint);
   }
 
   async read(path: string): Promise<string> {
     const url = this.objectUrl(path);
-    const { url: reqUrl, init } = await this.buildSignedRequest('GET', url);
-
-    const response = await fetch(reqUrl, init);
-    if (!response.ok) {
-      throw new Error(
-        `[R2WorkspaceProvider] Failed to read "${path}": HTTP ${response.status} ${response.statusText}`,
-      );
-    }
-
-    return response.text();
+    const headers = await buildSigV4Headers(
+      'GET', url, '', this.config.region, this.config.accessKeyId, this.config.secretAccessKey
+    );
+    const res = await fetch(url.toString(), { headers });
+    if (!res.ok) throw new Error(`R2 read failed: ${res.status} ${path}`);
+    return res.text();
   }
 
-  async write(path: string, content: string | Uint8Array): Promise<void> {
+  async write(path: string, content: string | Buffer): Promise<void> {
     const url = this.objectUrl(path);
-    const body = typeof content === 'string' ? content : content;
-    const { url: reqUrl, init } = await this.buildSignedRequest('PUT', url, body);
-
-    const response = await fetch(reqUrl, init);
-    if (!response.ok) {
-      throw new Error(
-        `[R2WorkspaceProvider] Failed to write "${path}": HTTP ${response.status} ${response.statusText}`,
-      );
-    }
+    const body = typeof content === 'string' ? content : new TextDecoder().decode(content);
+    const headers = await buildSigV4Headers(
+      'PUT', url, body, this.config.region, this.config.accessKeyId, this.config.secretAccessKey
+    );
+    const res = await fetch(url.toString(), { method: 'PUT', headers, body });
+    if (!res.ok) throw new Error(`R2 write failed: ${res.status} ${path}`);
   }
 
   async list(prefix?: string): Promise<string[]> {
+    const url = new URL(`/${this.config.bucket}`, this.config.endpoint);
+    url.searchParams.set('list-type', '2');
+    if (prefix) url.searchParams.set('prefix', prefix);
+    const headers = await buildSigV4Headers(
+      'GET', url, '', this.config.region, this.config.accessKeyId, this.config.secretAccessKey
+    );
+    const res = await fetch(url.toString(), { headers });
+    if (!res.ok) throw new Error(`R2 list failed: ${res.status}`);
+    const xml = await res.text();
     const keys: string[] = [];
-    let continuationToken: string | undefined;
-
-    do {
-      const baseUrl = this.bucketUrl();
-      const params = new URLSearchParams({ 'list-type': '2' });
-      if (prefix) params.set('prefix', prefix);
-      if (continuationToken) params.set('continuation-token', continuationToken);
-
-      const url = `${baseUrl}?${params.toString()}`;
-      const { url: reqUrl, init } = await this.buildSignedRequest('GET', url);
-
-      const response = await fetch(reqUrl, init);
-      if (!response.ok) {
-        throw new Error(
-          `[R2WorkspaceProvider] Failed to list objects: HTTP ${response.status} ${response.statusText}`,
-        );
-      }
-
-      const xml = await response.text();
-
-      // Extract all <Key> elements
-      const keyMatches = xml.matchAll(/<Key>([^<]*)<\/Key>/g);
-      for (const match of keyMatches) {
-        keys.push(match[1]);
-      }
-
-      // Check pagination
-      const isTruncatedMatch = xml.match(/<IsTruncated>([^<]*)<\/IsTruncated>/);
-      const isTruncated = isTruncatedMatch?.[1]?.toLowerCase() === 'true';
-
-      if (isTruncated) {
-        const tokenMatch = xml.match(
-          /<NextContinuationToken>([^<]*)<\/NextContinuationToken>/,
-        );
-        continuationToken = tokenMatch?.[1];
-      } else {
-        continuationToken = undefined;
-      }
-    } while (continuationToken);
-
+    const matches = xml.matchAll(/<Key>([^<]+)<\/Key>/g);
+    for (const m of matches) keys.push(m[1]);
     return keys;
   }
 
   async delete(path: string): Promise<void> {
     const url = this.objectUrl(path);
-    const { url: reqUrl, init } = await this.buildSignedRequest('DELETE', url);
-
-    const response = await fetch(reqUrl, init);
-    if (response.status !== 204 && response.status !== 200) {
-      throw new Error(
-        `[R2WorkspaceProvider] Failed to delete "${path}": HTTP ${response.status} ${response.statusText}`,
-      );
-    }
+    const headers = await buildSigV4Headers(
+      'DELETE', url, '', this.config.region, this.config.accessKeyId, this.config.secretAccessKey
+    );
+    const res = await fetch(url.toString(), { method: 'DELETE', headers });
+    if (!res.ok && res.status !== 204) throw new Error(`R2 delete failed: ${res.status} ${path}`);
   }
 
   async exists(path: string): Promise<boolean> {
-    const result = await this.stat(path);
-    return result !== null;
-  }
-
-  async stat(
-    path: string,
-  ): Promise<{ size: number; modified: Date; isDirectory: boolean } | null> {
     const url = this.objectUrl(path);
-    const { url: reqUrl, init } = await this.buildSignedRequest('HEAD', url);
-
-    const response = await fetch(reqUrl, init);
-
-    if (response.status === 404) {
-      return null;
-    }
-
-    if (!response.ok) {
-      throw new Error(
-        `[R2WorkspaceProvider] Failed to stat "${path}": HTTP ${response.status} ${response.statusText}`,
-      );
-    }
-
-    const contentLength = response.headers.get('content-length');
-    const lastModified = response.headers.get('last-modified');
-
-    return {
-      size: contentLength ? parseInt(contentLength, 10) : 0,
-      modified: lastModified ? new Date(lastModified) : new Date(),
-      isDirectory: false,
-    };
-  }
-
-  /**
-   * Generates a pre-signed URL for direct upload or download from R2.
-   *
-   * @param path - Object key in the bucket.
-   * @param expiresIn - Expiry in seconds (default: 3600).
-   */
-  async getPresignedUrl(path: string, expiresIn = 3600): Promise<string> {
-    const url = this.objectUrl(path);
-    return createPresignedUrl({
-      method: 'GET',
-      url,
-      expiresIn,
-      accessKeyId: this.accessKeyId,
-      secretAccessKey: this.secretAccessKey,
-      region: this.region,
-    });
-  }
-
-  /**
-   * Sets lifecycle rules on the bucket for automatic object expiration.
-   */
-  async setBucketLifecycle(rules: LifecycleRule[]): Promise<void> {
-    const xmlBody = buildLifecycleXml(rules);
-    const url = `${this.bucketUrl()}?lifecycle`;
-
-    const { url: reqUrl, init } = await this.buildSignedRequest(
-      'PUT',
-      url,
-      encoder.encode(xmlBody),
-      { 'content-type': 'application/xml' },
+    const headers = await buildSigV4Headers(
+      'HEAD', url, '', this.config.region, this.config.accessKeyId, this.config.secretAccessKey
     );
-
-    const response = await fetch(reqUrl, init);
-    if (!response.ok) {
-      throw new Error(
-        `[R2WorkspaceProvider] Failed to set bucket lifecycle: HTTP ${response.status} ${response.statusText}`,
-      );
-    }
+    const res = await fetch(url.toString(), { method: 'HEAD', headers });
+    return res.ok;
   }
-}
-
-/** Builds the XML body for a PutBucketLifecycleConfiguration request. */
-function buildLifecycleXml(rules: LifecycleRule[]): string {
-  const rulesXml = rules.map((rule) => {
-    const filter =
-      rule.prefix !== undefined
-        ? `<Filter><Prefix>${escapeXml(rule.prefix)}</Prefix></Filter>`
-        : `<Filter><Prefix></Prefix></Filter>`;
-
-    const expiration =
-      rule.expirationDays !== undefined
-        ? `<Expiration><Days>${rule.expirationDays}</Days></Expiration>`
-        : '';
-
-    return [
-      '<Rule>',
-      `<ID>${escapeXml(rule.id)}</ID>`,
-      filter,
-      `<Status>${rule.status ?? 'Enabled'}</Status>`,
-      expiration,
-      '</Rule>',
-    ].join('');
-  });
-
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<LifecycleConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">',
-    ...rulesXml,
-    '</LifecycleConfiguration>',
-  ].join('');
-}
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 }

@@ -7,6 +7,8 @@
 
 import { LocalWorkspaceProvider } from '../workspace.js';
 import { R2WorkspaceProvider } from '../providers/r2-provider.js';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// Re-export from parent for convenience (actual implementation is in workspace.ts)
 
 export interface WorkspaceConfig {
   /** Storage backend type. Defaults to AGENTFORGE_STORAGE env var or 'local' */
