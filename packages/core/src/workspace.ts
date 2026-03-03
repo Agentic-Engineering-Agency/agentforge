@@ -7,6 +7,22 @@
 import { readFile, writeFile, readdir, rm, access, mkdir } from 'node:fs/promises';
 import { join, dirname, resolve } from 'node:path';
 
+export interface LocalWorkspaceConfig {
+  type: 'local';
+  basePath?: string;
+}
+
+export interface CloudWorkspaceConfig {
+  type: 's3' | 'r2';
+  bucket: string;
+  region?: string;
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+}
+
+export type WorkspaceToolConfig = LocalWorkspaceConfig | CloudWorkspaceConfig;
+
 export interface WorkspaceProvider {
   read(path: string): Promise<string>;
   write(path: string, content: string | Buffer): Promise<void>;
