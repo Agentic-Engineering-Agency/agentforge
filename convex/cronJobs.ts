@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, action } from "./_generated/server";
+import { mutation, query, action, internalMutation, internalAction } from "./_generated/server";
+import { api, internal } from "./_generated/api";
 
 /**
  * Parse a cron expression and return the next run timestamp (ms) after `fromMs`.
@@ -49,12 +50,20 @@ function getNextCronRun(cronExpression: string, fromMs: number): number {
     const month = candidate.getUTCMonth() + 1; // 1-12
     const dow = candidate.getUTCDay(); // 0=Sunday
 
+    // Standard cron: when both dom and dow are restricted, treat as OR (POSIX)
+    const domMatches = matchesField(domField, dom, 1, 31);
+    const dowMatches = matchesField(dowField, dow, 0, 6);
+    const domRestricted = domField !== "*";
+    const dowRestricted = dowField !== "*";
+    const dayMatches = (domRestricted && dowRestricted)
+      ? (domMatches || dowMatches)
+      : (domMatches && dowMatches);
+
     if (
       matchesField(minuteField, minute, 0, 59) &&
       matchesField(hourField, hour, 0, 23) &&
-      matchesField(domField, dom, 1, 31) &&
-      matchesField(monthField, month, 1, 12) &&
-      matchesField(dowField, dow, 0, 6)
+      dayMatches &&
+      matchesField(monthField, month, 1, 12)
     ) {
       return candidate.getTime();
     }
@@ -297,14 +306,159 @@ export const getRunHistory = query({
       .query("cronJobRuns")
       .withIndex("byCronJobId", (q) => q.eq("cronJobId", args.cronJobId!))
       .collect();
-    
+
     // Sort by startedAt descending
     runs.sort((a, b) => b.startedAt - a.startedAt);
-    
+
     if (args.limit) {
       return runs.slice(0, args.limit);
     }
-    
+
     return runs;
+  },
+});
+
+// ============================================================
+// Internal Cron Execution Engine
+// ============================================================
+
+/**
+ * Internal mutation: Execute all due cron jobs.
+ * Called by the cron scheduler every minute.
+ */
+export const executeDueJobs = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    // Get all jobs that are due to run
+    const dueJobs = await ctx.runQuery(api.cronJobs.getDueJobs, {});
+
+    if (dueJobs.length === 0) {
+      return { executed: 0, jobs: [] };
+    }
+
+    const jobIds: string[] = [];
+
+    // For each due job, schedule its execution
+    for (const job of dueJobs) {
+      try {
+        // Create a run record
+        const runId = await ctx.runMutation(api.cronJobs.recordRun, {
+          cronJobId: job._id,
+          status: "running",
+        });
+
+        jobIds.push(job._id);
+
+        // Advance nextRun immediately to prevent double-scheduling on long jobs
+        const nextRun = getNextCronRun(job.schedule, Date.now());
+        await ctx.db.patch(job._id, { nextRun });
+
+        // Schedule the actual job execution immediately
+        ctx.scheduler.runAfter(0, internal.cronJobs.executeJob, {
+          jobId: job._id,
+          runId,
+        });
+      } catch (error) {
+        console.error(`[cron.executeDueJobs] Failed to schedule job ${job._id}:`, error);
+      }
+    }
+
+    return { executed: jobIds.length, jobs: jobIds };
+  },
+});
+
+/**
+ * Internal action: Execute a single cron job.
+ * This is where the actual agent execution happens.
+ */
+export const executeJob = internalAction({
+  args: {
+    jobId: v.id("cronJobs"),
+    runId: v.id("cronJobRuns"),
+  },
+  handler: async (ctx, args) => {
+    // Get the cron job definition
+    const job = await ctx.runQuery(api.cronJobs.get, { id: args.jobId });
+    if (!job) {
+      throw new Error(`Cron job not found: ${args.jobId}`);
+    }
+
+    let output: string | undefined;
+    let error: string | undefined;
+    let status: "success" | "failed" = "success";
+
+    try {
+      // Import Agent class
+      const { Agent: AgentClass } = await import("./lib/agent");
+      const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
+
+      // Get the agent configuration
+      const agent = await ctx.runQuery(api.agents.get, { id: job.agentId });
+      if (!agent) {
+        throw new Error(`Agent not found: ${job.agentId}`);
+      }
+
+      // Get API key for the provider
+      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
+        provider: agent.provider || "openrouter",
+      });
+
+      if (!apiKeyData || !apiKeyData.apiKey) {
+        throw new Error(`No API key found for provider: ${agent.provider}`);
+      }
+
+      // Create agent instance
+      const mastraAgent = new AgentClass({
+        id: job.agentId,
+        name: agent.name,
+        instructions: agent.instructions || "You are a helpful AI assistant.",
+        model: {
+          providerId: agent.provider || "openrouter",
+          modelId: getBaseModelId(agent.provider || "openrouter", agent.model || "gpt-4o-mini"),
+          apiKey: apiKeyData.apiKey,
+          url: getProviderBaseUrl(agent.provider || "openrouter"),
+        },
+        temperature: agent.temperature,
+        maxTokens: agent.maxTokens,
+      });
+
+      // Execute the agent with the cron job prompt
+      let fullResponse = "";
+      for await (const chunk of mastraAgent.stream(job.prompt || "Execute scheduled task.")) {
+        fullResponse += chunk.content;
+      }
+
+      output = fullResponse;
+      status = "success";
+    } catch (err) {
+      error = err instanceof Error ? err.message : String(err);
+      status = "failed";
+      console.error(`[cron.executeJob] Job ${args.jobId} failed:`, error);
+    }
+
+    // Update the existing run record (avoids creating a duplicate row)
+    await ctx.runMutation(api.cronJobs.updateRun, {
+      runId: args.runId,
+      status,
+      ...(output && { output }),
+      ...(error && { error }),
+    });
+
+    // Calculate the next run time for this cron job
+    const now = Date.now();
+    const nextRun = getNextCronRun(job.schedule, now);
+
+    await ctx.runMutation(api.cronJobs.updateLastRun, {
+      id: args.jobId,
+      nextRun,
+    });
+
+    return {
+      success: status === "success",
+      jobId: args.jobId,
+      runId: args.runId,
+      output,
+      error,
+    };
   },
 });
