@@ -28,7 +28,7 @@
  * ```
  */
 
-import { execSync, type ExecSyncOptions } from 'child_process';
+import { execFileSync, type ExecFileSyncOptions } from 'child_process';
 import { existsSync, readdirSync, statSync } from 'fs';
 import { join, resolve } from 'path';
 
@@ -618,20 +618,77 @@ export class GitTool {
   }
 
   /**
+   * Parse a command string into an array of arguments.
+   * Handles quoted strings (both single and double quotes) and escaped quotes.
+   */
+  private parseArgs(command: string): string[] {
+    const args: string[] = [];
+    let current = '';
+    let inQuote = false;
+    let quoteChar: '"' | "'" | null = null;
+    let i = 0;
+
+    while (i < command.length) {
+      const ch = command[i];
+      const nextCh = command[i + 1];
+
+      if (inQuote) {
+        // Inside a quoted string
+        if (ch === quoteChar) {
+          if (nextCh === quoteChar) {
+            // Escaped quote ("")
+            current += ch;
+            i += 2;
+            continue;
+          } else {
+            // End of quoted string
+            inQuote = false;
+            quoteChar = null;
+          }
+        } else {
+          current += ch;
+        }
+      } else {
+        // Outside quotes
+        if (ch === '"' || ch === "'") {
+          inQuote = true;
+          quoteChar = ch;
+        } else if (ch === ' ') {
+          if (current) {
+            args.push(current);
+            current = '';
+          }
+        } else {
+          current += ch;
+        }
+      }
+      i++;
+    }
+
+    // Add the last argument if present
+    if (current) {
+      args.push(current);
+    }
+
+    return args;
+  }
+
+  /**
    * Execute a raw git command and return stdout.
    */
   exec(command: string, cwd?: string): string {
-    const options: ExecSyncOptions = {
+    const args = this.parseArgs(command);
+    const options: ExecFileSyncOptions = {
       cwd: cwd || this.currentRepoPath || this.basePath,
       timeout: this.timeout,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
+      encoding: 'utf-8' as BufferEncoding,
+      // execFileSync doesn't use shell by default - safer!
     };
 
     try {
-      return execSync(`${this.gitBinary} ${command}`, options) as string;
+      return execFileSync(this.gitBinary, args, options) as string;
     } catch (error: unknown) {
-      const err = error as { stderr?: string; message?: string };
+      const err = error as { stderr?: string | Buffer; status?: number; message?: string };
       const stderr = err.stderr?.toString().trim() || err.message || 'Unknown git error';
       throw new GitToolError(`git ${command.split(' ')[0]} failed: ${stderr}`, command);
     }
