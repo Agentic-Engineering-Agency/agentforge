@@ -32,13 +32,67 @@ export const tools = [{
     category: 'utility',
     complexity: 'simple',
     template: `import { z } from 'zod';
+
+// Safe recursive descent parser - no eval/Function
+function safeEvaluate(expr: string): number {
+  if (!/^[0-9+\\-*/().%\\s]+$/.test(expr)) {
+    throw new Error('Invalid characters');
+  }
+  let pos = 0;
+  const peek = () => expr[pos] ?? '';
+  const consume = () => expr[pos++];
+  const skipWs = () => { while (peek() === ' ') consume(); };
+
+  function parseNumber(): number {
+    skipWs();
+    let num = '';
+    if (peek() === '(') { consume(); const v = parseExpr(); skipWs(); consume(); return v; }
+    while (/[0-9.]/.test(peek())) num += consume();
+    return parseFloat(num);
+  }
+
+  function parseFactor(): number {
+    skipWs();
+    if (peek() === '-') { consume(); return -parseFactor(); }
+    return parseNumber();
+  }
+
+  function parseTerm(): number {
+    let left = parseFactor();
+    skipWs();
+    while (peek() === '*' || peek() === '/' || peek() === '%') {
+      const op = consume();
+      skipWs();
+      const right = parseFactor();
+      left = op === '*' ? left * right : op === '/' ? left / right : left % right;
+      skipWs();
+    }
+    return left;
+  }
+
+  function parseExpr(): number {
+    let left = parseTerm();
+    skipWs();
+    while (peek() === '+' || peek() === '-') {
+      const op = consume();
+      skipWs();
+      const right = parseTerm();
+      left = op === '+' ? left + right : left - right;
+      skipWs();
+    }
+    return left;
+  }
+
+  return parseExpr();
+}
+
 export const tools = [{
   name: 'calculate',
   description: 'Evaluate a mathematical expression',
   inputSchema: z.object({ expression: z.string().describe('Math expression, e.g. "2 + 2 * 3"') }),
   outputSchema: z.object({ result: z.number(), expression: z.string() }),
   handler: async (input) => {
-    const result = Function('"use strict"; return (' + input.expression + ')')();
+    const result = safeEvaluate(input.expression);
     return { result: Number(result), expression: input.expression };
   },
 }];`,
