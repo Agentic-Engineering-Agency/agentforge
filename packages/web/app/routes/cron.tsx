@@ -3,7 +3,7 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useState } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
+import { Id } from '../../../../convex/_generated/dataModel';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
@@ -32,7 +32,7 @@ type CronJob = {
 
 function CronPageComponent() {
   // Convex hooks
-  const jobsQuery = useQuery(api.cronJobs.list, {});
+  const jobsQuery = useQuery(api.cronJobs.list, {}) as CronJob[] | undefined;
   const jobs = jobsQuery ?? [];
   const createJob = useMutation(api.cronJobs.create);
   const updateJob = useMutation(api.cronJobs.update);

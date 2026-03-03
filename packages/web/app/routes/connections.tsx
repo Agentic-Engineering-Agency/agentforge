@@ -4,11 +4,18 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
+import { Id } from '../../../../convex/_generated/dataModel';
 import { Plug, Plus, RefreshCw, CheckCircle, XCircle, Trash2, MoreVertical, Edit, Search } from 'lucide-react';
 
 // --- Types ---
 type ConnectionStatus = 'connected' | 'disconnected' | 'testing';
+
+type ConnectionFormData = {
+    _id?: Id<'mcpConnections'>;
+    name: string;
+    serverUrl: string;
+    protocol: string;
+};
 
 interface Connection {
   _id: Id<'mcpConnections'>;
@@ -127,7 +134,7 @@ function ConnectionCard({ connection, onTest, onEdit, onDelete, onToggle, isTest
 function ConnectionFormModal({ open, onClose, onSave, connection: initialConnection }: {
     open: boolean;
     onClose: () => void;
-    onSave: (connection: Omit<Connection, '_id'> & { _id?: Id<'mcpConnections'> }) => void;
+    onSave: (connection: ConnectionFormData) => void;
     connection: Connection | null;
 }) {
     const [name, setName] = useState('');
@@ -195,7 +202,7 @@ export const Route = createFileRoute('/connections')({ component: ConnectionsPag
 
 function ConnectionsPage() {
     // --- Convex Hooks ---
-    const connectionsQuery = useQuery(api.mcpConnections.list, {});
+    const connectionsQuery = useQuery(api.mcpConnections.list, {}) as Connection[] | undefined;
     const connections = connectionsQuery ?? [];
     const createConnection = useMutation(api.mcpConnections.create);
     const updateConnection = useMutation(api.mcpConnections.update);
@@ -238,7 +245,7 @@ function ConnectionsPage() {
         await deleteConnection({ id });
     };
 
-    const handleSave = async (data: Omit<Connection, '_id'> & { _id?: Id<'mcpConnections'> }) => {
+    const handleSave = async (data: ConnectionFormData) => {
         if (data._id) {
             const { _id, protocol, ...updatePayload } = data;
             await updateConnection({ id: _id!, ...updatePayload });

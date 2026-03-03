@@ -3,7 +3,7 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
-import { Id } from '../../../convex/_generated/dataModel';
+import { Id } from '../../../../convex/_generated/dataModel';
 import { Sparkles, Download, Trash2, Plus, Search, Filter, X } from 'lucide-react';
 
 // --- Types ---
@@ -32,7 +32,7 @@ const CATEGORIES: SkillCategory[] = ['Tools', 'Knowledge', 'Workflows', 'Integra
 
 // --- Components ---
 
-function CreateSkillDialog({ open, onOpenChange, onCreateSkill }: { open: boolean; onOpenChange: (open: boolean) => void; onCreateSkill: (skill: Omit<Skill, '_id' | 'isInstalled' | 'createdAt' | 'updatedAt'>) => void; }) {
+function CreateSkillDialog({ open, onOpenChange, onCreateSkill }: { open: boolean; onOpenChange: (open: boolean) => void; onCreateSkill: (skill: Omit<Skill, '_id' | 'isInstalled' | 'isEnabled' | 'createdAt' | 'updatedAt'>) => void; }) {
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [description, setDescription] = useState('');
@@ -132,7 +132,7 @@ export const Route = createFileRoute('/skills')({ component: SkillsPage });
 
 function SkillsPage() {
   // Convex hooks
-  const skillsQuery = useQuery(api.skills.list, {});
+  const skillsQuery = useQuery(api.skills.list, {}) as Skill[] | undefined;
   const skills = skillsQuery ?? [];
   const isLoading = skillsQuery === undefined;
   const createSkillMutation = useMutation(api.skills.create);
@@ -151,7 +151,7 @@ function SkillsPage() {
     );
   };
 
-  const handleCreateSkill = async (newSkillData: Omit<Skill, '_id' | 'isInstalled' | 'createdAt' | 'updatedAt'>) => {
+  const handleCreateSkill = async (newSkillData: Omit<Skill, '_id' | 'isInstalled' | 'isEnabled' | 'createdAt' | 'updatedAt'>) => {
     await createSkillMutation(newSkillData);
   };
 
