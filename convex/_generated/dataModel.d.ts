@@ -171,6 +171,7 @@ export type DataModel = {
       createdAt: number;
       encryptedKey: string;
       isActive: boolean;
+      iv: string;
       keyName: string;
       lastUsedAt?: number;
       provider: string;
@@ -184,6 +185,7 @@ export type DataModel = {
       | "createdAt"
       | "encryptedKey"
       | "isActive"
+      | "iv"
       | "keyName"
       | "lastUsedAt"
       | "provider"

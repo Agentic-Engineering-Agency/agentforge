@@ -1,168 +1,234 @@
+"use node";
+
 /**
  * Chat Actions for AgentForge
  *
- * This module provides the core chat execution pipeline:
+ * This module provides the core chat execution pipeline with multi-provider
+ * failover support:
  * 1. User sends a message → stored via mutation
- * 2. Convex action triggers LLM generation via Mastra Agent
- * 3. Assistant response stored back in Convex
- * 4. Real-time subscription updates the UI automatically
+ * 2. Convex action builds a failover chain from agent config
+ * 3. Primary provider is tried first; on failure, automatic failover to next
+ * 4. Assistant response stored back in Convex with provider/cost metadata
+ * 5. Real-time subscription updates the UI automatically
  *
- * LLM calls are delegated to mastraIntegration.generateResponse (Node.js runtime).
- * This file runs in the default Convex runtime and can contain queries,
- * mutations, and actions.
+ * NOTE: Queries and mutations are in chatMutations.ts (non-Node runtime).
+ * This file only contains actions that run in Node.js runtime.
+ *
+ * Supports: OpenRouter, OpenAI, Anthropic, Google Gemini, Custom.
+ * Failover is configured per-agent via `failoverModels` field or falls back
+ * to a global default chain.
  */
-import { action, mutation, query } from "./_generated/server";
+import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { api, internal } from "./_generated/api";
-import type { Id } from "./_generated/dataModel";
-
-// Explicit return type shared by sendMessage and startNewChat.
-// Required to break circular type inference when Convex actions in the same
-// file call each other through the generated `api` object (TS7022/TS7023).
-type UsageData = {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
-} | null;
-
-type SendMessageResult = {
-  success: boolean;
-  threadId: Id<"threads">;
-  response: string;
-  usage: UsageData;
-};
+import { api } from "./_generated/api";
+import { Agent } from "./lib/agent";
 
 // ============================================================
-// Queries
+// Default Failover Chain Configuration
 // ============================================================
 
 /**
- * Get the current chat state for a thread: messages + thread metadata.
+ * Global default failover chain used when an agent has no per-agent config.
+ * Priority: OpenRouter → OpenAI → Anthropic → Google Gemini
  */
-export const getThreadMessages = query({
-  args: { threadId: v.id("threads") },
-  handler: async (ctx, args) => {
-    const messages = await ctx.db
-      .query("messages")
-      .withIndex("byThread", (q) => q.eq("threadId", args.threadId))
-      .collect();
-    return messages;
-  },
-});
+const DEFAULT_FAILOVER_CHAIN = [
+  { provider: "openrouter", model: "openai/gpt-4o-mini" },
+  { provider: "openai", model: "gpt-4o-mini" },
+  { provider: "anthropic", model: "claude-3-5-haiku-20241022" },
+  { provider: "google", model: "gemini-2.0-flash" },
+];
 
 /**
- * List all threads for a user, ordered by most recent activity.
+ * Build a failover chain configuration from an agent record.
+ *
+ * If the agent has `failoverModels` configured, those are used as fallbacks
+ * after the primary model. Otherwise, the global default chain is used.
  */
-export const listThreads = query({
-  args: {
-    userId: v.optional(v.string()),
-    agentId: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    let threads;
-    if (args.agentId) {
-      threads = await ctx.db
-        .query("threads")
-        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
-        .collect();
-    } else if (args.userId) {
-      threads = await ctx.db
-        .query("threads")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
-        .collect();
-    } else {
-      threads = await ctx.db.query("threads").collect();
+function buildFailoverChain(agent: {
+  provider?: string;
+  model?: string;
+  failoverModels?: Array<{ provider: string; model: string }>;
+}): Array<{ provider: string; model: string }> {
+  const chain: Array<{ provider: string; model: string }> = [];
+
+  // Primary model
+  chain.push({
+    provider: agent.provider || "openrouter",
+    model: agent.model || "openai/gpt-4o-mini",
+  });
+
+  // Agent-specific failover models
+  if (agent.failoverModels && agent.failoverModels.length > 0) {
+    for (const fm of agent.failoverModels) {
+      // Skip if same as primary
+      if (fm.provider === chain[0].provider && fm.model === chain[0].model) continue;
+      chain.push(fm);
     }
-    // Sort by most recently updated
-    return threads.sort((a, b) => b.updatedAt - a.updatedAt);
-  },
-});
+  } else {
+    // Use global defaults (skip any that match the primary)
+    for (const dfm of DEFAULT_FAILOVER_CHAIN) {
+      if (dfm.provider === chain[0].provider && dfm.model === chain[0].model) continue;
+      chain.push(dfm);
+    }
+  }
+
+  return chain;
+}
 
 // ============================================================
-// Mutations
+// Model Resolution with Failover
 // ============================================================
 
 /**
- * Create a new chat thread for an agent.
+ * Classify an error for failover decision-making.
  */
-export const createThread = mutation({
-  args: {
-    agentId: v.string(),
-    name: v.optional(v.string()),
-    userId: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const threadId = await ctx.db.insert("threads", {
-      name: args.name || "New Chat",
-      agentId: args.agentId,
-      userId: args.userId,
-      createdAt: now,
-      updatedAt: now,
-    });
-    return threadId;
-  },
-});
+function classifyError(error: unknown): "rate_limit" | "server_error" | "timeout" | "network_error" | "auth_error" | "unknown" {
+  if (error instanceof Error) {
+    const msg = error.message.toLowerCase();
+    const name = error.name.toLowerCase();
+
+    if (msg.includes("429") || msg.includes("rate limit") || msg.includes("too many requests") || msg.includes("quota exceeded")) {
+      return "rate_limit";
+    }
+    if (msg.includes("500") || msg.includes("502") || msg.includes("503") || msg.includes("504") || msg.includes("internal server error") || msg.includes("bad gateway") || msg.includes("service unavailable")) {
+      return "server_error";
+    }
+    if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("econnreset") || name.includes("timeout") || name === "aborterror") {
+      return "timeout";
+    }
+    if (msg.includes("enotfound") || msg.includes("econnrefused") || msg.includes("network") || msg.includes("dns") || msg.includes("fetch failed")) {
+      return "network_error";
+    }
+    if (msg.includes("401") || msg.includes("403") || msg.includes("unauthorized") || msg.includes("forbidden") || msg.includes("invalid api key")) {
+      return "auth_error";
+    }
+  }
+  return "unknown";
+}
 
 /**
- * Store a user message in a thread (called before triggering LLM).
- * AGE-144: Supports optional fileIds for file context.
+ * Determine if an error should trigger failover to the next provider.
  */
-export const addUserMessage = mutation({
-  args: {
-    threadId: v.id("threads"),
-    content: v.string(),
-    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
-  },
-  handler: async (ctx, args) => {
-    const messageId = await ctx.db.insert("messages", {
-      threadId: args.threadId,
-      role: "user",
-      content: args.content,
-      fileIds: args.fileIds,
-      createdAt: Date.now(),
-    });
-    await ctx.db.patch(args.threadId, { updatedAt: Date.now() });
-    return messageId;
-  },
-});
+function shouldFailover(category: string): boolean {
+  return ["rate_limit", "server_error", "timeout", "network_error", "auth_error", "unknown"].includes(category);
+}
 
 /**
- * Store an assistant message in a thread (called after LLM responds).
+ * Execute an LLM call with failover across multiple providers.
+ *
+ * Tries each model in the chain with retry + exponential backoff.
+ * Returns the response from the first successful provider.
  */
-export const addAssistantMessage = mutation({
-  args: {
-    threadId: v.id("threads"),
-    content: v.string(),
-    metadata: v.optional(v.any()),
-  },
-  handler: async (ctx, args) => {
-    const messageId = await ctx.db.insert("messages", {
-      threadId: args.threadId,
-      role: "assistant",
-      content: args.content,
-      metadata: args.metadata,
-      createdAt: Date.now(),
-    });
-    await ctx.db.patch(args.threadId, { updatedAt: Date.now() });
-    return messageId;
-  },
-});
+async function executeWithFailover(
+  chain: Array<{ provider: string; model: string }>,
+  systemPrompt: string,
+  messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
+  options: { temperature?: number; maxTokens?: number; maxRetries?: number; backoffMs?: number }
+): Promise<{
+  text: string;
+  usage: { promptTokens: number; completionTokens: number; totalTokens: number } | null;
+  provider: string;
+  model: string;
+  chainPosition: number;
+  totalAttempts: number;
+  didFailover: boolean;
+  failoverEvents: Array<{ from: string; to: string; error: string; category: string }>;
+  latencyMs: number;
+}> {
+  const startTime = Date.now();
+  const maxRetries = options.maxRetries ?? 2;
+  const baseBackoff = options.backoffMs ?? 1000;
+  let totalAttempts = 0;
+  const failoverEvents: Array<{ from: string; to: string; error: string; category: string }> = [];
+
+  for (let chainPos = 0; chainPos < chain.length; chainPos++) {
+    const { provider, model: modelId } = chain[chainPos];
+    const modelKey = `${provider}/${modelId}`;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      totalAttempts++;
+
+      try {
+        const mastraAgent = new Agent({
+          name: "agentforge-executor",
+          instructions: systemPrompt,
+          model: modelKey,
+        });
+
+        const result = await mastraAgent.generate(messages);
+
+        const usage = result.usage
+          ? {
+              promptTokens: result.usage.promptTokens || 0,
+              completionTokens: result.usage.completionTokens || 0,
+              totalTokens: (result.usage.promptTokens || 0) + (result.usage.completionTokens || 0),
+            }
+          : null;
+
+        return {
+          text: result.text,
+          usage,
+          provider,
+          model: modelId,
+          chainPosition: chainPos,
+          totalAttempts,
+          didFailover: chainPos > 0,
+          failoverEvents,
+          latencyMs: Date.now() - startTime,
+        };
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorCategory = classifyError(error);
+
+        console.error(`[chat.failover] ${modelKey} attempt ${attempt + 1} failed (${errorCategory}): ${errorMessage}`);
+
+        if (!shouldFailover(errorCategory)) {
+          throw error;
+        }
+
+        // Last retry for this model — log failover event
+        if (attempt === maxRetries) {
+          if (chainPos < chain.length - 1) {
+            const next = chain[chainPos + 1];
+            failoverEvents.push({
+              from: modelKey,
+              to: `${next.provider}/${next.model}`,
+              error: errorMessage,
+              category: errorCategory,
+            });
+            console.warn(`[chat.failover] Failing over from ${modelKey} → ${next.provider}/${next.model}`);
+          }
+          break;
+        }
+
+        // Exponential backoff
+        const backoff = Math.min(baseBackoff * Math.pow(2, attempt), 30_000);
+        await new Promise((resolve) => setTimeout(resolve, backoff));
+      }
+    }
+  }
+
+  throw new Error(
+    `All models in failover chain exhausted after ${totalAttempts} attempts. ` +
+    `Chain: ${chain.map((m) => `${m.provider}/${m.model}`).join(" → ")}`
+  );
+}
 
 // ============================================================
 // Actions (Node.js runtime — can call external APIs)
 // ============================================================
 
 /**
- * Send a message and get an AI response.
+ * Send a message and get an AI response with automatic failover.
  *
  * This is the main chat action. It:
  * 1. Looks up the agent config from the database
  * 2. Stores the user message
  * 3. Builds conversation history from the thread
- * 4. Calls the provider via Mastra Agent.generate()
- * 5. Stores the assistant response
- * 6. Records usage metrics
+ * 4. Builds a failover chain from agent config (or global defaults)
+ * 5. Executes with automatic failover across providers
+ * 6. Stores the assistant response with provider metadata
+ * 7. Records usage metrics including cost estimation
  *
  * The UI subscribes to `chat.getThreadMessages` which auto-updates
  * when new messages are inserted.
@@ -173,16 +239,15 @@ export const sendMessage = action({
     threadId: v.id("threads"),
     content: v.string(),
     userId: v.optional(v.string()),
-    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
   },
-  handler: async (ctx, args): Promise<SendMessageResult> => {
+  handler: async (ctx, args) => {
     // 1. Get agent configuration
     const agent = await ctx.runQuery(api.agents.get, { id: args.agentId });
     if (!agent) {
       throw new Error(`Agent "${args.agentId}" not found. Please create an agent first.`);
     }
 
-    // 1.5. Load project settings to apply overrides (if agent belongs to a project)
+    // 2. Load project settings to apply overrides (if agent belongs to a project)
     let projectSystemPrompt: string | undefined;
     let projectDefaultModel: string | undefined;
     let projectDefaultProvider: string | undefined;
@@ -204,29 +269,10 @@ export const sendMessage = action({
       }
     }
 
-    // 1.6. AGE-144: Fetch file content for context if files are attached
-    let fileContext = "";
-    if (args.fileIds && args.fileIds.length > 0) {
-      const fileContents: string[] = [];
-      for (const fileId of args.fileIds) {
-        const file = await ctx.runQuery(api.files.get, { id: fileId });
-        if (file && file.storageId) {
-          // For file context, we include metadata. Actual content fetching
-          // would require an internal HTTP call which we'll skip for now.
-          // The agent can be told about the file and can request specific content.
-          fileContents.push(`- File: ${file.name} (${file.mimeType}, ${file.size} bytes)`);
-        }
-      }
-      if (fileContents.length > 0) {
-        fileContext = `\n\n[Attached Files]\n${fileContents.join("\n")}\n`;
-      }
-    }
-
-    // 2. Store the user message with fileIds
+    // 2. Store the user message
     await ctx.runMutation(api.chat.addUserMessage, {
       threadId: args.threadId,
       content: args.content,
-      fileIds: args.fileIds,
     });
 
     // 3. Get conversation history for context
@@ -242,57 +288,137 @@ export const sendMessage = action({
         content: msg.content,
       }));
 
-    // AGE-144: If file context exists, append it to the current user message
-    if (fileContext && conversationMessages.length > 0) {
-      const lastMessage = conversationMessages[conversationMessages.length - 1];
-      if (lastMessage.role === "user") {
-        lastMessage.content += fileContext;
+    // 4. Build failover chain from agent config (with project overrides)
+    const agentWithOverrides = {
+      provider: projectDefaultProvider || agent.provider,
+      model: projectDefaultModel || agent.model,
+      failoverModels: agent.failoverModels,
+    };
+    const failoverChain = buildFailoverChain(agentWithOverrides as {
+      provider?: string;
+      model?: string;
+      failoverModels?: Array<{ provider: string; model: string }>;
+    });
+
+    // 5. Load installed skills and MCP connections for tool injection
+    let toolDescriptions: string[] = [];
+
+    // Load skills for this agent/project
+    if (agent.projectId) {
+      try {
+        const skills = await ctx.runQuery(api.skills.listInstalled, { projectId: agent.projectId });
+        for (const skill of skills as Array<{ name: string; displayName: string; description: string }>) {
+          toolDescriptions.push(`- ${skill.name}: ${skill.description}`);
+        }
+      } catch (e) {
+        console.debug("[chat.sendMessage] Skills loading skipped:", e);
+      }
+
+      // Load MCP connections for this agent/project
+      try {
+        const mcpConnections = await ctx.runQuery(api.mcpConnections.list, {
+          projectId: agent.projectId,
+          isEnabled: true,
+        });
+        for (const mcp of mcpConnections as Array<{ name: string; serverUrl: string; capabilities?: any }>) {
+          const toolList = mcp.capabilities?.tools
+            ? Object.keys(mcp.capabilities.tools).map((t) => `  - ${t}`).join("\n")
+            : "  (tools listed in server capabilities)";
+          toolDescriptions.push(`- MCP:${mcp.name} (${mcp.serverUrl}):\n${toolList}`);
+        }
+      } catch (e) {
+        console.debug("[chat.sendMessage] MCP loading skipped:", e);
       }
     }
 
-    // 4. Call the LLM via mastraIntegration.generateResponse (Node.js action)
+    // 6. Build system prompt with project override and available tools
+    const baseInstructions = agent.instructions || "You are a helpful AI assistant built with AgentForge.";
+    let systemPrompt = projectSystemPrompt
+      ? `${projectSystemPrompt}\n\n${baseInstructions}`
+      : baseInstructions;
+
+    // Inject available tools into the system prompt
+    if (toolDescriptions.length > 0) {
+      systemPrompt += `\n\n## Available Tools\n\nYou have access to the following tools:\n${toolDescriptions.join("\n")}\n\nWhen you need to use a tool, mention it in your response and the system will execute it.`;
+    }
+
+    // 6. Execute with failover
     let responseText: string;
     let usageData: { promptTokens: number; completionTokens: number; totalTokens: number } | null = null;
+    let actualProvider: string = projectDefaultProvider || agent.provider || "openrouter";
+    let actualModel: string = projectDefaultModel || agent.model || "unknown";
+    let didFailover = false;
+    let failoverEvents: Array<{ from: string; to: string; error: string; category: string }> = [];
+    let latencyMs = 0;
 
     try {
-      const provider = projectDefaultProvider || agent.provider || "openrouter";
-      const modelId = projectDefaultModel || agent.model || "openai/gpt-4o-mini";
-
-      // Build system prompt with project override (project settings prepend to agent instructions)
-      const baseInstructions = agent.instructions || "You are a helpful AI assistant built with AgentForge.";
-      const instructions = projectSystemPrompt
-        ? `${projectSystemPrompt}\n\n${baseInstructions}`
-        : baseInstructions;
-
-      const result = await ctx.runAction(internal.mastraIntegration.generateResponse, {
-        provider, // AGE-137: Pass provider for BYOK
-        modelKey: `${provider}/${modelId}`,
-        instructions,
-        messages: conversationMessages,
-      });
+      const result = await executeWithFailover(
+        failoverChain,
+        systemPrompt,
+        conversationMessages,
+        {
+          temperature: agent.temperature ?? undefined,
+          maxTokens: agent.maxTokens ?? undefined,
+        }
+      );
 
       responseText = result.text;
-      usageData = result.usage ?? null;
+      usageData = result.usage;
+      actualProvider = result.provider;
+      actualModel = result.model;
+      didFailover = result.didFailover;
+      failoverEvents = result.failoverEvents;
+      latencyMs = result.latencyMs;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      console.error("[chat.sendMessage] Mastra error:", errorMessage);
+      console.error("[chat.sendMessage] All providers failed:", errorMessage);
 
       // Store error as assistant message so user sees feedback
       responseText = `I encountered an error while processing your request: ${errorMessage}`;
     }
 
-    // 5. Store the assistant response
+    // 7. Store the assistant response with provider metadata
+    const metadata: Record<string, unknown> = {};
+    if (usageData) {
+      metadata.usage = usageData;
+    }
+    metadata.provider = actualProvider;
+    metadata.model = actualModel;
+    if (didFailover) {
+      metadata.didFailover = true;
+      metadata.failoverEvents = failoverEvents;
+    }
+    metadata.latencyMs = latencyMs;
+
     await ctx.runMutation(api.chat.addAssistantMessage, {
       threadId: args.threadId,
       content: responseText,
-      metadata: usageData ? { usage: usageData } : undefined,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
     });
 
-    // 6. Record usage metrics (non-blocking, best-effort)
+    // 8. Record usage metrics (non-blocking, best-effort)
     if (usageData) {
       try {
-        const actualProvider = projectDefaultProvider || agent.provider || "openrouter";
-        const actualModel = projectDefaultModel || agent.model || "unknown";
+        // Estimate cost based on provider/model pricing
+        const costPerMillion: Record<string, { input: number; output: number }> = {
+          "gpt-4.1": { input: 2.0, output: 8.0 },
+          "gpt-4.1-mini": { input: 0.4, output: 1.6 },
+          "gpt-4o": { input: 2.5, output: 10.0 },
+          "gpt-4o-mini": { input: 0.15, output: 0.6 },
+          "claude-sonnet-4-20250514": { input: 3.0, output: 15.0 },
+          "claude-3-5-sonnet-20241022": { input: 3.0, output: 15.0 },
+          "claude-3-5-haiku-20241022": { input: 0.8, output: 4.0 },
+          "gemini-2.5-flash": { input: 0.15, output: 0.6 },
+          "gemini-2.0-flash": { input: 0.1, output: 0.4 },
+        };
+
+        // Strip provider prefix for cost lookup
+        const modelKey = actualModel.includes("/") ? actualModel.split("/").pop()! : actualModel;
+        const pricing = costPerMillion[modelKey] || { input: 1.0, output: 2.0 };
+        const estimatedCost =
+          (usageData.promptTokens / 1_000_000) * pricing.input +
+          (usageData.completionTokens / 1_000_000) * pricing.output;
+
         await ctx.runMutation(api.usage.record, {
           agentId: args.agentId,
           provider: actualProvider,
@@ -300,6 +426,7 @@ export const sendMessage = action({
           promptTokens: usageData.promptTokens,
           completionTokens: usageData.completionTokens,
           totalTokens: usageData.totalTokens,
+          cost: estimatedCost,
           userId: args.userId,
         });
       } catch (e) {
@@ -307,15 +434,20 @@ export const sendMessage = action({
       }
     }
 
-    // 7. Log the interaction
+    // 9. Log the interaction
     try {
       await ctx.runMutation(api.logs.add, {
         level: "info",
         source: "chat",
-        message: `Agent "${agent.name}" responded to user message`,
+        message: `Agent "${agent.name}" responded via ${actualProvider}/${actualModel}${didFailover ? " (failover)" : ""}`,
         metadata: {
           agentId: args.agentId,
           threadId: args.threadId,
+          provider: actualProvider,
+          model: actualModel,
+          didFailover,
+          failoverEvents: failoverEvents.length > 0 ? failoverEvents : undefined,
+          latencyMs,
           usage: usageData,
         },
         userId: args.userId,
@@ -329,6 +461,11 @@ export const sendMessage = action({
       threadId: args.threadId,
       response: responseText,
       usage: usageData,
+      provider: actualProvider,
+      model: actualModel,
+      didFailover,
+      failoverEvents,
+      latencyMs,
     };
   },
 });
@@ -336,7 +473,6 @@ export const sendMessage = action({
 /**
  * Create a new thread and send the first message in one action.
  * Convenience action for starting a new conversation.
- * AGE-144: Supports optional fileIds for file context.
  */
 export const startNewChat = action({
   args: {
@@ -344,9 +480,8 @@ export const startNewChat = action({
     content: v.string(),
     threadName: v.optional(v.string()),
     userId: v.optional(v.string()),
-    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
   },
-  handler: async (ctx, args): Promise<SendMessageResult> => {
+  handler: async (ctx, args) => {
     // Create a new thread
     const threadId = await ctx.runMutation(api.chat.createThread, {
       agentId: args.agentId,
@@ -360,7 +495,6 @@ export const startNewChat = action({
       threadId,
       content: args.content,
       userId: args.userId,
-      fileIds: args.fileIds,
     });
 
     return {

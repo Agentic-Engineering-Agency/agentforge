@@ -1460,6 +1460,15 @@ export declare const api: {
  * ```
  */
 export declare const internal: {
+  cronJobs: {
+    executeDueJobs: FunctionReference<"mutation", "internal", {}, any>;
+    executeJob: FunctionReference<
+      "action",
+      "internal",
+      { jobId: Id<"cronJobs">; runId: Id<"cronJobRuns"> },
+      any
+    >;
+  };
   lib: {
     seedMarketplace: {
       seedMarketplace: FunctionReference<"mutation", "internal", {}, any>;

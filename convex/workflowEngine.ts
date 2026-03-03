@@ -53,7 +53,7 @@ export const executeWorkflow = internalAction({
         name: stepConfig.name,
         execute: async (input) => {
           // Get agent configuration
-          const agent = await ctx.runQuery(internal.agents.get, { id: stepConfig.agentId });
+          const agent = await ctx.runQuery(api.agents.get, { id: stepConfig.agentId });
           if (!agent) {
             throw new Error(`Agent not found: ${stepConfig.agentId}`);
           }
@@ -88,11 +88,45 @@ export const executeWorkflow = internalAction({
               throw new Error(`No API key found for provider: ${agent.provider}`);
             }
 
+            // Load installed skills and MCP connections for tool injection
+            let toolDescriptions: string[] = [];
+            if (run.projectId) {
+              try {
+                const skills = await ctx.runQuery(api.skills.listInstalled, { projectId: run.projectId });
+                for (const skill of skills as Array<{ name: string; displayName: string; description: string }>) {
+                  toolDescriptions.push(`- ${skill.name}: ${skill.description}`);
+                }
+              } catch (e) {
+                console.debug("[workflow.executeStep] Skills loading skipped:", e);
+              }
+
+              try {
+                const mcpConnections = await ctx.runQuery(api.mcpConnections.list, {
+                  projectId: run.projectId,
+                  isEnabled: true,
+                });
+                for (const mcp of mcpConnections as Array<{ name: string; serverUrl: string; capabilities?: any }>) {
+                  const toolList = mcp.capabilities?.tools
+                    ? Object.keys(mcp.capabilities.tools).map((t) => `  - ${t}`).join("\n")
+                    : "  (tools listed in server capabilities)";
+                  toolDescriptions.push(`- MCP:${mcp.name} (${mcp.serverUrl}):\n${toolList}`);
+                }
+              } catch (e) {
+                console.debug("[workflow.executeStep] MCP loading skipped:", e);
+              }
+            }
+
+            // Build instructions with available tools
+            let instructions = agent.instructions || "You are a helpful AI assistant.";
+            if (toolDescriptions.length > 0) {
+              instructions += `\n\n## Available Tools\n\nYou have access to the following tools:\n${toolDescriptions.join("\n")}\n\nWhen you need to use a tool, mention it in your response and the system will execute it.`;
+            }
+
             // Create agent instance
             const mastraAgent = new AgentClass({
               id: stepConfig.agentId,
               name: agent.name,
-              instructions: agent.instructions || "You are a helpful AI assistant.",
+              instructions,
               model: {
                 providerId: agent.provider || "openrouter",
                 modelId: getBaseModelId(agent.provider || "openrouter", agent.model || "gpt-4o-mini"),

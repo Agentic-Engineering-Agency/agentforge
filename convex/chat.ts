@@ -300,11 +300,47 @@ export const sendMessage = action({
       failoverModels?: Array<{ provider: string; model: string }>;
     });
 
-    // 5. Build system prompt with project override (project settings override agent instructions)
+    // 5. Load installed skills and MCP connections for tool injection
+    let toolDescriptions: string[] = [];
+
+    // Load skills for this agent/project
+    if (agent.projectId) {
+      try {
+        const skills = await ctx.runQuery(api.skills.listInstalled, { projectId: agent.projectId });
+        for (const skill of skills as Array<{ name: string; displayName: string; description: string }>) {
+          toolDescriptions.push(`- ${skill.name}: ${skill.description}`);
+        }
+      } catch (e) {
+        console.debug("[chat.sendMessage] Skills loading skipped:", e);
+      }
+
+      // Load MCP connections for this agent/project
+      try {
+        const mcpConnections = await ctx.runQuery(api.mcpConnections.list, {
+          projectId: agent.projectId,
+          isEnabled: true,
+        });
+        for (const mcp of mcpConnections as Array<{ name: string; serverUrl: string; capabilities?: any }>) {
+          const toolList = mcp.capabilities?.tools
+            ? Object.keys(mcp.capabilities.tools).map((t) => `  - ${t}`).join("\n")
+            : "  (tools listed in server capabilities)";
+          toolDescriptions.push(`- MCP:${mcp.name} (${mcp.serverUrl}):\n${toolList}`);
+        }
+      } catch (e) {
+        console.debug("[chat.sendMessage] MCP loading skipped:", e);
+      }
+    }
+
+    // 6. Build system prompt with project override and available tools
     const baseInstructions = agent.instructions || "You are a helpful AI assistant built with AgentForge.";
-    const systemPrompt = projectSystemPrompt
+    let systemPrompt = projectSystemPrompt
       ? `${projectSystemPrompt}\n\n${baseInstructions}`
       : baseInstructions;
+
+    // Inject available tools into the system prompt
+    if (toolDescriptions.length > 0) {
+      systemPrompt += `\n\n## Available Tools\n\nYou have access to the following tools:\n${toolDescriptions.join("\n")}\n\nWhen you need to use a tool, mention it in your response and the system will execute it.`;
+    }
 
     // 6. Execute with failover
     let responseText: string;
