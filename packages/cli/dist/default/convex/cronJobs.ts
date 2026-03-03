@@ -341,6 +341,10 @@ export const executeDueJobs = internalMutation({
 
         jobIds.push(job._id);
 
+        // Advance nextRun immediately to prevent double-scheduling on long jobs
+        const nextRun = getNextCronRun(job.schedule, Date.now());
+        await ctx.db.patch(job._id, { nextRun });
+
         // Schedule the actual job execution immediately
         ctx.scheduler.runAfter(0, internal.cronJobs.executeJob, {
           jobId: job._id,
@@ -424,12 +428,12 @@ export const executeJob = internalAction({
       console.error(`[cron.executeJob] Job ${args.jobId} failed:`, error);
     }
 
-    // Update the run record with the result
-    await ctx.runMutation(api.cronJobs.recordRun, {
-      cronJobId: args.jobId,
+    // Update the existing run record (avoids creating a duplicate row)
+    await ctx.runMutation(api.cronJobs.updateRun, {
+      runId: args.runId,
       status,
-      output,
-      error,
+      ...(output && { output }),
+      ...(error && { error }),
     });
 
     // Calculate the next run time for this cron job

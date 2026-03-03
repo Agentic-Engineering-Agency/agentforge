@@ -324,7 +324,8 @@ export const sendMessage = action({
           const toolList = mcp.capabilities?.tools
             ? Object.keys(mcp.capabilities.tools).map((t) => `  - ${t}`).join("\n")
             : "  (tools listed in server capabilities)";
-          toolDescriptions.push(`- MCP:${mcp.name} (${mcp.serverUrl}):\n${toolList}`);
+          toolDescriptions.push(`- MCP:${mcp.name}:
+${toolList}`);
         }
       } catch (e) {
         console.debug("[chat.sendMessage] MCP loading skipped:", e);

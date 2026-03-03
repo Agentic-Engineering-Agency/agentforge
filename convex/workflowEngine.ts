@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 /**
  * Workflow Engine — Execute workflows using AgentPipeline.
@@ -109,7 +109,8 @@ export const executeWorkflow = internalAction({
                   const toolList = mcp.capabilities?.tools
                     ? Object.keys(mcp.capabilities.tools).map((t) => `  - ${t}`).join("\n")
                     : "  (tools listed in server capabilities)";
-                  toolDescriptions.push(`- MCP:${mcp.name} (${mcp.serverUrl}):\n${toolList}`);
+                  toolDescriptions.push(`- MCP:${mcp.name}:
+${toolList}`);
                 }
               } catch (e) {
                 console.debug("[workflow.executeStep] MCP loading skipped:", e);
