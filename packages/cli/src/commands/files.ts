@@ -79,10 +79,14 @@ export function registerFilesCommand(program: Command) {
         // Step 3: Save metadata with storage ID
         info('Saving file metadata...');
         const fileId = await safeCall(
-          () => client.mutation('files:create' as any, {
-            name, originalName: name, mimeType, size: stat.size,
-            url: uploadUrl, storageId,
-            folderId: opts.folder, projectId: opts.project,
+          () => client.mutation('files:confirmUpload' as any, {
+            storageId: storageId as any,
+            name,
+            originalName: name,
+            mimeType,
+            size: stat.size,
+            folderId: opts.folder ? (opts.folder as any) : undefined,
+            projectId: opts.project ? (opts.project as any) : undefined,
           }),
           'Failed to save file metadata'
         );
@@ -114,18 +118,14 @@ export function registerFilesCommand(program: Command) {
           error(`File not found: ${id}`);
           process.exit(1);
         }
-        
-        if (!file.storageId) {
-          error('This file does not have stored content (legacy metadata-only entry).');
+
+        // Get file URL from file metadata (stored after confirmUpload)
+        info('Getting file URL...');
+        if (!file.url) {
+          error('File URL not available. This file may not have been properly uploaded.');
           process.exit(1);
         }
-        
-        // Get file URL
-        info('Getting file URL...');
-        const fileUrl = await safeCall(
-          () => client.query('files:getFileUrl' as any, { storageId: file.storageId }),
-          'Failed to get file URL'
-        ) as string;
+        const fileUrl = file.url;
         
         // Download file content
         info('Downloading file content...');

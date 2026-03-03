@@ -1,50 +1,56 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo } from 'react';
-// import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../convex/_generated/api';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
 import { Sparkles, Download, Trash2, Plus, Search, Filter, X } from 'lucide-react';
 
-// --- Mock Data and Types ---
-type SkillCategory = 'Tools' | 'Knowledge' | 'Workflows' | 'Integrations';
+// --- Types ---
+type SkillCategory = string;
 
 interface Skill {
-  id: string;
+  _id: Id<'skills'>;
   name: string;
+  displayName: string;
   description: string;
   category: SkillCategory;
   version: string;
+  author?: string;
+  repository?: string;
+  documentation?: string;
   isInstalled: boolean;
+  isEnabled: boolean;
+  code: string;
+  schema?: any;
+  createdAt: number;
+  updatedAt: number;
+  installedAt?: number;
 }
-
-const mockSkills: Skill[] = [
-  { id: '1', name: 'Web Scraper', description: 'Extracts data from websites using CSS selectors.', category: 'Tools', version: '1.2.0', isInstalled: true },
-  { id: '2', name: 'Sentiment Analysis', description: 'Analyzes text to determine emotional tone.', category: 'Knowledge', version: '2.0.1', isInstalled: false },
-  { id: '3', name: 'Daily Report', description: 'Generates a daily summary of activities.', category: 'Workflows', version: '1.0.0', isInstalled: true },
-  { id: '4', name: 'GitHub Integration', description: 'Connects to GitHub to manage repositories.', category: 'Integrations', version: '1.5.3', isInstalled: false },
-  { id: '5', name: 'Image Resizer', description: 'Resizes images to specified dimensions.', category: 'Tools', version: '1.1.0', isInstalled: false },
-  { id: '6', name: 'Company Financials', description: 'Provides financial data for public companies.', category: 'Knowledge', version: '3.1.0', isInstalled: true },
-];
 
 const CATEGORIES: SkillCategory[] = ['Tools', 'Knowledge', 'Workflows', 'Integrations'];
 
 // --- Components ---
 
-function CreateSkillDialog({ open, onOpenChange, onCreateSkill }: { open: boolean; onOpenChange: (open: boolean) => void; onCreateSkill: (skill: Omit<Skill, 'id' | 'isInstalled'>) => void; }) {
+function CreateSkillDialog({ open, onOpenChange, onCreateSkill }: { open: boolean; onOpenChange: (open: boolean) => void; onCreateSkill: (skill: Omit<Skill, '_id' | 'isInstalled' | 'createdAt' | 'updatedAt'>) => void; }) {
   const [name, setName] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState<SkillCategory>('Tools');
   const [version, setVersion] = useState('1.0.0');
+  const [code, setCode] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !description || !version) return;
-    onCreateSkill({ name, description, category, version });
+    onCreateSkill({ name: name.toLowerCase().replace(/\s+/g, '-'), displayName: displayName || name, description, category, version, code: code || '// Skill code', isInstalled: false, isEnabled: false });
     onOpenChange(false);
     setName('');
+    setDisplayName('');
     setDescription('');
     setCategory('Tools');
     setVersion('1.0.0');
+    setCode('');
   };
 
   if (!open) return null;
@@ -58,8 +64,8 @@ function CreateSkillDialog({ open, onOpenChange, onCreateSkill }: { open: boolea
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="name" className="block text-sm font-medium text-muted-foreground mb-1">Skill Name</label>
-            <input id="name" value={name} onChange={(e) => setName(e.target.value)} required className="w-full bg-background border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary" />
+            <label htmlFor="displayName" className="block text-sm font-medium text-muted-foreground mb-1">Display Name</label>
+            <input id="displayName" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required className="w-full bg-background border border-border rounded-md px-3 py-2 text-foreground focus:outline-none focus:ring-2 focus:ring-primary" />
           </div>
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-muted-foreground mb-1">Description</label>
@@ -87,17 +93,9 @@ function CreateSkillDialog({ open, onOpenChange, onCreateSkill }: { open: boolea
   );
 }
 
-function SkillCard({ skill, onToggleInstall }: { skill: Skill; onToggleInstall: (id: string) => void; }) {
-  // const uninstallSkill = useMutation(api.skills.uninstall);
-  // const installSkill = useMutation(api.skills.install);
-
+function SkillCard({ skill, onToggleInstall }: { skill: Skill; onToggleInstall: (id: Id<'skills'>) => void; }) {
   const handleToggle = () => {
-    onToggleInstall(skill.id);
-    // if (skill.isInstalled) {
-    //   uninstallSkill({ id: skill.id });
-    // } else {
-    //   installSkill({ id: skill.id });
-    // }
+    onToggleInstall(skill._id);
   };
 
   return (
@@ -109,7 +107,7 @@ function SkillCard({ skill, onToggleInstall }: { skill: Skill; onToggleInstall: 
               <Sparkles className="text-primary" size={20} />
             </div>
             <div>
-              <h3 className="font-semibold text-foreground">{skill.name}</h3>
+              <h3 className="font-semibold text-foreground">{skill.displayName}</h3>
               <p className="text-xs text-muted-foreground">v{skill.version}</p>
             </div>
           </div>
@@ -132,15 +130,17 @@ function SkillCard({ skill, onToggleInstall }: { skill: Skill; onToggleInstall: 
 export const Route = createFileRoute('/skills')({ component: SkillsPage });
 
 function SkillsPage() {
-  const [skills, setSkills] = useState(mockSkills);
+  // Convex hooks
+  const skills = useQuery(api.skills.list, {}) ?? [];
+  const createSkillMutation = useMutation(api.skills.create);
+  const installSkillMutation = useMutation(api.skills.install);
+  const uninstallSkillMutation = useMutation(api.skills.uninstall);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategories, setSelectedCategories] = useState<SkillCategory[]>([]);
   const [isCreateDialogOpen, setCreateDialogOpen] = useState(false);
 
-  // const allSkillsQuery = useQuery(api.skills.list);
-  // const createSkillMutation = useMutation(api.skills.create);
-  // const isLoading = allSkillsQuery === undefined;
-  // const skillsData = allSkillsQuery || [];
+  const isLoading = skills === undefined;
 
   const handleToggleCategory = (category: SkillCategory) => {
     setSelectedCategories(prev =>
@@ -150,30 +150,27 @@ function SkillsPage() {
     );
   };
 
-  const handleCreateSkill = (newSkillData: Omit<Skill, 'id' | 'isInstalled'>) => {
-    const newSkill: Skill = {
-      ...newSkillData,
-      id: `custom-${Date.now()}`,
-      isInstalled: false,
-    };
-    setSkills(prev => [newSkill, ...prev]);
-    // createSkillMutation(newSkillData).catch(console.error);
+  const handleCreateSkill = async (newSkillData: Omit<Skill, '_id' | 'isInstalled' | 'createdAt' | 'updatedAt'>) => {
+    await createSkillMutation(newSkillData);
   };
 
-  const handleToggleInstall = (id: string) => {
-    setSkills(prev => prev.map(s => s.id === id ? { ...s, isInstalled: !s.isInstalled } : s));
-    // Note: The actual mutation would be called in SkillCard
+  const handleToggleInstall = async (id: Id<'skills'>) => {
+    const skill = skills.find(s => s._id === id);
+    if (skill) {
+      if (skill.isInstalled) {
+        await uninstallSkillMutation({ id });
+      } else {
+        await installSkillMutation({ id });
+      }
+    }
   };
 
   const filteredSkills = useMemo(() => {
-    // Replace `skills` with `skillsData` when using Convex
     return skills.filter(skill =>
-      skill.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+      skill.displayName.toLowerCase().includes(searchQuery.toLowerCase()) &&
       (selectedCategories.length === 0 || selectedCategories.includes(skill.category))
     );
-  }, [skills, searchQuery, selectedCategories]); // Replace `skills` with `skillsData`
-
-  const isLoading = false; // When using Convex, this would be `allSkillsQuery === undefined`
+  }, [skills, searchQuery, selectedCategories]);
 
   return (
     <DashboardLayout>
@@ -232,7 +229,7 @@ function SkillsPage() {
         ) : filteredSkills.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {filteredSkills.map(skill => (
-              <SkillCard key={skill.id} skill={skill} onToggleInstall={handleToggleInstall} />
+              <SkillCard key={skill._id} skill={skill} onToggleInstall={handleToggleInstall} />
             ))}
           </div>
         ) : (

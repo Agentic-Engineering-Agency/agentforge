@@ -1,13 +1,15 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
+import { Id } from '../../../convex/_generated/dataModel';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Switch } from '../components/ui/switch';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../components/ui/tooltip';
 import { Clock, Play, Pause, Plus, History, AlertCircle, Trash2, Edit } from 'lucide-react';
@@ -15,77 +17,50 @@ import { Clock, Play, Pause, Plus, History, AlertCircle, Trash2, Edit } from 'lu
 export const Route = createFileRoute('/cron')({ component: CronPageComponent });
 
 type CronJob = {
-  id: string;
+  _id: Id<'cronJobs'>;
   name: string;
+  description: string | undefined;
   schedule: string;
-  scheduleReadable: string;
-  agent: string;
-  status: 'enabled' | 'disabled';
-  lastRun: string | null;
-  nextRun: string;
+  agentId: string;
+  prompt: string;
+  isEnabled: boolean;
+  lastRun: number | undefined;
+  nextRun: number | undefined;
+  createdAt: number;
+  updatedAt: number;
 };
 
-const initialCronJobs: CronJob[] = [
-  {
-    id: 'cron_1',
-    name: 'Daily Report',
-    schedule: '0 9 * * *',
-    scheduleReadable: 'Every day at 9:00 AM',
-    agent: 'reporting-agent',
-    status: 'enabled',
-    lastRun: '2026-02-15 09:00:12',
-    nextRun: '2026-02-16 09:00:00',
-  },
-  {
-    id: 'cron_2',
-    name: 'Hourly Sync',
-    schedule: '0 * * * *',
-    scheduleReadable: 'Every hour',
-    agent: 'sync-agent',
-    status: 'disabled',
-    lastRun: '2026-02-15 14:00:05',
-    nextRun: '2026-02-15 16:00:00',
-  },
-  {
-    id: 'cron_3',
-    name: 'Nightly Cleanup',
-    schedule: '0 2 * * *',
-    scheduleReadable: 'Every day at 2:00 AM',
-    agent: 'cleanup-agent',
-    status: 'enabled',
-    lastRun: '2026-02-15 02:00:08',
-    nextRun: '2026-02-16 02:00:00',
-  },
-];
-
 function CronPageComponent() {
-  const [cronJobs, setCronJobs] = useState<CronJob[]>(initialCronJobs);
+  // Convex hooks
+  const jobs = useQuery(api.cronJobs.list, {}) ?? [];
+  const createJob = useMutation(api.cronJobs.create);
+  const updateJob = useMutation(api.cronJobs.update);
+  const deleteJob = useMutation(api.cronJobs.remove);
+  const toggleJob = useMutation(api.cronJobs.toggleEnabled);
+  const runHistory = useQuery(api.cronJobs.getRunHistory, { cronJobId: undefined as any, limit: 10 });
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<CronJob | null>(null);
   const [selectedJobHistory, setSelectedJobHistory] = useState<CronJob | null>(null);
 
-  const handleSaveJob = (jobData: Omit<CronJob, 'id'>) => {
+  const isLoading = jobs === undefined;
+
+  const handleSaveJob = async (jobData: Omit<CronJob, '_id' | 'createdAt' | 'updatedAt' | 'lastRun' | 'nextRun'>) => {
     if (editingJob) {
-      const updatedJob: CronJob = { ...editingJob, ...jobData };
-      setCronJobs(cronJobs.map(j => j.id === editingJob.id ? updatedJob : j));
+      await updateJob({ id: editingJob._id, ...jobData });
     } else {
-      const newJob: CronJob = { ...jobData, id: `cron_${Date.now()}` };
-      setCronJobs([...cronJobs, newJob]);
+      await createJob(jobData);
     }
     setIsModalOpen(false);
     setEditingJob(null);
   };
 
-  const handleToggleStatus = (job: CronJob) => {
-    const newStatus: 'enabled' | 'disabled' = job.status === 'enabled' ? 'disabled' : 'enabled';
-    const updatedJob: CronJob = { ...job, status: newStatus };
-    setCronJobs(cronJobs.map(j => j.id === job.id ? updatedJob : j));
+  const handleToggleStatus = async (job: CronJob) => {
+    await toggleJob({ id: job._id });
   };
 
-  const handleDeleteJob = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this cron job?')) {
-      setCronJobs(cronJobs.filter(j => j.id !== id));
-    }
+  const handleDeleteJob = async (id: Id<'cronJobs'>) => {
+    await deleteJob({ id });
   };
 
   const openEditModal = (job: CronJob) => {
@@ -96,6 +71,20 @@ function CronPageComponent() {
   const openCreateModal = () => {
     setEditingJob(null);
     setIsModalOpen(true);
+  };
+
+  // Helper functions
+  const formatTimestamp = (ts: number | undefined) => {
+    if (!ts) return 'N/A';
+    return new Date(ts).toLocaleString();
+  };
+
+  const getNextRunReadable = (schedule: string) => {
+    // Simplified readable schedule
+    if (schedule === '0 * * * *') return 'Every hour';
+    if (schedule === '0 0 * * *') return 'Every day at midnight';
+    if (schedule === '0 0 * * 1') return 'Every Monday';
+    return schedule;
   };
 
   return (
@@ -137,14 +126,14 @@ function CronPageComponent() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {cronJobs.map(job => (
-                      <TableRow key={job.id}>
+                    {jobs.map(job => (
+                      <TableRow key={job._id}>
                         <TableCell>
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <button onClick={() => handleToggleStatus(job)}>
-                                  {job.status === 'enabled' ? (
+                                  {job.isEnabled ? (
                                     <Play className="h-5 w-5 text-green-500" />
                                   ) : (
                                     <Pause className="h-5 w-5 text-yellow-500" />
@@ -152,7 +141,7 @@ function CronPageComponent() {
                                 </button>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p>{job.status === 'enabled' ? 'Enabled (Click to disable)' : 'Disabled (Click to enable)'}</p>
+                                <p>{job.isEnabled ? 'Enabled (Click to disable)' : 'Disabled (Click to enable)'}</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
@@ -161,14 +150,14 @@ function CronPageComponent() {
                         <TableCell>
                           <TooltipProvider>
                             <Tooltip>
-                              <TooltipTrigger className="cursor-help">{job.scheduleReadable}</TooltipTrigger>
+                              <TooltipTrigger className="cursor-help">{getNextRunReadable(job.schedule)}</TooltipTrigger>
                               <TooltipContent><p>{job.schedule}</p></TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
                         </TableCell>
-                        <TableCell>{job.agent}</TableCell>
-                        <TableCell>{job.lastRun || 'N/A'}</TableCell>
-                        <TableCell>{job.nextRun}</TableCell>
+                        <TableCell>{job.agentId}</TableCell>
+                        <TableCell>{formatTimestamp(job.lastRun)}</TableCell>
+                        <TableCell>{formatTimestamp(job.nextRun)}</TableCell>
                         <TableCell className="text-right space-x-2">
                           <Button variant="ghost" size="icon" onClick={() => setSelectedJobHistory(job)}>
                             <History className="h-4 w-4" />
@@ -176,7 +165,7 @@ function CronPageComponent() {
                           <Button variant="ghost" size="icon" onClick={() => openEditModal(job)}>
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="destructive" size="icon" onClick={() => handleDeleteJob(job.id)}>
+                          <Button variant="destructive" size="icon" onClick={() => handleDeleteJob(job._id)}>
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </TableCell>
@@ -231,30 +220,29 @@ function CronPageComponent() {
 
 interface CronJobFormProps {
   job: CronJob | null;
-  onSave: (jobData: Omit<CronJob, 'id'>) => void;
+  onSave: (jobData: Omit<CronJob, '_id' | 'createdAt' | 'updatedAt' | 'lastRun' | 'nextRun'>) => void;
   onClose: () => void;
 }
 
 function CronJobForm({ job, onSave, onClose }: CronJobFormProps) {
   const [name, setName] = useState(job?.name || '');
-  const [agent, setAgent] = useState(job?.agent || '');
+  const [description, setDescription] = useState(job?.description || '');
+  const [agentId, setAgentId] = useState(job?.agentId || '');
+  const [prompt, setPrompt] = useState(job?.prompt || '');
   const [schedulePreset, setSchedulePreset] = useState('custom');
   const [customSchedule, setCustomSchedule] = useState(job?.schedule || '');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const schedule = schedulePreset === 'custom' ? customSchedule : schedulePreset;
-    // This is a simplified readable schedule. A real implementation would use a library.
-    const scheduleReadable = schedulePreset === 'custom' ? `Custom: ${customSchedule}` : `Every ${schedulePreset.split(' ')[1]}`;
-    
+
     onSave({
       name,
-      agent,
+      description: description || undefined,
+      agentId,
+      prompt,
       schedule,
-      scheduleReadable,
-      status: job?.status || 'enabled',
-      lastRun: job?.lastRun || null,
-      nextRun: job?.nextRun || 'Calculating...',
+      isEnabled: job?.isEnabled ?? true,
     });
   };
 
@@ -270,8 +258,16 @@ function CronJobForm({ job, onSave, onClose }: CronJobFormProps) {
             <Input id="name" value={name} onChange={e => setName(e.target.value)} className="col-span-3" placeholder="e.g., Daily Summary" required />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
-            <Label htmlFor="agent" className="text-right">Agent</Label>
-            <Input id="agent" value={agent} onChange={e => setAgent(e.target.value)} className="col-span-3" placeholder="e.g., reporting-agent" required />
+            <Label htmlFor="description" className="text-right">Description</Label>
+            <Input id="description" value={description} onChange={e => setDescription(e.target.value)} className="col-span-3" placeholder="Optional description" />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="agentId" className="text-right">Agent ID</Label>
+            <Input id="agentId" value={agentId} onChange={e => setAgentId(e.target.value)} className="col-span-3" placeholder="e.g., reporting-agent" required />
+          </div>
+          <div className="grid grid-cols-4 items-center gap-4">
+            <Label htmlFor="prompt" className="text-right">Prompt</Label>
+            <Input id="prompt" value={prompt} onChange={e => setPrompt(e.target.value)} className="col-span-3" placeholder="Task prompt for the agent" required />
           </div>
           <div className="grid grid-cols-4 items-center gap-4">
             <Label htmlFor="schedule" className="text-right">Schedule</Label>
@@ -290,12 +286,12 @@ function CronJobForm({ job, onSave, onClose }: CronJobFormProps) {
           {schedulePreset === 'custom' && (
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="custom-schedule" className="text-right">Cron</Label>
-              <Input 
-                id="custom-schedule" 
-                value={customSchedule} 
-                onChange={e => setCustomSchedule(e.target.value)} 
-                className="col-span-3" 
-                placeholder="* * * * *" 
+              <Input
+                id="custom-schedule"
+                value={customSchedule}
+                onChange={e => setCustomSchedule(e.target.value)}
+                className="col-span-3"
+                placeholder="* * * * *"
                 required
               />
             </div>
