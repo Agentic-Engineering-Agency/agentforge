@@ -1,105 +1,203 @@
-/**
- * Model Fetching Queries for AgentForge
- *
- * Provides queries to get cached models from various LLM providers.
- */
+"use node";
 
-import { query } from "./_generated/server";
+/**
+ * Dynamic model fetching from provider APIs.
+ * Falls back to the static LLM_MODELS list when live fetch fails or no key is available.
+ */
+import { action } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import { LLM_MODELS, LLM_PROVIDERS, type LLMModel } from "./llmProviders";
 
-// Model definitions from various providers
-const PROVIDER_MODELS: Record<string, Array<{ id: string; name: string; context: number; pricing?: { input: number; output: number } }>> = {
-  openrouter: [
-    { id: "openai/gpt-4o-mini", name: "GPT-4o Mini", context: 128000, pricing: { input: 0.15, output: 0.6 } },
-    { id: "openai/gpt-4o", name: "GPT-4o", context: 128000, pricing: { input: 2.5, output: 10.0 } },
-    { id: "openai/gpt-4.1", name: "GPT-4.1", context: 128000, pricing: { input: 2.0, output: 8.0 } },
-    { id: "openai/gpt-4.1-mini", name: "GPT-4.1 Mini", context: 128000, pricing: { input: 0.4, output: 1.6 } },
-    { id: "openai/o3-mini", name: "o3-mini", context: 200000, pricing: { input: 1.1, output: 4.4 } },
-    { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", context: 200000, pricing: { input: 3.0, output: 15.0 } },
-    { id: "anthropic/claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", context: 200000, pricing: { input: 3.0, output: 15.0 } },
-    { id: "anthropic/claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000, pricing: { input: 0.8, output: 4.0 } },
-    { id: "google/gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000, pricing: { input: 0.15, output: 0.6 } },
-    { id: "google/gemini-2.0-flash", name: "Gemini 2.0 Flash", context: 1000000, pricing: { input: 0.1, output: 0.4 } },
-    { id: "google/gemini-pro", name: "Gemini Pro", context: 917280, pricing: { input: 0.5, output: 1.5 } },
-    { id: "deepseek/deepseek-chat", name: "DeepSeek Chat", context: 128000, pricing: { input: 0.14, output: 0.28 } },
-    { id: "deepseek/deepseek-reasoner", name: "DeepSeek Reasoner", context: 64000, pricing: { input: 0.55, output: 2.19 } },
-    { id: "meta-llama/llama-3.1-405b-instruct", name: "Llama 3.1 405B", context: 131072, pricing: { input: 0.8, output: 0.8 } },
-    { id: "meta-llama/llama-3.3-70b-instruct", name: "Llama 3.3 70B", context: 131072, pricing: { input: 0.2, output: 0.2 } },
-    { id: "mistralai/mistral-large", name: "Mistral Large", context: 128000, pricing: { input: 2.0, output: 6.0 } },
-    { id: "mistralai/mistral-7b", name: "Mistral 7B", context: 32768, pricing: { input: 0.07, output: 0.07 } },
-    { id: "qwen/qwen-2.5-72b-instruct", name: "Qwen 2.5 72B", context: 131072, pricing: { input: 0.4, output: 0.4 } },
-    { id: "x-ai/grok-2", name: "Grok 2", context: 131072, pricing: { input: 2.0, output: 10.0 } },
-  ],
-  openai: [
-    { id: "gpt-4o-mini", name: "GPT-4o Mini", context: 128000, pricing: { input: 0.15, output: 0.6 } },
-    { id: "gpt-4o", name: "GPT-4o", context: 128000, pricing: { input: 2.5, output: 10.0 } },
-    { id: "gpt-4.1", name: "GPT-4.1", context: 128000, pricing: { input: 2.0, output: 8.0 } },
-    { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", context: 128000, pricing: { input: 0.4, output: 1.6 } },
-    { id: "o3-mini", name: "o3-mini", context: 200000, pricing: { input: 1.1, output: 4.4 } },
-  ],
-  anthropic: [
-    { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", context: 200000, pricing: { input: 3.0, output: 15.0 } },
-    { id: "claude-3-5-sonnet-20241022", name: "Claude 3.5 Sonnet", context: 200000, pricing: { input: 3.0, output: 15.0 } },
-    { id: "claude-3-5-haiku-20241022", name: "Claude 3.5 Haiku", context: 200000, pricing: { input: 0.8, output: 4.0 } },
-  ],
-  google: [
-    { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", context: 1000000, pricing: { input: 0.15, output: 0.6 } },
-    { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", context: 1000000, pricing: { input: 0.1, output: 0.4 } },
-    { id: "gemini-pro", name: "Gemini Pro", context: 917280, pricing: { input: 0.5, output: 1.5 } },
-  ],
-  groq: [
-    { id: "llama-3.3-70b-versatile", name: "Llama 3.3 70B Versatile", context: 131072, pricing: { input: 0.59, output: 0.79 } },
-    { id: "llama-3.1-70b-versatile", name: "Llama 3.1 70B Versatile", context: 131072, pricing: { input: 0.59, output: 0.79 } },
-    { id: "mixtral-8x7b-32768", name: "Mixtral 8x7B", context: 32768, pricing: { input: 0.24, output: 0.24 } },
-  ],
-  deepinfra: [
-    { id: "meta-llama/Meta-Llama-3.1-405B-Instruct", name: "Llama 3.1 405B", context: 131072, pricing: { input: 0.8, output: 0.8 } },
-    { id: "meta-llama/Meta-Llama-3.3-70B-Instruct", name: "Llama 3.3 70B", context: 131072, pricing: { input: 0.2, output: 0.2 } },
-    { id: "mistralai/Mistral-Nemo-Instruct-2407", name: "Mistral Nemo", context: 128000, pricing: { input: 0.15, output: 0.15 } },
-  ],
-};
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+interface FetchedModel {
+  id: string;
+  displayName: string;
+  provider: string;
+  contextWindow: number;
+  capabilities: string[];
+  isGA: boolean;
+  pricingTier: string;
+}
 
-/**
- * Query: Get cached models for a provider.
- */
-export const getCachedModels = query({
-  args: {
-    provider: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    // For now, return the static model definitions
-    // In the future, this could be cached in a database table
-    if (args.provider) {
-      return PROVIDER_MODELS[args.provider] ?? [];
-    }
-    return PROVIDER_MODELS;
-  },
-});
+// ---------------------------------------------------------------------------
+// Provider-specific fetchers
+// ---------------------------------------------------------------------------
 
-/**
- * Query: Get all available providers.
- */
-export const listProviders = query({
-  args: {},
-  handler: async (ctx) => {
-    return Object.keys(PROVIDER_MODELS).map((provider) => ({
-      id: provider,
-      name: provider.charAt(0).toUpperCase() + provider.slice(1),
-      modelCount: PROVIDER_MODELS[provider]?.length ?? 0,
+async function fetchOpenAIModels(apiKey: string): Promise<FetchedModel[]> {
+  const res = await fetch("https://api.openai.com/v1/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(`OpenAI models fetch failed: ${res.status}`);
+  const data = await res.json();
+  const chatModels = (data.data as Array<{ id: string }>)
+    .filter((m) =>
+      m.id.startsWith("gpt-") ||
+      m.id.startsWith("o1") ||
+      m.id.startsWith("o3") ||
+      m.id.startsWith("chatgpt-")
+    )
+    .map((m) => ({
+      id: `openai/${m.id}`,
+      displayName: m.id,
+      provider: "openai",
+      contextWindow: m.id.includes("128k") ? 128000 : m.id.includes("gpt-4") ? 128000 : 16000,
+      capabilities: ["chat", "function_calling"] as string[],
+      isGA: !m.id.includes("preview") && !m.id.includes("turbo-preview"),
+      pricingTier: m.id.includes("o1") || m.id.includes("o3") || m.id.includes("gpt-4.1") ? "premium" : "standard",
     }));
+  return chatModels;
+}
+
+async function fetchAnthropicModels(apiKey: string): Promise<FetchedModel[]> {
+  const res = await fetch("https://api.anthropic.com/v1/models", {
+    headers: {
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+    },
+  });
+  if (!res.ok) throw new Error(`Anthropic models fetch failed: ${res.status}`);
+  const data = await res.json();
+  return (data.data as Array<{ id: string; display_name?: string; context_window?: number }>).map((m) => ({
+    id: `anthropic/${m.id}`,
+    displayName: m.display_name || m.id,
+    provider: "anthropic",
+    contextWindow: m.context_window ?? 200000,
+    capabilities: ["chat", "code", "vision"] as string[],
+    isGA: !m.id.includes("beta"),
+    pricingTier: m.id.includes("opus") ? "premium" : m.id.includes("haiku") ? "standard" : "premium",
+  }));
+}
+
+async function fetchGoogleModels(apiKey: string): Promise<FetchedModel[]> {
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+  );
+  if (!res.ok) throw new Error(`Google models fetch failed: ${res.status}`);
+  const data = await res.json();
+  return (
+    (data.models as Array<{ name: string; displayName?: string; inputTokenLimit?: number }>) ?? []
+  )
+    .filter((m) => m.name.includes("gemini"))
+    .map((m) => {
+      const shortId = m.name.replace("models/", "");
+      return {
+        id: `google/${shortId}`,
+        displayName: m.displayName || shortId,
+        provider: "google",
+        contextWindow: m.inputTokenLimit ?? 1000000,
+        capabilities: ["chat", "vision"] as string[],
+        isGA: !shortId.includes("exp") && !shortId.includes("preview"),
+        pricingTier: shortId.includes("ultra") || shortId.includes("2.5-pro") ? "premium" : "standard",
+      };
+    });
+}
+
+async function fetchOpenRouterModels(apiKey: string): Promise<FetchedModel[]> {
+  const res = await fetch("https://openrouter.ai/api/v1/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(`OpenRouter models fetch failed: ${res.status}`);
+  const data = await res.json();
+  return (data.data as Array<{ id: string; name?: string; context_length?: number; pricing?: any }> ?? [])
+    .slice(0, 100) // cap at 100 most recent
+    .map((m) => ({
+      id: `openrouter/${m.id}`,
+      displayName: m.name || m.id,
+      provider: "openrouter",
+      contextWindow: m.context_length ?? 32000,
+      capabilities: ["chat"] as string[],
+      isGA: true,
+      pricingTier: m.pricing?.prompt > 0.01 ? "premium" : "standard",
+    }));
+}
+
+async function fetchMistralModels(apiKey: string): Promise<FetchedModel[]> {
+  const res = await fetch("https://api.mistral.ai/v1/models", {
+    headers: { Authorization: `Bearer ${apiKey}` },
+  });
+  if (!res.ok) throw new Error(`Mistral models fetch failed: ${res.status}`);
+  const data = await res.json();
+  return (data.data as Array<{ id: string }>).map((m) => ({
+    id: `mistral/${m.id}`,
+    displayName: m.id,
+    provider: "mistral",
+    contextWindow: 32000,
+    capabilities: ["chat", "code"] as string[],
+    isGA: !m.id.includes("dev") && !m.id.includes("test"),
+    pricingTier: m.id.includes("large") ? "premium" : "standard",
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Static fallback per provider
+// ---------------------------------------------------------------------------
+function getStaticModels(provider: string): FetchedModel[] {
+  return LLM_MODELS.filter((m) => m.provider === provider).map((m) => ({
+    id: m.id,
+    displayName: m.displayName,
+    provider: m.provider,
+    contextWindow: m.contextWindow,
+    capabilities: m.capabilities as string[],
+    isGA: m.isGA,
+    pricingTier: m.pricingTier,
+  }));
+}
+
+// ---------------------------------------------------------------------------
+// Convex action: fetch models for a provider using stored API key
+// ---------------------------------------------------------------------------
+export const fetchForProvider = action({
+  args: { provider: v.string() },
+  handler: async (ctx, { provider }): Promise<FetchedModel[]> => {
+    // Try to get the stored API key for this provider
+    let apiKey: string | null = null;
+    try {
+      const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+      apiKey = keyData?.apiKey ?? null;
+    } catch {
+      // No key stored — fall through to static list
+    }
+
+    if (!apiKey) return getStaticModels(provider);
+
+    try {
+      switch (provider) {
+        case "openai":
+          return await fetchOpenAIModels(apiKey);
+        case "anthropic":
+          return await fetchAnthropicModels(apiKey);
+        case "google":
+          return await fetchGoogleModels(apiKey);
+        case "openrouter":
+          return await fetchOpenRouterModels(apiKey);
+        case "mistral":
+          return await fetchMistralModels(apiKey);
+        default:
+          return getStaticModels(provider);
+      }
+    } catch (err) {
+      console.warn(`[models.fetchForProvider] Live fetch failed for ${provider}, using static list:`, err);
+      return getStaticModels(provider);
+    }
   },
 });
 
-/**
- * Query: Get model details by ID.
- */
-export const getModelById = query({
-  args: {
-    provider: v.string(),
-    modelId: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const models = PROVIDER_MODELS[args.provider] ?? [];
-    return models.find((m) => m.id === args.modelId) ?? null;
+// ---------------------------------------------------------------------------
+// Convex action: fetch models for all configured providers
+// ---------------------------------------------------------------------------
+export const fetchAll = action({
+  args: {},
+  handler: async (ctx): Promise<Record<string, FetchedModel[]>> => {
+    const results: Record<string, FetchedModel[]> = {};
+    const providers = LLM_PROVIDERS.map((p) => p.key);
+    await Promise.all(
+      providers.map(async (provider) => {
+        results[provider] = await ctx.runAction(internal.models.fetchForProvider, { provider });
+      })
+    );
+    return results;
   },
 });

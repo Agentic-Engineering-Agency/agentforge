@@ -1,5 +1,22 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
+
+declare const process: { env: Record<string, string | undefined> };
+
+function getEncryptionSalt(): string {
+  return process.env.AGENTFORGE_KEY_SALT ?? "agentforge-default-salt";
+}
+
+function decodeKey(encoded: string, iv: string, salt: string): string {
+  const key = salt + iv;
+  let decoded = "";
+  for (let i = 0; i < encoded.length; i += 4) {
+    decoded += String.fromCharCode(
+      parseInt(encoded.substring(i, i + 4), 16) ^ key.charCodeAt((i / 4) % key.length)
+    );
+  }
+  return decoded;
+}
 
 // Query: List API keys
 export const list = query({
@@ -129,5 +146,31 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
     return { success: true };
+  },
+});
+
+// Internal query: Get active API key for provider with decryption
+// Used by Convex actions (chat, cronJobs, modelFetcher) to fetch BYOK keys at runtime
+export const getDecryptedForProvider = internalQuery({
+  args: { provider: v.string(), userId: v.optional(v.string()) },
+  handler: async (ctx, args): Promise<{ apiKey: string; provider: string } | null> => {
+    const keys = await ctx.db
+      .query("apiKeys")
+      .withIndex("byProvider", (q) => q.eq("provider", args.provider))
+      .collect();
+
+    const activeKeys = keys.filter((k) => k.isActive);
+    const key = args.userId
+      ? activeKeys.find((k) => k.userId === args.userId) ?? activeKeys[0]
+      : activeKeys[0];
+
+    if (!key) return null;
+
+    const salt = getEncryptionSalt();
+    const apiKey = key.iv
+      ? decodeKey(key.encryptedKey, key.iv, salt)
+      : key.encryptedKey;
+
+    return { apiKey, provider: args.provider };
   },
 });
