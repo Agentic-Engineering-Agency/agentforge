@@ -19,6 +19,7 @@
  * to a global default chain.
  */
 import { action } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
 import { Agent } from "./lib/agent";
@@ -353,6 +354,24 @@ ${toolList}`);
     let latencyMs = 0;
 
     try {
+      // Inject BYOK API keys for each provider in the failover chain
+      const providersSeen = new Set<string>();
+      for (const { provider } of failoverChain) {
+        if (providersSeen.has(provider)) continue;
+        providersSeen.add(provider);
+        try {
+          const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+          if (keyData?.apiKey) {
+            const { LLM_PROVIDERS } = await import("./llmProviders");
+            const providerCfg = LLM_PROVIDERS.find(p => p.key === provider);
+            const envVar = providerCfg?.envVar ?? `${provider.toUpperCase()}_API_KEY`;
+            process.env[envVar] = keyData.apiKey;
+          }
+        } catch {
+          // Key not found — model will use env default if available
+        }
+      }
+
       const result = await executeWithFailover(
         failoverChain,
         systemPrompt,

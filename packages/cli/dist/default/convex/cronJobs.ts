@@ -50,12 +50,20 @@ function getNextCronRun(cronExpression: string, fromMs: number): number {
     const month = candidate.getUTCMonth() + 1; // 1-12
     const dow = candidate.getUTCDay(); // 0=Sunday
 
+    // Standard cron: when both dom and dow are restricted, treat as OR (POSIX)
+    const domMatches = matchesField(domField, dom, 1, 31);
+    const dowMatches = matchesField(dowField, dow, 0, 6);
+    const domRestricted = domField !== "*";
+    const dowRestricted = dowField !== "*";
+    const dayMatches = (domRestricted && dowRestricted)
+      ? (domMatches || dowMatches)
+      : (domMatches && dowMatches);
+
     if (
       matchesField(minuteField, minute, 0, 59) &&
       matchesField(hourField, hour, 0, 23) &&
-      matchesField(domField, dom, 1, 31) &&
-      matchesField(monthField, month, 1, 12) &&
-      matchesField(dowField, dow, 0, 6)
+      dayMatches &&
+      matchesField(monthField, month, 1, 12)
     ) {
       return candidate.getTime();
     }
