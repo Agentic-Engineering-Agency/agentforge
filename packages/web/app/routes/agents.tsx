@@ -42,7 +42,7 @@ interface Agent {
 export const Route = createFileRoute('/agents')({ component: AgentsPageLayout });
 
 function AgentsPageLayout() {
-  const childMatch = useMatch({ from: '/agents/$agentId', shouldThrow: false });
+  const childMatch = useMatch({ from: '/agents/$agentId' as any, shouldThrow: false });
   if (childMatch) return <Outlet />;
   return <AgentsPage />;
 }
@@ -236,13 +236,12 @@ function AgentCard({ agent, onEdit, onDelete }: AgentCardProps) {
           <div className="flex items-center"><Zap className="h-3 w-3 mr-1" /> {agent.provider}</div>
         </div>
       </div>
-      <Link
-        to="/agents/$agentId"
-        params={{ agentId: agent.id }}
+      <a
+        href={`/agents/${agent.id}`}
         className="w-full bg-background border border-border text-center py-2 rounded-lg hover:bg-primary/10 text-sm block"
       >
         View Details
-      </Link>
+      </a>
     </div>
   );
 }
