@@ -157,3 +157,11 @@ export const getDownloadUrl = query({
     return { url: file.url, name: file.originalName, mimeType: file.mimeType };
   },
 });
+// Alias for dashboard compatibility
+export const getFileUrl = query({
+  args: { storageId: v.string() },
+  handler: async (ctx, args) => {
+    return ctx.storage.getUrl(args.storageId);
+  },
+});
+

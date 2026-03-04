@@ -102,7 +102,7 @@ function classifyError(error: unknown): "rate_limit" | "server_error" | "timeout
     if (msg.includes("enotfound") || msg.includes("econnrefused") || msg.includes("network") || msg.includes("dns") || msg.includes("fetch failed")) {
       return "network_error";
     }
-    if (msg.includes("401") || msg.includes("403") || msg.includes("unauthorized") || msg.includes("forbidden") || msg.includes("invalid api key")) {
+    if (msg.includes("401") || msg.includes("403") || msg.includes("unauthorized") || msg.includes("forbidden") || msg.includes("invalid api key") || msg.includes("incorrect api key") || msg.includes("invalid_api_key") || (msg.includes("api key") && (msg.includes("incorrect") || msg.includes("invalid") || msg.includes("invalid_api_key")))) {
       return "auth_error";
     }
   }
@@ -196,6 +196,9 @@ async function executeWithFailover(
         if (!shouldFailover(errorCategory)) {
           throw error;
         }
+
+        // Auth errors: skip retries on same provider, move to next immediately
+        if (errorCategory === "auth_error" && attempt < maxRetries) break;
 
         // Last retry for this model — log failover event
         if (attempt === maxRetries) {
@@ -379,12 +382,12 @@ export const sendMessage = action({
         providersSeen.add(provider);
         try {
           const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
-          if (keyData?.apiKey) {
-            keyMap[provider] = keyData.apiKey;
+          if (keyData) {
+            keyMap[provider] = keyData;
             // Also inject into process.env as belt-and-suspenders for Mastra's env reader
             const providerCfg = LLM_PROVIDERS.find(p => p.key === provider);
             const envVar = providerCfg?.envVar ?? `${provider.toUpperCase()}_API_KEY`;
-            process.env[envVar] = keyData.apiKey;
+            process.env[envVar] = keyData;
           }
         } catch {
           // Key not found for this provider — will fail with 401 and trigger failover

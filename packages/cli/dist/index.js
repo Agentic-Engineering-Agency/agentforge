@@ -1418,7 +1418,7 @@ function registerChatCommand(program2) {
       }
       const input = opts.message.trim();
       let threadId2 = await safeCall(
-        () => client.mutation("threads:create", { agentId: a.id }),
+        () => client.mutation("threads:createThread", { agentId: a.id }),
         "Failed to create thread"
       );
       await safeCall(() => client.mutation("messages:add", { threadId: threadId2, role: "user", content: input }), "Failed to send");
@@ -1452,7 +1452,7 @@ function registerChatCommand(program2) {
     dim(`  Type "exit" or "quit" to end. "/new" for new thread. "/history" for messages.`);
     console.log();
     let threadId = await safeCall(
-      () => client.mutation("threads:create", { agentId: a.id }),
+      () => client.mutation("threads:createThread", { agentId: a.id }),
       "Failed to create thread"
     );
     const history = [];
@@ -1480,7 +1480,7 @@ function registerChatCommand(program2) {
         process.exit(0);
       }
       if (input === "/new") {
-        threadId = await safeCall(() => client.mutation("threads:create", { agentId: a.id }), "Failed");
+        threadId = await safeCall(() => client.mutation("threads:createThread", { agentId: a.id }), "Failed");
         history.length = 0;
         info("New thread started.");
         if (isTTY) rl.prompt();
@@ -1671,7 +1671,7 @@ function registerThreadsCommand(program2) {
   threads.command("list").option("--agent <id>", "Filter by agent ID").option("--json", "Output as JSON").description("List all threads").action(async (opts) => {
     const client = await createClient();
     const args = opts.agent ? { agentId: opts.agent } : {};
-    const result = await safeCall(() => client.query("threads:list", args), "Failed to list threads");
+    const result = await safeCall(() => client.query("threads:listThreads", args), "Failed to list threads");
     if (opts.json) {
       console.log(JSON.stringify(result, null, 2));
       return;
@@ -1706,7 +1706,7 @@ function registerThreadsCommand(program2) {
   });
   threads.command("delete").argument("<id>", "Thread ID").description("Delete a thread and its messages").action(async (id) => {
     const client = await createClient();
-    await safeCall(() => client.mutation("threads:remove", { id }), "Failed to delete thread");
+    await safeCall(() => client.mutation("threads:deleteThread", { id }), "Failed to delete thread");
     success(`Thread "${id}" deleted.`);
   });
   threads.command("rename").argument("<id>", "Thread ID").argument("<name>", "New name").description("Rename a thread").action(async (id, name) => {
@@ -4790,12 +4790,12 @@ function registerModelsCommand(program2) {
     const providers = opts.provider ? [opts.provider] : PROVIDERS2;
     const allModels = {};
     for (const provider of providers) {
-      const cached = await client.query("models:getCachedModels", { provider }).catch(() => null);
+      const cached = await client.query("modelFetcher:getModelsForProvider", { provider }).catch(() => null);
       if (cached && !opts.refresh) {
         allModels[provider] = cached.models;
       } else {
         info(`Fetching ${provider} models...`);
-        const result = await client.action("models:fetchAndCacheModels", { provider, apiKey: "" }).catch(() => null);
+        const result = await client.action("modelFetcher:refreshAllModels", { provider, apiKey: "" }).catch(() => null);
         if (result) allModels[provider] = result;
       }
     }
@@ -4818,7 +4818,7 @@ function registerModelsCommand(program2) {
     const client = await createClient();
     const providers = provider ? [provider] : PROVIDERS2;
     for (const p of providers) {
-      await client.action("models:fetchAndCacheModels", { provider: p, apiKey: "" }).catch(() => {
+      await client.action("modelFetcher:refreshAllModels", { provider: p, apiKey: "" }).catch(() => {
       });
       success(`Refreshed ${p} models`);
     }

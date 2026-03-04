@@ -80,7 +80,7 @@ export function registerChatCommand(program: Command) {
         const input = opts.message.trim();
         
         let threadId = await safeCall(
-          () => client.mutation('threads:create' as any, { agentId: a.id }),
+          () => client.mutation('threads:createThread' as any, { agentId: a.id }),
           'Failed to create thread'
         );
 
@@ -119,7 +119,7 @@ export function registerChatCommand(program: Command) {
       console.log();
 
       let threadId = await safeCall(
-        () => client.mutation('threads:create' as any, { agentId: a.id }),
+        () => client.mutation('threads:createThread' as any, { agentId: a.id }),
         'Failed to create thread'
       );
 
@@ -158,7 +158,7 @@ export function registerChatCommand(program: Command) {
           process.exit(0);
         }
         if (input === '/new') {
-          threadId = await safeCall(() => client.mutation('threads:create' as any, { agentId: a.id }), 'Failed');
+          threadId = await safeCall(() => client.mutation('threads:createThread' as any, { agentId: a.id }), 'Failed');
           history.length = 0;
           info('New thread started.');
           if (isTTY) rl.prompt();
