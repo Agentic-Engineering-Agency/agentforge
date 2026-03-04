@@ -939,8 +939,9 @@ export type DataModel = {
       featured: boolean;
       name: string;
       readmeContent?: string;
+      references?: Array<{ content: string; name: string }>;
       repositoryUrl?: string;
-      skillMdContent: string;
+      skillMdContent?: string;
       tags: Array<string>;
       updatedAt: number;
       version: string;
@@ -958,6 +959,7 @@ export type DataModel = {
       | "featured"
       | "name"
       | "readmeContent"
+      | "references"
       | "repositoryUrl"
       | "skillMdContent"
       | "tags"
@@ -992,8 +994,10 @@ export type DataModel = {
       isInstalled: boolean;
       name: string;
       projectId?: Id<"projects">;
+      references?: Array<{ content: string; name: string }>;
       repository?: string;
       schema?: any;
+      skillMdContent?: string;
       updatedAt: number;
       userId?: string;
       version: string;
@@ -1015,8 +1019,10 @@ export type DataModel = {
       | "isInstalled"
       | "name"
       | "projectId"
+      | "references"
       | "repository"
       | "schema"
+      | "skillMdContent"
       | "updatedAt"
       | "userId"
       | "version";

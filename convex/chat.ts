@@ -52,10 +52,12 @@ function buildFailoverChain(agent: {
 }): Array<{ provider: string; model: string }> {
   const chain: Array<{ provider: string; model: string }> = [];
 
-  // Primary model
+  // Primary model — strip provider: prefix if stored as "openai:gpt-4o-mini" format
+  const rawModel = agent.model || "openai/gpt-4o-mini";
+  const cleanModel = rawModel.includes(":") ? rawModel.split(":").slice(1).join(":") : rawModel;
   chain.push({
     provider: agent.provider || "openrouter",
-    model: agent.model || "openai/gpt-4o-mini",
+    model: cleanModel,
   });
 
   // Agent-specific failover models
