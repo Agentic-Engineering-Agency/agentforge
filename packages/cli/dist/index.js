@@ -4791,26 +4791,24 @@ Troubleshooting:`);
 // src/commands/tokens.ts
 function registerTokensCommand(program2) {
   const tokens = program2.command("tokens").description("Manage API access tokens (for /v1/chat/completions)");
-  tokens.command("generate").option("--name <name>", "Token name (required)").option("--agent <agentId>", "Scope to specific agent").description("Generate a new API access token (shown once only)").action(async (opts) => {
+  tokens.command("generate").option("--name <name>", "Token name (required)").description("Generate a new API access token (shown once only)").action(async (opts) => {
     if (!opts.name) {
       error("--name is required");
       process.exit(1);
     }
     const client = await createClient();
-    const result = await client.action("apiAccessTokens:generate", {
-      name: opts.name,
-      ...opts.agent ? { agentId: opts.agent } : {}
+    const result = await client.mutation("apiAccessTokens:generate", {
+      name: opts.name
     });
-    success(`Token "${result.name}" created.`);
+    success(`Token "${opts.name}" created.`);
     info(`
-  Token: ${result.plaintext}`);
+  Token: ${result.token}`);
     info(`
   \u26A0\uFE0F  This token will NOT be shown again. Store it securely.`);
-    if (result.agentId) info(`  Scoped to agent: ${result.agentId}`);
     dim(`
-Use it as: Authorization: Bearer ${result.plaintext}`);
+Use it as: Authorization: Bearer ${result.token}`);
   });
-  tokens.command("list").option("--json", "Output as JSON").description("List all active API access tokens").action(async (opts) => {
+  tokens.command("list").option("--json", "Output as JSON").description("List all API access tokens").action(async (opts) => {
     const client = await createClient();
     const items = await client.query("apiAccessTokens:list", {});
     if (opts.json) {
@@ -4822,17 +4820,26 @@ Use it as: Authorization: Bearer ${result.plaintext}`);
       dim('No tokens. Create one: agentforge tokens generate --name "my-app"');
       return;
     }
-    table(items.map((t) => ({
-      Name: t.name,
-      Agent: t.agentId || "all agents",
-      Created: new Date(t.createdAt).toLocaleDateString(),
-      "Last Used": t.lastUsedAt ? new Date(t.lastUsedAt).toLocaleDateString() : "Never"
-    })));
+    table(items.map((t) => {
+      const maskedToken = t.token ? `${t.token.slice(0, 8)}...${t.token.slice(-4)}` : "...";
+      return {
+        Name: t.name,
+        Token: maskedToken,
+        Status: t.isActive ? "Active" : "Revoked",
+        Created: new Date(t.createdAt).toLocaleDateString(),
+        Expires: t.expiresAt ? new Date(t.expiresAt).toLocaleDateString() : "Never"
+      };
+    }));
   });
   tokens.command("revoke <id>").description("Revoke an API access token").action(async (id) => {
     const client = await createClient();
-    await client.mutation("apiAccessTokens:revoke", { id });
-    success(`Token revoked.`);
+    try {
+      await client.mutation("apiAccessTokens:revoke", { id });
+      success(`Token ${id} revoked.`);
+    } catch (err) {
+      error(`Failed to revoke token: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
   });
 }
 

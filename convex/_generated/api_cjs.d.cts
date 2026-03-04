@@ -1066,6 +1066,7 @@ export declare const api: {
       any
     >;
     listActive: FunctionReference<"query", "public", { userId?: string }, any>;
+    listByAgent: FunctionReference<"query", "public", { agentId: string }, any>;
     remove: FunctionReference<"mutation", "public", { sessionId: string }, any>;
     updateActivity: FunctionReference<
       "mutation",
