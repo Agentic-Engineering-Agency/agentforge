@@ -84,7 +84,7 @@ export function registerThreadsCommand(program: Command) {
     .action(async (opts) => {
       const client = await createClient();
       const args = opts.agent ? { agentId: opts.agent } : {};
-      const result = await safeCall(() => client.query('threads:list' as any, args), 'Failed to list threads');
+      const result = await safeCall(() => client.query('threads:listThreads' as any, args), 'Failed to list threads');
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
       header('Threads');
       const items = (result as any[]) || [];
@@ -120,7 +120,7 @@ export function registerThreadsCommand(program: Command) {
     .description('Delete a thread and its messages')
     .action(async (id) => {
       const client = await createClient();
-      await safeCall(() => client.mutation('threads:remove' as any, { id }), 'Failed to delete thread');
+      await safeCall(() => client.mutation('threads:deleteThread' as any, { id }), 'Failed to delete thread');
       success(`Thread "${id}" deleted.`);
     });
 

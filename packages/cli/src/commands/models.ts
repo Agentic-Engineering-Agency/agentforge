@@ -19,12 +19,12 @@ export function registerModelsCommand(program: Command) {
       const allModels: Record<string, string[]> = {};
 
       for (const provider of providers) {
-        const cached = await client.query('models:getCachedModels' as any, { provider }).catch(() => null);
+        const cached = await client.query('modelFetcher:getModelsForProvider' as any, { provider }).catch(() => null);
         if (cached && !opts.refresh) {
           allModels[provider] = (cached as any).models;
         } else {
           info(`Fetching ${provider} models...`);
-          const result = await client.action('models:fetchAndCacheModels' as any, { provider, apiKey: '' })
+          const result = await client.action('modelFetcher:refreshAllModels' as any, { provider, apiKey: '' })
             .catch(() => null);
           if (result) allModels[provider] = (result as string[]);
         }
@@ -48,7 +48,7 @@ export function registerModelsCommand(program: Command) {
       const client = await createClient();
       const providers = provider ? [provider] : PROVIDERS;
       for (const p of providers) {
-        await client.action('models:fetchAndCacheModels' as any, { provider: p, apiKey: '' }).catch(() => {});
+        await client.action('modelFetcher:refreshAllModels' as any, { provider: p, apiKey: '' }).catch(() => {});
         success(`Refreshed ${p} models`);
       }
     });

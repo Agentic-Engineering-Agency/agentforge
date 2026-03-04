@@ -115,7 +115,7 @@ function classifyError(error: unknown): string {
     if (msg.includes("500") || msg.includes("502") || msg.includes("503") || msg.includes("504") || msg.includes("internal server error") || msg.includes("bad gateway") || msg.includes("service unavailable")) return "server_error";
     if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("econnreset") || name.includes("timeout") || name === "aborterror") return "timeout";
     if (msg.includes("enotfound") || msg.includes("econnrefused") || msg.includes("network") || msg.includes("dns") || msg.includes("fetch failed")) return "network_error";
-    if (msg.includes("401") || msg.includes("403") || msg.includes("unauthorized") || msg.includes("forbidden") || msg.includes("invalid api key")) return "auth_error";
+    if (msg.includes("401") || msg.includes("403") || msg.includes("unauthorized") || msg.includes("forbidden") || msg.includes("invalid api key") || msg.includes("incorrect api key") || msg.includes("invalid_api_key")) return "auth_error";
   }
   return "unknown";
 }
@@ -183,13 +183,7 @@ async function executeWithFailover(
       try {
         const mastraAgent = getCachedAgent(modelKey, systemPrompt, chain[chainPos].apiKey);
 
-        const generateOptions: Record<string, unknown> = {
-          messages,
-        };
-        if (options.temperature !== undefined) generateOptions.temperature = options.temperature;
-        if (options.maxTokens !== undefined) generateOptions.maxTokens = options.maxTokens;
-
-        const result = await mastraAgent.generate(generateOptions as any);
+        const result = await mastraAgent.generate(messages);
 
         const usage = result.usage
           ? {
@@ -358,11 +352,11 @@ export const executeAgent = action({
         providersSeen2.add(provider);
         try {
           const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
-          if (keyData?.apiKey) {
-            keyMap[provider] = keyData.apiKey;
+          if (keyData) {
+            keyMap[provider] = keyData;
             const providerCfg = LLM_PROVIDERS.find((p: { key: string }) => p.key === provider);
             const envVar = providerCfg?.envVar ?? `${provider.toUpperCase()}_API_KEY`;
-            process.env[envVar] = keyData.apiKey;
+            process.env[envVar] = keyData;
           }
         } catch { /* key not found */ }
       }

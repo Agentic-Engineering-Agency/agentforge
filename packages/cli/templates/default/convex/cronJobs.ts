@@ -481,3 +481,13 @@ export const updateRun = mutation({
     });
   },
 });
+
+export const triggerNow = mutation({
+  args: { id: v.id("cronJobs") },
+  handler: async (ctx, args) => {
+    const job = await ctx.db.get(args.id);
+    if (!job) throw new Error("Cron job not found");
+    await ctx.db.patch(args.id, { lastRun: Date.now(), nextRun: Date.now() });
+    return { success: true, jobId: args.id };
+  },
+});
