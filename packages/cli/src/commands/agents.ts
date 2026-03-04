@@ -50,17 +50,21 @@ export function registerAgentsCommand(program: Command) {
     .option('--name <name>', 'Agent name')
     .option('--model <model>', 'Model identifier (e.g., openai:gpt-4o-mini)')
     .option('--instructions <text>', 'System instructions')
+    .option('--description <text>', 'Agent description')
+    .option('--provider <provider>', 'Provider (openai, anthropic, etc.)')
     .action(async (opts) => {
       const name = opts.name || await prompt('Agent name: ');
       const model = opts.model || await prompt('Model (e.g., openai:gpt-4o-mini): ');
       const instructions = opts.instructions || await prompt('Instructions: ');
+      const description = opts.description || await prompt('Description (optional): ');
+      const provider = opts.provider || await prompt('Provider (openai, anthropic, etc.) [default: openai]: ') || 'openai';
 
       if (!name || !model || !instructions) {
         error('Name, model, and instructions are required.');
         process.exit(1);
       }
 
-      let agentProvider = 'openai';
+      let agentProvider = provider;
       let agentModel = model || 'gpt-4o-mini';
       if (agentModel.includes(':')) {
         const [p, m] = agentModel.split(':');
@@ -75,6 +79,7 @@ export function registerAgentsCommand(program: Command) {
         () => client.mutation('agents:create' as any, {
           id: agentId,
           name,
+          description: description || undefined,
           instructions,
           model: agentModel,
           provider: agentProvider,
