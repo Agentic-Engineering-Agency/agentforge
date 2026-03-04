@@ -21,7 +21,7 @@ export function registerModelsCommand(program: Command) {
       for (const provider of providers) {
         const cached = await client.action('modelFetcher:getModelsForProvider' as any, { provider }).catch(() => null);
         if (cached && !opts.refresh) {
-          allModels[provider] = (cached as any).models;
+          allModels[provider] = Array.isArray(cached) ? cached : (cached as any).models ?? cached;
         } else {
           info(`Fetching ${provider} models...`);
           const result = await client.action('modelFetcher:refreshAllModels' as any, { provider, apiKey: '' })
