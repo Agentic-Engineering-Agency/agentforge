@@ -1,157 +1,125 @@
 /**
  * @module workspace/workspace.test
  *
- * TDD tests for createWorkspace factory.
- * WRITTEN FIRST - tests should fail until implementation exists.
+ * Tests for Mastra-native createWorkspace factory.
+ * Verifies correct Workspace/LocalFilesystem/S3Filesystem construction.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createWorkspace } from './index.js';
-import { rm } from 'node:fs/promises';
+import { rm, mkdir } from 'node:fs/promises';
+import { Workspace, LocalFilesystem } from '@mastra/core/workspace';
+import { S3Filesystem } from '@mastra/s3';
+
+const testBasePath = '/tmp/test-agentforge-workspace';
+
+beforeEach(async () => {
+  await rm(testBasePath, { recursive: true, force: true });
+  await mkdir(testBasePath, { recursive: true });
+  delete process.env.AGENTFORGE_STORAGE;
+});
+
+afterEach(async () => {
+  await rm(testBasePath, { recursive: true, force: true });
+  delete process.env.AGENTFORGE_STORAGE;
+});
 
 describe('createWorkspace', () => {
-  const testBasePath = '/tmp/test-agentforge-workspace';
-  const testEnv = process.env;
-
-  beforeEach(async () => {
-    // Clean up test directory
-    await rm(testBasePath, { recursive: true, force: true });
-    // Reset environment
-    process.env = { ...testEnv };
-    delete process.env.AGENTFORGE_STORAGE;
-  });
-
-  afterEach(async () => {
-    // Clean up test directory
-    await rm(testBasePath, { recursive: true, force: true });
-    // Restore environment
-    process.env = testEnv;
-  });
-
   describe('local storage', () => {
-    it('returns object with read/write methods when storage is local', () => {
-      const workspace = createWorkspace({
-        storage: 'local',
-        basePath: testBasePath,
-      });
-
-      expect(workspace).toBeDefined();
-      expect(typeof workspace.read).toBe('function');
-      expect(typeof workspace.write).toBe('function');
-      expect(typeof workspace.list).toBe('function');
-      expect(typeof workspace.delete).toBe('function');
-      expect(typeof workspace.exists).toBe('function');
+    it('returns a Mastra Workspace instance', () => {
+      const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
+      expect(workspace).toBeInstanceOf(Workspace);
     });
 
-    it('write then read returns same content', async () => {
-      const workspace = createWorkspace({
-        storage: 'local',
-        basePath: testBasePath,
-      });
-
-      await workspace.write('test.txt', 'Hello, World!');
-      const content = await workspace.read('test.txt');
-
-      expect(content).toBe('Hello, World!');
+    it('has a LocalFilesystem configured', () => {
+      const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
+      expect(workspace.filesystem).toBeInstanceOf(LocalFilesystem);
     });
 
-    it('list returns array of paths', async () => {
-      const workspace = createWorkspace({
-        storage: 'local',
-        basePath: testBasePath,
-      });
-
-      await workspace.write('file1.txt', 'content1');
-      await workspace.write('file2.txt', 'content2');
-      await workspace.write('subdir/file3.txt', 'content3');
-
-      const files = await workspace.list();
-
-      expect(files).toEqual(expect.arrayContaining([
-        'file1.txt',
-        'file2.txt',
-        'subdir/file3.txt',
-      ]));
+    it('filesystem can write and read files', async () => {
+      const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
+      await workspace.filesystem!.writeFile('/test.txt', 'hello world');
+      const content = await workspace.filesystem!.readFile('/test.txt', { encoding: 'utf-8' });
+      expect(content.toString()).toBe('hello world');
     });
 
-    it('exists returns true for written file', async () => {
-      const workspace = createWorkspace({
-        storage: 'local',
-        basePath: testBasePath,
-      });
-
-      await workspace.write('test.txt', 'content');
-
-      expect(await workspace.exists('test.txt')).toBe(true);
-      expect(await workspace.exists('nonexistent.txt')).toBe(false);
+    it('filesystem.exists() returns true for written file', async () => {
+      const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
+      await workspace.filesystem!.writeFile('/exists-test.txt', 'data');
+      const exists = await workspace.filesystem!.exists('/exists-test.txt');
+      expect(exists).toBe(true);
     });
 
-    it('delete removes file', async () => {
-      const workspace = createWorkspace({
-        storage: 'local',
-        basePath: testBasePath,
-      });
-
-      await workspace.write('test.txt', 'content');
-      expect(await workspace.exists('test.txt')).toBe(true);
-
-      await workspace.delete('test.txt');
-      expect(await workspace.exists('test.txt')).toBe(false);
-    });
-  });
-
-  describe('environment variable toggle', () => {
-    it('AGENTFORGE_STORAGE=local selects local storage', () => {
-      process.env.AGENTFORGE_STORAGE = 'local';
-
-      const workspace = createWorkspace({
-        basePath: testBasePath,
-      });
-
-      // Should work with local filesystem operations
-      expect(typeof workspace.write).toBe('function');
+    it('filesystem.readdir() returns entries', async () => {
+      const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
+      await workspace.filesystem!.writeFile('/a.txt', 'a');
+      await workspace.filesystem!.writeFile('/b.txt', 'b');
+      const entries = await workspace.filesystem!.readdir('/');
+      expect(Array.isArray(entries)).toBe(true);
+      expect(entries.length).toBeGreaterThan(0);
     });
 
-    it('defaults to local when AGENTFORGE_STORAGE is not set', () => {
-      delete process.env.AGENTFORGE_STORAGE;
-
-      const workspace = createWorkspace({
-        basePath: testBasePath,
-      });
-
-      expect(typeof workspace.write).toBe('function');
+    it('filesystem.deleteFile() removes file', async () => {
+      const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
+      await workspace.filesystem!.writeFile('/del.txt', 'bye');
+      await workspace.filesystem!.deleteFile('/del.txt');
+      const exists = await workspace.filesystem!.exists('/del.txt');
+      expect(exists).toBe(false);
     });
   });
 
   describe('S3 storage', () => {
-    it('creates S3 workspace when storage is s3', () => {
+    it('returns a Mastra Workspace with S3Filesystem', () => {
       const workspace = createWorkspace({
         storage: 's3',
         bucket: 'test-bucket',
         region: 'us-east-1',
-        accessKeyId: 'test-key',
-        secretAccessKey: 'test-secret',
+        accessKeyId: 'key',
+        secretAccessKey: 'secret',
       });
+      expect(workspace).toBeInstanceOf(Workspace);
+      expect(workspace.filesystem).toBeInstanceOf(S3Filesystem);
+    });
 
-      expect(workspace).toBeDefined();
-      expect(typeof workspace.read).toBe('function');
-      expect(typeof workspace.write).toBe('function');
+    it('S3Filesystem has correct bucket', () => {
+      const workspace = createWorkspace({
+        storage: 's3', bucket: 'my-bucket', region: 'us-east-1',
+        accessKeyId: 'k', secretAccessKey: 's',
+      });
+      expect((workspace.filesystem as S3Filesystem).bucket).toBe('my-bucket');
     });
   });
 
   describe('R2 storage', () => {
-    it('creates R2 workspace when storage is r2', () => {
+    it('returns a Mastra Workspace with S3Filesystem for R2', () => {
       const workspace = createWorkspace({
         storage: 'r2',
-        bucket: 'test-bucket',
-        endpoint: 'https://example.com',
-        accessKeyId: 'test-key',
-        secretAccessKey: 'test-secret',
+        bucket: 'my-r2-bucket',
+        endpoint: 'https://xxx.r2.cloudflarestorage.com',
+        accessKeyId: 'key',
+        secretAccessKey: 'secret',
       });
+      expect(workspace).toBeInstanceOf(Workspace);
+      expect(workspace.filesystem).toBeInstanceOf(S3Filesystem);
+    });
+  });
 
-      expect(workspace).toBeDefined();
-      expect(typeof workspace.read).toBe('function');
-      expect(typeof workspace.write).toBe('function');
+  describe('environment variable', () => {
+    it('defaults to LocalFilesystem when AGENTFORGE_STORAGE not set', () => {
+      const workspace = createWorkspace({ basePath: testBasePath });
+      expect(workspace.filesystem).toBeInstanceOf(LocalFilesystem);
+    });
+
+    it('uses AGENTFORGE_STORAGE=local', () => {
+      process.env.AGENTFORGE_STORAGE = 'local';
+      const workspace = createWorkspace({ basePath: testBasePath });
+      expect(workspace.filesystem).toBeInstanceOf(LocalFilesystem);
+    });
+  });
+
+  describe('error handling', () => {
+    it('throws for unknown storage type', () => {
+      expect(() => createWorkspace({ storage: 'unknown' as any })).toThrow('Unknown storage type');
     });
   });
 });

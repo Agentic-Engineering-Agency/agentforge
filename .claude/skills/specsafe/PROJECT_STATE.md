@@ -1,15 +1,34 @@
 # PROJECT_STATE.md — SpecSafe Project Tracking
 
 **Last Updated:** 2026-03-04
-**Current Branch:** feat/overnite-a
-**Current Spec:** SPEC-20260304-010
+**Current Branch:** feat/mastra-workspace-native
+**Current Spec:** SPEC-017
 
 ---
 
 ## Active Specs
 
+### SPEC-017: Mastra Native Workspace + @mastra/s3 Integration
+**Status:** IN PROGRESS (SPEC → TEST stage)
+**Priority:** P0 — Core infrastructure improvement
+**Stage:** TEST
+
+**Description:**
+Replace custom AgentForgeWorkspace and R2WorkspaceProvider with Mastra's native Workspace class from @mastra/core/workspace and S3Filesystem from @mastra/s3.
+
+**Implementation Steps:**
+1. ✓ SPEC — spec file created
+2. TEST — Write tests for createWorkspace(), workspace methods, agent integration
+3. CODE — Add @mastra/s3, create factory, update agent, deprecate old code, CLI commands, dashboard
+4. QA — Run tests, typecheck, live deployment test
+5. COMPLETE — Commit + PR
+
+---
+
+## Pending Specs
+
 ### SPEC-20260304-010: Fix Missing CLI Command Flags & Subcommands
-**Status:** IN PROGRESS (SPEC stage → moving to TEST)
+**Status:** PENDING
 **Priority:** P0 — Broken in v0.10.12
 **Stage:** SPEC
 
@@ -19,12 +38,6 @@ Several CLI commands are broken or missing in v0.10.12:
 2. `agentforge sessions delete <id>` — delete subcommand completely missing
 3. `agentforge workflows create` — create subcommand missing
 4. `agentforge skills install <name>` — crashes with unimplemented error
-
-**Fixes Required:**
-- Fix 1: Add `--description` flag to agents create
-- Fix 2: Add sessions delete subcommand with --force flag
-- Fix 3: Add workflows create subcommand
-- Fix 4: Fix skills install crashes
 
 ---
 

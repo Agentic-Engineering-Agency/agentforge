@@ -2,6 +2,10 @@
  * @module providers/r2-provider
  * R2/S3-compatible workspace provider using native fetch + SigV4.
  * No AWS SDK — uses Web Crypto API per project conventions (Lesson 11/12).
+ *
+ * @deprecated Use Mastra's native S3Filesystem from '@mastra/s3' instead.
+ * Import { createWorkspace } from '@agentforge-ai/core/workspace' for the recommended implementation.
+ * This custom implementation will be removed in a future version.
  */
 
 import type { WorkspaceProvider } from '../workspace.js';
@@ -76,6 +80,11 @@ async function buildSigV4Headers(
   };
 }
 
+/**
+ * @deprecated Use Mastra's native S3Filesystem from '@mastra/s3' instead.
+ * Import { createWorkspace } from '@agentforge-ai/core/workspace' for the recommended implementation.
+ * This custom implementation will be removed in a future version.
+ */
 export class R2WorkspaceProvider implements WorkspaceProvider {
   private config: Required<R2ProviderConfig>;
 
