@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Outlet, useMatch } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, useEffect } from 'react';
 // import { useQuery, useMutation } from 'convex/react';
@@ -46,9 +46,14 @@ const mockSessions = [
 
 type Session = typeof mockSessions[0] & { endTime?: number };
 
-export const Route = createFileRoute('/sessions')({
-  component: SessionsPage,
-});
+export const Route = createFileRoute('/sessions')({ component: SessionsPageLayout });
+
+function SessionsPageLayout() {
+  const childMatch = useMatch({ from: '/sessions/$sessionId', shouldThrow: false });
+  if (childMatch) return <Outlet />;
+  return <SessionsPage />;
+}
+
 
 function formatDuration(startTime: number, endTime?: number) {
   const end = endTime ? endTime : new Date().getTime();

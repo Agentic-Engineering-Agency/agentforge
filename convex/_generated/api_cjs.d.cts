@@ -1047,6 +1047,12 @@ export declare const api: {
       },
       any
     >;
+    endSession: FunctionReference<
+      "mutation",
+      "public",
+      { sessionId: string },
+      any
+    >;
     get: FunctionReference<"query", "public", { sessionId: string }, any>;
     list: FunctionReference<
       "query",
