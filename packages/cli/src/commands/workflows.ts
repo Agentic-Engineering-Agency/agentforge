@@ -8,6 +8,54 @@ export function registerWorkflowsCommand(program: Command) {
     .description('Multi-agent workflow commands');
 
   workflowsCmd
+    .command('create')
+    .description('Create a new workflow')
+    .option('--name <name>', 'Workflow name')
+    .option('--agent <id>', 'Agent ID to assign')
+    .option('--trigger <type>', 'Trigger type (manual, cron, webhook)', 'manual')
+    .option('--schedule <cron>', 'Cron schedule (for cron trigger)')
+    .action(async (opts) => {
+      const name = opts.name;
+      const agent = opts.agent;
+      const trigger = opts.trigger || 'manual';
+      const schedule = opts.schedule;
+
+      if (!name) {
+        error('--name is required');
+        process.exit(1);
+      }
+
+      if (!agent) {
+        error('--agent is required');
+        process.exit(1);
+      }
+
+      if (trigger === 'cron' && !schedule) {
+        error('--schedule is required for cron triggers');
+        process.exit(1);
+      }
+
+      const client = await createClient();
+
+      // Build triggers JSON based on trigger type
+      let triggersData: any = { type: trigger };
+      if (trigger === 'cron' && schedule) {
+        triggersData.schedule = schedule;
+      }
+
+      await safeCall(
+        () => client.mutation('workflows:create' as any, {
+          name,
+          triggers: JSON.stringify(triggersData),
+          steps: JSON.stringify([{ agentId: agent, name: 'Step 1' }]),
+        }),
+        'Failed to create workflow'
+      );
+
+      success(`Workflow "${name}" created`);
+    });
+
+  workflowsCmd
     .command('list')
     .option('-p, --project <projectId>', 'Filter by project ID')
     .option('--active', 'Show only active workflows')
