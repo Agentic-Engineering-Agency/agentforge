@@ -32,13 +32,14 @@ function OverviewPage() {
   const agents = useQuery(api.agents.list, {});
   const sessions = useQuery(api.sessions.list, {});
   const files = useQuery(api.files.list, {});
-  const usage = useQuery(api.usage.list, {});
-  const logs = useQuery(api.logs.list, { limit: 5 });
+  const usage = useQuery(api.usage.getStats, {});
+  const logsResult = useQuery(api.logs.list, { paginationOpts: { numItems: 5, cursor: null } });
 
   const totalAgents = agents?.length ?? 0;
   const activeSessions = sessions?.filter((s: any) => s.status === 'active').length ?? 0;
   const totalFiles = files?.length ?? 0;
-  const totalTokens = usage?.reduce((sum: number, u: any) => sum + (u.totalTokens || 0), 0) ?? 0;
+  const totalTokens = usage?.totalTokens ?? 0;
+  const logs = logsResult?.page;
   const isLoading = agents === undefined;
 
   return (
