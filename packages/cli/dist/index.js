@@ -7,7 +7,7 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 });
 
 // src/index.ts
-import { Command as Command3 } from "commander";
+import { Command as Command2 } from "commander";
 
 // src/commands/create.ts
 import path from "path";
@@ -229,13 +229,6 @@ import os from "os";
 var CREDENTIALS_DIR = path3.join(os.homedir(), ".agentforge");
 var CREDENTIALS_FILE = path3.join(CREDENTIALS_DIR, "credentials.json");
 var DEFAULT_CLOUD_URL = "https://cloud.agentforge.ai";
-async function ensureCredentialsDir() {
-  await fs3.ensureDir(CREDENTIALS_DIR);
-  try {
-    await fs3.chmod(CREDENTIALS_DIR, 448);
-  } catch {
-  }
-}
 async function readCredentials() {
   try {
     if (!await fs3.pathExists(CREDENTIALS_FILE)) {
@@ -251,34 +244,6 @@ async function readCredentials() {
     return null;
   }
 }
-async function writeCredentials(credentials) {
-  await ensureCredentialsDir();
-  const data = {
-    ...credentials,
-    cloudUrl: credentials.cloudUrl || DEFAULT_CLOUD_URL,
-    refreshedAt: Date.now()
-  };
-  await fs3.writeFile(CREDENTIALS_FILE, JSON.stringify(data, null, 2), "utf-8");
-  try {
-    await fs3.chmod(CREDENTIALS_FILE, 384);
-  } catch {
-  }
-}
-async function deleteCredentials() {
-  try {
-    if (await fs3.pathExists(CREDENTIALS_FILE)) {
-      await fs3.remove(CREDENTIALS_FILE);
-      return true;
-    }
-    return false;
-  } catch {
-    return false;
-  }
-}
-async function isAuthenticated() {
-  const creds = await readCredentials();
-  return creds !== null && creds.apiKey !== void 0;
-}
 async function getCloudUrl() {
   const creds = await readCredentials();
   return creds?.cloudUrl || process.env.AGENTFORGE_CLOUD_URL || DEFAULT_CLOUD_URL;
@@ -286,9 +251,6 @@ async function getCloudUrl() {
 async function getApiKey() {
   const creds = await readCredentials();
   return creds?.apiKey || null;
-}
-function getCredentialsPath() {
-  return CREDENTIALS_FILE;
 }
 
 // src/lib/cloud-client.ts
@@ -4543,144 +4505,6 @@ function registerStatusCommand(program2) {
   });
 }
 
-// src/commands/login.ts
-import chalk2 from "chalk";
-import ora2 from "ora";
-import prompts from "prompts";
-function registerLoginCommand(program2) {
-  program2.command("login").description("Authenticate with AgentForge Cloud").option("--api-key <key>", "API key for authentication (skips browser flow)").option("--cloud-url <url>", "Custom AgentForge Cloud URL").action(async (options) => {
-    header("AgentForge Cloud Login");
-    const existingCreds = await readCredentials();
-    if (existingCreds?.apiKey) {
-      const { overwrite } = await prompts({
-        type: "confirm",
-        name: "overwrite",
-        message: "You are already logged in. Overwrite existing credentials?",
-        initial: false
-      });
-      if (!overwrite) {
-        info("Login cancelled.");
-        return;
-      }
-    }
-    let apiKey;
-    let cloudUrl;
-    if (options.apiKey) {
-      apiKey = options.apiKey;
-      cloudUrl = options.cloudUrl || process.env.AGENTFORGE_CLOUD_URL || "https://cloud.agentforge.ai";
-    } else {
-      const { method } = await prompts({
-        type: "select",
-        name: "method",
-        message: "How would you like to authenticate?",
-        choices: [
-          { title: "Enter API key manually", value: "api-key" },
-          { title: "Browser (OAuth - coming soon)", value: "browser", disabled: true }
-        ]
-      });
-      if (method === "api-key") {
-        const response = await prompts({
-          type: "password",
-          name: "key",
-          message: "Enter your AgentForge API key:",
-          validate: (value) => value.length > 0 ? true : "API key is required"
-        });
-        apiKey = response.key;
-      } else {
-        error("Browser authentication not yet implemented. Use --api-key flag.");
-        process.exit(1);
-      }
-      cloudUrl = options.cloudUrl || process.env.AGENTFORGE_CLOUD_URL || "https://cloud.agentforge.ai";
-    }
-    const spinner = ora2("Authenticating with AgentForge Cloud...").start();
-    try {
-      const client = new CloudClient(cloudUrl, apiKey);
-      const user = await client.authenticate();
-      await writeCredentials({
-        apiKey,
-        cloudUrl,
-        userEmail: user.email,
-        userName: user.name
-      });
-      spinner.succeed("Authentication successful!");
-      success(`Logged in as ${chalk2.bold(user.email)}`);
-      info(`Cloud URL: ${cloudUrl}`);
-      info(`Credentials stored at: ${getCredentialsPath()}`);
-    } catch (err) {
-      spinner.fail("Authentication failed");
-      if (err instanceof CloudClientError) {
-        error(err.message);
-        if (err.code === "NETWORK_ERROR") {
-          info("Check your internet connection and try again.");
-        } else if (err.status === 401) {
-          info("Your API key appears to be invalid. Please check and try again.");
-        }
-      } else {
-        error(`Unexpected error: ${err.message || err}`);
-      }
-      process.exit(1);
-    }
-  });
-  program2.command("logout").description("Clear AgentForge Cloud credentials").action(async () => {
-    header("AgentForge Cloud Logout");
-    const wasLoggedIn = await isAuthenticated();
-    if (!wasLoggedIn) {
-      info("You are not currently logged in.");
-      return;
-    }
-    const { confirm } = await prompts({
-      type: "confirm",
-      name: "confirm",
-      message: "Are you sure you want to log out?",
-      initial: true
-    });
-    if (!confirm) {
-      info("Logout cancelled.");
-      return;
-    }
-    const deleted = await deleteCredentials();
-    if (deleted) {
-      success("Logged out successfully.");
-      info("Your credentials have been removed.");
-    } else {
-      error("Failed to remove credentials.");
-      process.exit(1);
-    }
-  });
-  program2.command("whoami").description("Show current user information").action(async () => {
-    header("Current User");
-    const creds = await readCredentials();
-    const cloudUrl = await getCloudUrl();
-    if (!creds?.apiKey) {
-      info("You are not logged in.");
-      info('Run "agentforge login" to authenticate.');
-      return;
-    }
-    details({
-      "Cloud URL": cloudUrl,
-      "Email": creds.userEmail || "Unknown",
-      "Name": creds.userName || "Unknown",
-      "Credentials File": getCredentialsPath()
-    });
-    const spinner = ora2("Validating session...").start();
-    try {
-      const client = new CloudClient(creds.cloudUrl, creds.apiKey);
-      const user = await client.authenticate();
-      spinner.succeed("Session is valid");
-      success(`Authenticated as ${chalk2.bold(user.email)}`);
-    } catch (err) {
-      spinner.fail("Session validation failed");
-      if (err instanceof CloudClientError && err.status === 401) {
-        error("Your session has expired or the API key is invalid.");
-        info('Run "agentforge login" to re-authenticate.');
-      } else {
-        error(`Error: ${err.message || err}`);
-        info("Your credentials are stored but the server could not be reached.");
-      }
-    }
-  });
-}
-
 // src/commands/models.ts
 var PROVIDERS2 = ["openai", "anthropic", "openrouter", "mistral", "google", "groq", "xai"];
 function registerModelsCommand(program2) {
@@ -6978,17 +6802,12 @@ function formatReport(report) {
   return lines.join("\n");
 }
 
-// src/commands/auth.ts
-import { Command } from "commander";
-var authCommand = new Command("auth");
-authCommand.description("Manage dashboard authentication");
-
 // src/commands/browser.ts
-import { Command as Command2 } from "commander";
+import { Command } from "commander";
 import { createBrowserTool } from "@agentforge-ai/core";
 import { writeFile as writeFile2, mkdir as mkdir2 } from "fs/promises";
 import { dirname } from "path";
-var browserCommand = new Command2("browser");
+var browserCommand = new Command("browser");
 browserCommand.description("Browser automation for testing and web scraping");
 browserCommand.command("open").description("Open a URL in the browser and get page info").argument("<url>", "URL to open").option("-w, --wait <ms>", "Wait time after navigation in ms", "5000").option("-s, --screenshot", "Take a screenshot after loading").option("-o, --output <path>", "Screenshot output path").option("-t, --text", "Extract text content from page").option("--headed", "Run in headed mode (visible browser)").action(async (url, options) => {
   const { tool, shutdown, sessionManager } = createBrowserTool({
@@ -7426,7 +7245,7 @@ import { dirname as dirname2, resolve as resolve3 } from "path";
 var __filename2 = fileURLToPath2(import.meta.url);
 var __dirname2 = dirname2(__filename2);
 var pkg = JSON.parse(readFileSync(resolve3(__dirname2, "..", "package.json"), "utf-8"));
-var program = new Command3();
+var program = new Command2();
 program.name("agentforge").description("AgentForge \u2014 NanoClaw: A minimalist agent framework powered by Mastra + Convex").version(pkg.version);
 program.command("create").argument("<project-name>", "Name of the project to create").description("Create a new AgentForge project").option("-t, --template <template>", "Project template to use", "default").action(async (projectName, options) => {
   await createProject(projectName, options);
@@ -7437,7 +7256,6 @@ program.command("run").description("Start the local development environment").op
 program.command("deploy").description("Deploy the project to production").option("--env <path>", "Path to environment file", ".env.production").option("--dry-run", "Preview deployment without executing", false).option("--rollback", "Rollback to previous deployment", false).option("--force", "Skip confirmation prompts", false).option("--provider <provider>", "Deployment provider (convex or cloud)", "convex").option("--project <projectId>", "Project ID for cloud deployments").option("--version <tag>", "Version tag for the deployment").action(async (options) => {
   await deployProject(options);
 });
-registerLoginCommand(program);
 registerModelsCommand(program);
 registerWorkspaceCommand(program);
 registerTokensCommand(program);
@@ -7460,7 +7278,6 @@ registerChannelSlackCommand(program);
 registerChannelDiscordCommand(program);
 registerSandboxCommand(program);
 registerResearchCommand(program);
-program.addCommand(authCommand);
 program.addCommand(browserCommand);
 registerVoiceCommand(program);
 registerWorkflowsCommand(program);
