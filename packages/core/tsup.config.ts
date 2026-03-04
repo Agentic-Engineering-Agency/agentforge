@@ -13,6 +13,7 @@ export default defineConfig({
     'src/providers/s3-signer.ts',
     'src/channels/telegram.ts',
     'src/channels/whatsapp.ts',
+    'src/voice/index.ts',
   ],
   format: ['esm'],
   dts: true,
