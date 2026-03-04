@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
 import { useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 import {
   Activity,
   Brain,
@@ -86,26 +88,33 @@ function statusBadgeClass(status: RunSummary["status"]): string {
 function AgentRunPage() {
   const { runId } = Route.useParams();
 
-  // In production, this would use Convex useQuery for real-time data.
-  // For now, using mock data that matches the TraceSpan structure from convex/lib/tracing.ts.
-  const [events] = useState<RunEvent[]>([
-    { id: "e1", type: "llm", name: "Agent Generate", timestamp: Date.now() - 5200, durationMs: 2340, model: "openai/gpt-4o", inputTokens: 1250, outputTokens: 580 },
-    { id: "e2", type: "tool", name: "web_search", timestamp: Date.now() - 2800, durationMs: 890, details: { query: "latest AgentForge documentation", results: 5 } },
-    { id: "e3", type: "memory", name: "vector_store.query", timestamp: Date.now() - 1900, durationMs: 120, details: { matches: 3, threshold: 0.8 } },
-    { id: "e4", type: "llm", name: "Agent Generate (final)", timestamp: Date.now() - 1700, durationMs: 1680, model: "openai/gpt-4o", inputTokens: 2800, outputTokens: 1200 },
-    { id: "e5", type: "memory", name: "memory.store", timestamp: Date.now() - 50, durationMs: 45, details: { stored: true, threadId: "th_abc123" } },
-  ]);
+  // Real Convex query - use api.workflows.getRun which returns workflow run data
+  // runId is a string URL param, need to use it as-is for Convex ID lookup
+  const runData = useQuery(api.workflows.listRuns, {});
+  const run = runData?.find((r: any) => r._id === runId);
 
-  const [summary] = useState<RunSummary>({
+  // For now, show loading state or empty state if run not found
+  // TODO: Implement proper run event tracking when TraceSpan data is available
+  const isLoading = runData === undefined;
+  const events: RunEvent[] = [];
+  const summary: RunSummary = run ? {
+    runId: run._id,
+    status: run.status === "failed" ? "error" : run.status === "completed" ? "completed" : "running",
+    startTime: run.startedAt,
+    endTime: run.completedAt ?? undefined,
+    totalDurationMs: run.completedAt ? run.completedAt - run.startedAt : Date.now() - run.startedAt,
+    totalCost: 0,
+    model: "N/A",
+    eventCount: 0,
+  } : {
     runId,
-    status: "completed",
-    startTime: Date.now() - 5200,
-    endTime: Date.now(),
-    totalDurationMs: 5200,
-    totalCost: 0.0142,
-    model: "openai/gpt-4o",
-    eventCount: events.length,
-  });
+    status: "running",
+    startTime: Date.now(),
+    totalDurationMs: 0,
+    totalCost: 0,
+    model: "N/A",
+    eventCount: 0,
+  };
 
   const isEmpty = events.length === 0;
 

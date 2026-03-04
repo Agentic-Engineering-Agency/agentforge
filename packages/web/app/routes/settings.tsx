@@ -155,11 +155,31 @@ const Button = ({ children, variant = 'primary', ...props }: { children: React.R
 };
 
 function GeneralTab({ settings, setSettings }: { settings: any, setSettings: any }) {
+  const updateSettings = useMutation(api.settings.set);
   const [isSaving, setIsSaving] = useState(false);
-  const handleSave = () => {
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  const handleSave = async () => {
     setIsSaving(true);
-    // updateSettings(settings);
-    setTimeout(() => setIsSaving(false), 1000);
+    setSaveError(null);
+    setSaveSuccess(false);
+
+    try {
+      // Use a default user ID for now - in production this would come from auth
+      const userId = 'default';
+      await Promise.all([
+        updateSettings({ userId, key: 'appName', value: settings.appName }),
+        updateSettings({ userId, key: 'defaultModel', value: settings.defaultModel }),
+        updateSettings({ userId, key: 'defaultProvider', value: settings.defaultProvider }),
+      ]);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2000);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : 'Failed to save settings');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -179,6 +199,16 @@ function GeneralTab({ settings, setSettings }: { settings: any, setSettings: any
           <input type="text" value={settings.defaultProvider} onChange={e => setSettings({...settings, defaultProvider: e.target.value})} className="w-full bg-background border border-border rounded-md px-3 py-2" />
         </div>
       </div>
+      {saveError && (
+        <div className="mt-4 p-3 bg-red-500/20 text-red-400 rounded-md text-sm">
+          {saveError}
+        </div>
+      )}
+      {saveSuccess && (
+        <div className="mt-4 p-3 bg-green-500/20 text-green-400 rounded-md text-sm">
+          Settings saved successfully
+        </div>
+      )}
       <div className="mt-6 flex justify-end">
         <Button onClick={handleSave} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Changes'}</Button>
       </div>
