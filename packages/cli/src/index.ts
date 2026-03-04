@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { createProject } from './commands/create.js';
 import { runProject } from './commands/run.js';
 import { deployProject } from './commands/deploy.js';
+import { upgradeProject } from './commands/upgrade.js';
 import { registerAgentsCommand } from './commands/agents.js';
 import { registerChatCommand } from './commands/chat.js';
 import { registerSessionsCommand, registerThreadsCommand } from './commands/sessions.js';
@@ -71,16 +72,26 @@ program
   .option('--provider <provider>', 'Deployment provider (convex or cloud)', 'convex')
   .option('--project <projectId>', 'Project ID for cloud deployments')
   .option('--version <tag>', 'Version tag for the deployment')
-  .action(async (options: { 
-    env: string; 
-    dryRun: boolean; 
-    rollback: boolean; 
+  .action(async (options: {
+    env: string;
+    dryRun: boolean;
+    rollback: boolean;
     force: boolean;
     provider: 'convex' | 'cloud';
     project?: string;
     version?: string;
   }) => {
     await deployProject(options);
+  });
+
+program
+  .command('upgrade')
+  .description('Sync convex/ directory with latest AgentForge template')
+  .option('-y, --yes', 'Skip confirmation prompt', false)
+  .option('--dry-run', 'Preview changes without applying', false)
+  .option('--only <file>', 'Only upgrade specific file')
+  .action(async (options: { yes: boolean; dryRun: boolean; only?: string }) => {
+    await upgradeProject(options);
   });
 
 // ─── Cloud Authentication ────────────────────────────────────────
