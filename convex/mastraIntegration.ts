@@ -274,6 +274,14 @@ export const executeAgent = action({
       throw new Error(`Agent ${args.agentId} not found`);
     }
 
+    // Log sandbox metadata if sandbox is enabled (SPEC-016 Task 3)
+    if (agent.sandboxEnabled && agent.sandboxImage) {
+      console.log(`[Sandbox] Agent ${args.agentId} has Docker sandbox enabled: ${agent.sandboxImage}`);
+      // Note: Actual Docker container spawning happens via CLI command
+      // agentforge sandbox run <agentId> --message "<msg>"
+      // For now, we just log metadata indicating sandbox was requested
+    }
+
     // Resolve memory configuration from agent tools/metadata
     const memoryConfig = resolveMemoryConfig(
       agent?.tools as Record<string, unknown> | undefined
