@@ -241,6 +241,18 @@ export const remove = mutation({
   },
 });
 
+// Query: List sessions by agent ID (ordered by createdAt desc)
+export const listByAgent = query({
+  args: { agentId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("sessions")
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
+      .order("desc")
+      .collect();
+  },
+});
+
 // Mutation: End session (alias for updateStatus with "completed")
 export const endSession = mutation({
   args: {
