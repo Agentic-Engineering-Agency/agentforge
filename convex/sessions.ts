@@ -64,7 +64,7 @@ export const list = query({
 
 // Query: Get session by ID
 export const get = query({
-  args: { sessionId: v.string() },
+  args: { sessionId: v.optional(v.string()) },
   handler: async (ctx, args) => {
     // First, try the bySessionId index (handles the sessionId field)
     const bySessionId = await ctx.db
@@ -76,13 +76,13 @@ export const get = query({
     // If not found, scan all sessions to match by Convex _id
     // This handles the case where user passes the full Convex document ID
     const allSessions = await ctx.db.query("sessions").collect();
-    return allSessions.find(s => String(s._id) === args.sessionId) || null;
+    return allSessions.find(s => s._id === args.sessionId || s._id.endsWith(args.sessionId!)) || null;
   },
 });
 
 // Query: Get session by ID with message preview
 export const getWithMessages = query({
-  args: { sessionId: v.string() },
+  args: { sessionId: v.optional(v.string()) },
   handler: async (ctx, args) => {
     // First, try the bySessionId index (handles the sessionId field)
     let session = await ctx.db
@@ -90,11 +90,11 @@ export const getWithMessages = query({
       .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
       .first();
 
-    // If not found, scan all sessions to match by Convex _id
+    // If not found, try suffix match (short ID like "c981y6rv")
     if (!session) {
       const allSessions = await ctx.db.query("sessions").collect();
-      session = allSessions.find(s => String(s._id) === args.sessionId) || null;
-    }
+      session = allSessions.find(s => s._id.endsWith(args.sessionId!)) || null;
+    } 
 
     if (!session) {
       return null;
@@ -223,7 +223,7 @@ export const updateStatus = mutation({
 
 // Mutation: Delete session
 export const remove = mutation({
-  args: { sessionId: v.string() },
+  args: { sessionId: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
