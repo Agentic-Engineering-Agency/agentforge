@@ -2,9 +2,27 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'fs-extra';
 import { execSync } from 'node:child_process';
+import os from 'node:os';
+import { readFileSync } from 'node:fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+/**
+ * Checks if the user is logged in to Convex by verifying the access token
+ */
+function isConvexLoggedIn(): boolean {
+  try {
+    const configPath = path.join(os.homedir(), '.convex', 'config.json');
+    if (!fs.existsSync(configPath)) {
+      return false;
+    }
+    const config = JSON.parse(readFileSync(configPath, 'utf-8'));
+    return !!config.accessToken && config.accessToken.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Options for the create command.
@@ -115,6 +133,42 @@ export async function createProject(
 
   // Initialize Convex
   console.log(`\n⚡ Initializing Convex...\n`);
+
+  // Check if user is logged in to Convex
+  if (!isConvexLoggedIn()) {
+    console.warn(`  ⚠️  Not logged in to Convex`);
+    console.warn(`  Run: npx convex login`);
+    console.warn(`  Then run: cd ${projectName} && npx convex dev\n`);
+    console.log(`
+🎉 AgentForge project "${projectName}" created successfully!
+
+Next steps:
+  cd ${projectName}
+
+  # Login to Convex (required)
+  npx convex login
+
+  # Start the Convex backend
+  npx convex dev
+
+  # In another terminal, launch the dashboard
+  agentforge dashboard
+
+  # Or chat with your agent from the CLI
+  agentforge chat
+
+  # Install skills to extend agent capabilities
+  agentforge skills list --registry
+  agentforge skills install web-search
+
+  # Check system status
+  agentforge status
+
+Documentation: https://github.com/Agentic-Engineering-Agency/agentforge
+`);
+    return;
+  }
+
   let convexReady = false;
   try {
     execSync('npx convex dev --once', {
@@ -125,7 +179,7 @@ export async function createProject(
     convexReady = true;
   } catch {
     console.warn(
-      `\n  ⚠️  Convex initialization skipped. Run "npx convex dev" to set up your backend.`
+      `\n  ⚠️  Convex initialization skipped. Run "cd ${projectName} && npx convex dev" to set up your backend.`
     );
   }
 
