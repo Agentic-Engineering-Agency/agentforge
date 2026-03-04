@@ -80,9 +80,9 @@ export class Agent {
         text: fullText,
         usage: usage
           ? {
-              promptTokens: usage.inputTokens,
-              completionTokens: usage.outputTokens,
-              totalTokens: usage.inputTokens + usage.outputTokens,
+              promptTokens: usage.inputTokens ?? 0,
+              completionTokens: usage.outputTokens ?? 0,
+              totalTokens: (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
             }
           : undefined,
       };

@@ -143,11 +143,16 @@ export const install = mutation({
     // Install the skill
     const skillId = await ctx.db.insert("skills", {
       name: marketplaceSkill.name,
+      displayName: marketplaceSkill.name,
       version: args.version || marketplaceSkill.version,
       description: marketplaceSkill.description,
       author: marketplaceSkill.author,
       category: marketplaceSkill.category,
-      repositoryUrl: marketplaceSkill.repositoryUrl,
+      repository: (marketplaceSkill as any).repositoryUrl,
+      code: (marketplaceSkill as any).code || "",
+      isInstalled: true,
+      isEnabled: true,
+      installedAt: Date.now(),
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });

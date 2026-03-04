@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { api } from "./_generated/api";
 import { mutation, query, action } from "./_generated/server";
 import { internal } from "./_generated/api";
 
@@ -117,7 +118,7 @@ export const updateStatus = mutation({
 export const toggleEnabled = mutation({
   args: { id: v.id("mcpConnections") },
   handler: async (ctx, args) => {
-    const connection = await ctx.db.get(args.id);
+    const connection = await ctx.runQuery(api.mcpConnections.get, { id: args.id });
     
     if (!connection) {
       throw new Error(`MCP connection not found`);
@@ -152,7 +153,7 @@ export const executeToolCall = action({
   },
   handler: async (ctx, args) => {
     // Get connection config for client-side execution
-    const connection = await ctx.db.get(args.id);
+    const connection = await ctx.runQuery(api.mcpConnections.get, { id: args.id });
 
     if (!connection) {
       throw new Error(`MCP connection not found: ${args.id}`);
