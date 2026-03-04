@@ -63,7 +63,7 @@ const myAgent = new Agent({
   id: 'my-first-agent',
   name: 'My First Agent',
   instructions: 'You are a helpful AI assistant...',
-  model: 'openai:gpt-4o-mini',
+  model: 'openai/gpt-4o-mini',
 });
 
 export default myAgent;

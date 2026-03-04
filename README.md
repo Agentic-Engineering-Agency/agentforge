@@ -55,17 +55,17 @@ OPENROUTER_API_KEY=sk-or-...
 # Or use a direct provider:
 # OPENAI_API_KEY=sk-...
 # ANTHROPIC_API_KEY=sk-ant-...
-CONVEX_URL=https://your-deployment.convex.cloud
+# CONVEX_URL is set automatically by npx convex dev
 ```
 
 ### 4. Start development
 
 ```bash
-# Terminal 1: Start Convex backend
-npx convex dev
-
-# Terminal 2: Start AgentForge
+# Terminal 1: Start AgentForge (Convex backend)
 agentforge run
+
+# Terminal 2: Launch the web dashboard (localhost:3000)
+agentforge dashboard
 ```
 
 ### 5. Chat with your agent
@@ -111,13 +111,8 @@ agentforge chat
 
 | Package | Description |
 |---------|-------------|
-| [`@agentforge-ai/core`](packages/core) | Agent primitives, MCP server/client, channels, A2A, skills, sandbox |
-| [`@agentforge-ai/cli`](packages/cli) | CLI tool — `agentforge create`, `run`, `deploy`, `chat`, and 20+ commands |
-| [`@agentforge-ai/channels-slack`](packages/channels-slack) | Slack Bolt.js adapter with Socket Mode and slash commands |
-| [`@agentforge-ai/channels-discord`](packages/channels-discord) | Discord.js v14 adapter with embeds and slash commands |
-| [`@agentforge-ai/tools-voice`](packages/tools-voice) | Voice TTS (ElevenLabs) + STT (Whisper) tools |
-| [`@agentforge-ai/sandbox`](packages/sandbox) | Docker sandbox provider with container pooling |
-| [`@agentforge-ai/web`](packages/web) | React + Vite web dashboard |
+| [`@agentforge-ai/core`](packages/core) | Shared types, utilities, and core abstractions for the AgentForge framework |
+| [`@agentforge-ai/cli`](packages/cli) | CLI tool — project scaffolding, chat interface, and agent management |
 
 ---
 

@@ -70,7 +70,7 @@ Fetch from provider API when key is added → cache in DB → UI reads DB. Stati
 No placeholders shipped. File upload stores bytes. Streaming streams tokens. Skills are SKILL.md folders.
 
 ### 9 · QA + Security After Every Sprint
-`pnpm test` all green → validate all mutation inputs → live test on `watchful-chipmunk-946` → document results.
+`pnpm test` all green → validate all mutation inputs → live test on `<your-convex-deployment>` → document results.
 
 ### 10 · dist/default ≡ templates/default
 Any change to `dist/default/` must be made identically in `templates/default/`. Always.
@@ -95,6 +95,6 @@ Unit tests mock Convex. Real verification requires a live deployment.
 ## 📦 Live Test Deployment
 
 ```
-Deployment: watchful-chipmunk-946.convex.cloud
+Deployment: <your-convex-deployment>.convex.cloud
 Dir:        /tmp/agentforge-test/agentforge-test
 ```
