@@ -2,6 +2,15 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  // API access tokens for external API authentication
+  apiAccessTokens: defineTable({
+    name: v.string(),
+    token: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    isActive: v.boolean(),
+  }).index("byToken", ["token"]),
+
   // Core agent definitions
   agents: defineTable({
     id: v.string(),
