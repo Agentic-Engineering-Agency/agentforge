@@ -1,4 +1,5 @@
 import { Agent as MastraAgent } from '@mastra/core/agent';
+import type { Workspace } from '@mastra/core/workspace';
 import type { MCPServer } from './mcp-server.js';
 import { A2AClient } from './a2a/index.js';
 import type { A2AAgentRegistry, A2AContext, A2AConstraints, A2AResult } from './a2a/index.js';
@@ -38,6 +39,25 @@ export interface AgentConfig {
   tools?: MCPServer;
   /** An A2AAgentRegistry for delegating tasks to other agents. */
   a2aRegistry?: A2AAgentRegistry;
+  /**
+   * A Mastra Workspace instance for file system access.
+   * When provided, the agent automatically gets file tools.
+   *
+   * @example
+   * ```typescript
+   * import { createWorkspace } from '@agentforge-ai/core/workspace';
+   *
+   * const workspace = createWorkspace({ storage: 'local' });
+   * const agent = new Agent({
+   *   id: 'my-agent',
+   *   name: 'My Agent',
+   *   instructions: 'You have file access.',
+   *   model: 'openai/gpt-4o',
+   *   workspace,
+   * });
+   * ```
+   */
+  workspace?: Workspace;
 }
 
 /**
@@ -113,6 +133,9 @@ export class Agent {
   /** The A2A client for delegating tasks to other agents. */
   private a2aClient?: A2AClient;
 
+  /** The workspace instance for file system access. */
+  private workspace?: Workspace;
+
   /**
    * Creates a new AgentForge Agent.
    * @param config - The configuration for the agent.
@@ -131,7 +154,8 @@ export class Agent {
       this.a2aClient = new A2AClient(config.a2aRegistry);
     }
 
-    this.mastraAgent = this.buildMastraAgent();
+    this.workspace = config.workspace;
+    this.mastraAgent = this.buildMastraAgent(this.workspace);
   }
 
   /**
@@ -161,7 +185,7 @@ export class Agent {
    */
   addTools(server: MCPServer): void {
     this.toolServers.push(server);
-    this.mastraAgent = this.buildMastraAgent();
+    this.mastraAgent = this.buildMastraAgent(this.workspace);
   }
 
   /**
@@ -172,7 +196,7 @@ export class Agent {
    */
   clearTools(): void {
     this.toolServers = [];
-    this.mastraAgent = this.buildMastraAgent();
+    this.mastraAgent = this.buildMastraAgent(this.workspace);
   }
 
   /**
@@ -252,7 +276,7 @@ export class Agent {
    * Builds (or rebuilds) the underlying Mastra agent from the current configuration.
    * Called on construction and whenever tools are added or cleared.
    */
-  private buildMastraAgent(): MastraAgent {
+  private buildMastraAgent(workspace?: Workspace): MastraAgent {
     const toolsRecord = this.buildToolsRecord();
 
     return new MastraAgent({
@@ -260,6 +284,7 @@ export class Agent {
       name: this.name,
       instructions: this.instructions,
       model: this.model,
+      ...(workspace ? { workspace } : {}),
       ...(Object.keys(toolsRecord).length > 0 ? { tools: toolsRecord as Record<string, never> } : {}),
     });
   }

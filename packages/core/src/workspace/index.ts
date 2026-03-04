@@ -1,20 +1,39 @@
 /**
  * @module workspace/index
  *
- * Workspace factory with S3/R2 filesystem support.
+ * Mastra-native Workspace factory with S3/R2 filesystem support.
  * Supports local, S3, and R2 storage backends via AGENTFORGE_STORAGE environment variable.
+ *
+ * @example
+ * ```typescript
+ * import { createWorkspace } from '@agentforge-ai/core/workspace';
+ *
+ * // Local workspace
+ * const local = createWorkspace({ storage: 'local', basePath: './workspace' });
+ *
+ * // R2 workspace
+ * const r2 = createWorkspace({
+ *   storage: 'r2',
+ *   bucket: 'my-bucket',
+ *   endpoint: 'https://example.com',
+ *   accessKeyId: 'key',
+ *   secretAccessKey: 'secret',
+ * });
+ * ```
  */
 
-import { LocalWorkspaceProvider } from '../workspace.js';
-import { R2WorkspaceProvider } from '../providers/r2-provider.js';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-// Re-export from parent for convenience (actual implementation is in workspace.ts)
+import { Workspace, LocalFilesystem } from '@mastra/core/workspace';
+import { S3Filesystem } from '@mastra/s3';
 
 export interface WorkspaceConfig {
   /** Storage backend type. Defaults to AGENTFORGE_STORAGE env var or 'local' */
   storage?: 'local' | 's3' | 'r2';
   /** Base path for local storage */
   basePath?: string;
+  /** Custom skills path (defaults to /skills) */
+  skillsPath?: string;
+
+  // S3/R2 config
   /** S3/R2 bucket name */
   bucket?: string;
   /** S3 region or 'auto' for R2 */
@@ -27,16 +46,8 @@ export interface WorkspaceConfig {
   secretAccessKey?: string;
 }
 
-export interface Workspace {
-  read(path: string): Promise<string>;
-  write(path: string, content: string | Buffer): Promise<void>;
-  list(prefix?: string): Promise<string[]>;
-  delete(path: string): Promise<void>;
-  exists(path: string): Promise<boolean>;
-}
-
 /**
- * Creates a workspace with the specified storage backend.
+ * Creates a Mastra-native Workspace with the specified storage backend.
  *
  * Storage type can be specified via:
  * - `config.storage` parameter
@@ -44,86 +55,80 @@ export interface Workspace {
  * - Defaults to 'local'
  *
  * @param config - Workspace configuration
- * @returns A workspace instance with read/write/list/delete/exists methods
+ * @returns A Mastra Workspace instance with filesystem and skills configured
  *
  * @example
  * ```typescript
- * // Local workspace
- * const local = createWorkspace({ storage: 'local', basePath: './workspace' });
+ * // Local workspace with default paths
+ * const local = createWorkspace();
  *
- * // R2 workspace
- * const r2 = createWorkspace({
- *   storage: 'r2',
- *   bucket: 'my-bucket',
- *   endpoint: 'https://example.com',
- *   accessKeyId: 'key',
- *   secretAccessKey: 'secret',
+ * // Local workspace with custom base path
+ * const customLocal = createWorkspace({
+ *   storage: 'local',
+ *   basePath: './my-workspace',
+ *   skillsPath: '/custom-skills',
  * });
  *
  * // S3 workspace
  * const s3 = createWorkspace({
  *   storage: 's3',
  *   bucket: 'my-bucket',
- *   region: 'us-east-1',
- *   accessKeyId: 'key',
- *   secretAccessKey: 'secret',
+ *   region: 'us-west-2',
+ *   accessKeyId: process.env.S3_ACCESS_KEY_ID,
+ *   secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+ * });
+ *
+ * // R2 workspace (Cloudflare R2)
+ * const r2 = createWorkspace({
+ *   storage: 'r2',
+ *   bucket: 'my-r2-bucket',
+ *   endpoint: 'https://example.r2.cloudflarestorage.com',
+ *   accessKeyId: process.env.R2_ACCESS_KEY_ID,
+ *   secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
  * });
  * ```
  */
 export function createWorkspace(config: WorkspaceConfig = {}): Workspace {
   // Determine storage type from config, env, or default
-  const storage = config.storage ??
-    process.env.AGENTFORGE_STORAGE as WorkspaceConfig['storage'] ??
+  const storage =
+    config.storage ??
+    (process.env.AGENTFORGE_STORAGE as WorkspaceConfig['storage']) ??
     'local';
+
+  // Build skills paths array
+  const skillsPaths = config.skillsPath ? [config.skillsPath] : ['/skills'];
 
   switch (storage) {
     case 'local': {
-      const provider = new LocalWorkspaceProvider(config.basePath ?? './workspace');
-      return {
-        read: (path) => provider.read(path),
-        write: (path, content) => provider.write(path, content),
-        list: (prefix) => provider.list(prefix),
-        delete: (path) => provider.delete(path),
-        exists: (path) => provider.exists(path),
-      };
-    }
-
-    case 'r2': {
-      const provider = new R2WorkspaceProvider({
-        bucket: config.bucket ?? '',
-        region: config.region ?? 'auto',
-        endpoint: config.endpoint,
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
+      return new Workspace({
+        filesystem: new LocalFilesystem({
+          basePath: config.basePath ?? './workspace',
+        }),
+        skills: skillsPaths,
       });
-      return {
-        read: (path) => provider.read(path),
-        write: (path, content) => provider.write(path, content),
-        list: (prefix) => provider.list(prefix),
-        delete: (path) => provider.delete(path),
-        exists: (path) => provider.exists(path),
-      };
     }
 
+    case 'r2':
     case 's3': {
-      // S3 uses the same R2 provider (S3-compatible)
-      const provider = new R2WorkspaceProvider({
-        bucket: config.bucket ?? '',
-        region: config.region ?? 'us-east-1',
-        endpoint: config.endpoint,
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
+      return new Workspace({
+        filesystem: new S3Filesystem({
+          bucket: config.bucket ?? '',
+          region:
+            storage === 'r2'
+              ? 'auto' // R2 requires region: 'auto'
+              : config.region ?? 'us-east-1',
+          endpoint: config.endpoint,
+          accessKeyId: config.accessKeyId,
+          secretAccessKey: config.secretAccessKey,
+        }),
+        skills: skillsPaths,
       });
-      return {
-        read: (path) => provider.read(path),
-        write: (path, content) => provider.write(path, content),
-        list: (prefix) => provider.list(prefix),
-        delete: (path) => provider.delete(path),
-        exists: (path) => provider.exists(path),
-      };
     }
 
     default:
       throw new Error(`Unknown storage type: ${(storage as string)}`);
   }
 }
+
+// Re-export types for convenience
+export type { Workspace };

@@ -2,6 +2,10 @@
  * @module workspace
  * Core workspace types and LocalWorkspaceProvider implementation.
  * Uses node:fs/promises — no external deps.
+ *
+ * @deprecated Use Mastra's native Workspace from '@mastra/core/workspace' instead.
+ * Import { createWorkspace } from '@agentforge-ai/core/workspace' for the recommended implementation.
+ * This custom implementation will be removed in a future version.
  */
 
 import { readFile, writeFile, readdir, rm, access, mkdir } from 'node:fs/promises';
@@ -41,6 +45,11 @@ export interface WorkspaceConfig {
   secretAccessKey?: string;
 }
 
+/**
+ * @deprecated Use Mastra's native Workspace from '@mastra/core/workspace' instead.
+ * Import { createWorkspace } from '@agentforge-ai/core/workspace' for the recommended implementation.
+ * This custom implementation will be removed in a future version.
+ */
 export class AgentForgeWorkspace {
   constructor(private provider: WorkspaceProvider) {}
 

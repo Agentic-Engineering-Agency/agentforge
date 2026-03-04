@@ -307,7 +307,8 @@ function SettingsPage() {
                   <label className="block text-sm font-medium mb-1">Default Model</label>
                   <select className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm">
                     <option value="gpt-4.1-mini">gpt-4.1-mini (OpenAI)</option>
-                    <option value="claude-3.5-sonnet">claude-3.5-sonnet (Anthropic)</option>
+                    <option value="claude-sonnet-4-6">claude-sonnet-4-6 (Anthropic)</option>
+                    <option value="claude-haiku-4-5">claude-haiku-4-5 (Anthropic)</option>
                     <option value="gemini-2.5-flash">gemini-2.5-flash (Google)</option>
                     <option value="openrouter/auto">auto (OpenRouter)</option>
                   </select>
