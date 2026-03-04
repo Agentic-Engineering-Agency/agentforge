@@ -25,14 +25,13 @@ export const executeTask = internalAction({
     const modelId = (agent as any).model || "gpt-4o-mini";
 
     try {
-      const result = await ctx.runAction(api.mastraIntegration.generateResponse, {
-        provider,
-        modelKey: `${provider}/${modelId}`,
-        instructions: (agent as any).instructions || "You are a helpful AI assistant.",
-        messages: [{ role: "user" as const, content: args.task }],
+      const result = await ctx.runAction(api.mastraIntegration.executeAgent, {
+        agentId: args.agentId,
+        prompt: args.task,
+        threadId: args.threadId,
       });
 
-      return { success: true, response: result.text };
+      return { success: true, response: (result as any).response };
     } catch (err: unknown) {
       const error = err instanceof Error ? err.message : String(err);
       return { success: false, error };
