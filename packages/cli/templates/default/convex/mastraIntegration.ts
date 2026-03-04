@@ -96,10 +96,10 @@ type ExecuteAgentResult = {
 /**
  * Default failover chain for programmatic agent execution.
  */
+// Default fallover: OpenAI → Anthropic → Google (no OpenRouter — requires separate key)
 const DEFAULT_FAILOVER_CHAIN = [
-  { provider: "openrouter", model: "openai/gpt-4o-mini" },
   { provider: "openai", model: "gpt-4o-mini" },
-  { provider: "anthropic", model: "claude-3-5-haiku-20241022" },
+  { provider: "anthropic", model: "claude-haiku-4-5" },
   { provider: "google", model: "gemini-2.0-flash" },
 ];
 
