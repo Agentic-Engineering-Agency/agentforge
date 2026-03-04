@@ -838,6 +838,12 @@ export declare const api: {
       },
       any
     >;
+    getByThread: FunctionReference<
+      "query",
+      "public",
+      { threadId: Id<"threads"> },
+      any
+    >;
     list: FunctionReference<
       "query",
       "public",

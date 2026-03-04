@@ -16,8 +16,8 @@
  */
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
-import { Agent } from "./lib/agent";
+import { api, internal } from "./_generated/api";
+import { Agent, getBaseModelId, getProviderBaseUrl } from "./lib/agent";
 import { resolveMemoryConfig } from "./lib/memoryConfig";
 import { computeCost } from "./lib/costAnalytics";
 import { initTracing, recordSpan, sendTraceToOpik } from "./lib/tracing";
@@ -40,8 +40,8 @@ const agentCache = new Map<string, Agent>();
  * Key is derived from the model string and the first 100 chars of the system prompt
  * so agents with different instructions are not conflated.
  */
-function getCachedAgent(modelKey: string, systemPrompt: string): Agent {
-  const cacheKey = `${modelKey}::${systemPrompt.slice(0, 100)}`;
+function getCachedAgent(modelKey: string, systemPrompt: string, apiKey?: string): Agent {
+  const cacheKey = `${modelKey}::${(apiKey || "").slice(0, 8)}::${systemPrompt.slice(0, 100)}`;
 
   if (agentCache.has(cacheKey)) {
     return agentCache.get(cacheKey)!;
@@ -55,10 +55,21 @@ function getCachedAgent(modelKey: string, systemPrompt: string): Agent {
     }
   }
 
+  // Parse "provider/modelId" from modelKey
+  const slashIdx = modelKey.indexOf("/");
+  const provider = slashIdx >= 0 ? modelKey.slice(0, slashIdx) : "openai";
+  const modelId = slashIdx >= 0 ? modelKey.slice(slashIdx + 1) : modelKey;
+
   const agent = new Agent({
+    id: `exec-${provider}-${modelId}`,
     name: "agentforge-executor",
     instructions: systemPrompt,
-    model: modelKey,
+    model: {
+      providerId: provider,
+      modelId: getBaseModelId(provider, modelId),
+      apiKey: apiKey || process.env[`${provider.toUpperCase()}_API_KEY`] || "",
+      url: getProviderBaseUrl(provider),
+    },
   });
 
   agentCache.set(cacheKey, agent);
@@ -145,7 +156,7 @@ function buildFailoverChain(agent: {
  * Execute an LLM call with failover across multiple providers.
  */
 async function executeWithFailover(
-  chain: Array<{ provider: string; model: string }>,
+  chain: Array<{ provider: string; model: string; apiKey?: string }>,
   systemPrompt: string,
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
   options: { temperature?: number; maxTokens?: number }
@@ -170,7 +181,7 @@ async function executeWithFailover(
       totalAttempts++;
 
       try {
-        const mastraAgent = getCachedAgent(modelKey, systemPrompt);
+        const mastraAgent = getCachedAgent(modelKey, systemPrompt, chain[chainPos].apiKey);
 
         const generateOptions: Record<string, unknown> = {};
         if (options.temperature !== undefined) generateOptions.temperature = options.temperature;
@@ -332,8 +343,32 @@ export const executeAgent = action({
         failoverModels?: Array<{ provider: string; model: string }>;
       });
 
+      // Inject BYOK API keys — build per-provider key map and attach to chain entries
+      const { LLM_PROVIDERS } = await import("./llmProviders");
+      const keyMap: Record<string, string> = {};
+      const providersSeen2 = new Set<string>();
+      for (const { provider } of failoverChain) {
+        if (providersSeen2.has(provider)) continue;
+        providersSeen2.add(provider);
+        try {
+          const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+          if (keyData?.apiKey) {
+            keyMap[provider] = keyData.apiKey;
+            const providerCfg = LLM_PROVIDERS.find((p: { key: string }) => p.key === provider);
+            const envVar = providerCfg?.envVar ?? `${provider.toUpperCase()}_API_KEY`;
+            process.env[envVar] = keyData.apiKey;
+          }
+        } catch { /* key not found */ }
+      }
+      const failoverChainWithKeys = failoverChain.map((entry) => ({
+        ...entry,
+        apiKey: keyMap[entry.provider] ?? process.env[
+          (LLM_PROVIDERS.find((p: { key: string }) => p.key === entry.provider)?.envVar ?? `${entry.provider.toUpperCase()}_API_KEY`)
+        ] ?? "",
+      }));
+
       // Get conversation history for context
-      const messages = await ctx.runQuery(api.messages.list, { threadId });
+      const messages = await ctx.runQuery(api.messages.getByThread, { threadId });
       const conversationMessages = (messages as Array<{ role: string; content: string }>)
         .slice(-20)
         .map((m) => ({
@@ -343,7 +378,7 @@ export const executeAgent = action({
 
       // Execute with failover
       const result = await executeWithFailover(
-        failoverChain,
+        failoverChainWithKeys,
         systemPrompt,
         conversationMessages,
         {
