@@ -22,7 +22,8 @@ function StatCard({ icon: Icon, title, value, subtitle }: { icon: any; title: st
 
 function UsagePage() {
   const stats = useQuery(api.usage.getStats, {});
-  const usageRecords = useQuery(api.usage.list, {}) ?? [];
+  const usageResult = useQuery(api.usage.list, { paginationOpts: { numItems: 20, cursor: null } });
+  const usageRecords = usageResult?.page ?? [];
 
   const totalTokens = stats?.totalTokens ?? 0;
   const totalCost = stats?.totalCost ?? 0;
