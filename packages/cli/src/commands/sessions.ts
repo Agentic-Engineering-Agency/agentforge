@@ -19,7 +19,7 @@ export function registerSessionsCommand(program: Command) {
       if (items.length === 0) { info('No sessions found.'); return; }
       const filtered = opts.status ? items.filter((s: any) => s.status === opts.status) : items;
       table(filtered.map((s: any) => ({
-        ID: s._id?.slice(-8) || 'N/A',
+        ID: s._id || 'N/A',
         Session: s.sessionId,
         Agent: s.agentId,
         Status: s.status,
@@ -82,9 +82,9 @@ export function registerThreadsCommand(program: Command) {
     .description('Show thread messages')
     .action(async (id) => {
       const client = await createClient();
-      const messages = await safeCall(() => client.query('messages:list' as any, { threadId: id }), 'Failed to fetch messages');
+      const messages = await safeCall(() => client.query('messages:list' as any, { threadId: id, paginationOpts: { cursor: null, numItems: 50 } }), 'Failed to fetch messages');
       header(`Thread: ${id}`);
-      const items = (messages as any[]) || [];
+      const items = (messages as any)?.page || [];
       if (items.length === 0) { info('No messages in this thread.'); return; }
       items.forEach((m: any) => {
         const role = m.role === 'user' ? '\x1b[32mUser\x1b[0m' : m.role === 'assistant' ? '\x1b[36mAssistant\x1b[0m' : `\x1b[33m${m.role}\x1b[0m`;
@@ -101,5 +101,16 @@ export function registerThreadsCommand(program: Command) {
       const client = await createClient();
       await safeCall(() => client.mutation('threads:remove' as any, { id }), 'Failed to delete thread');
       success(`Thread "${id}" deleted.`);
+    });
+
+  threads
+    .command('rename')
+    .argument('<id>', 'Thread ID')
+    .argument('<name>', 'New name')
+    .description('Rename a thread')
+    .action(async (id, name) => {
+      const client = await createClient();
+      await safeCall(() => client.mutation('threads:rename' as any, { id, name }), 'Failed to rename thread');
+      success(`Thread renamed to "${name}"`);
     });
 }

@@ -64,28 +64,37 @@ export const list = query({
 
 // Query: Get session by ID
 export const get = query({
-  args: { sessionId: v.string() },
+  args: { sessionId: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    return await ctx.db
+    // First, try the bySessionId index (handles the sessionId field)
+    const bySessionId = await ctx.db
       .query("sessions")
       .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
       .first();
+    if (bySessionId) return bySessionId;
+
+    // If not found, scan all sessions to match by Convex _id
+    // This handles the case where user passes the full Convex document ID
+    const allSessions = await ctx.db.query("sessions").collect();
+    return allSessions.find(s => s._id === args.sessionId || s._id.endsWith(args.sessionId!)) || null;
   },
 });
 
 // Query: Get session by ID with message preview
 export const getWithMessages = query({
-  args: { sessionId: v.string() },
+  args: { sessionId: v.optional(v.string()) },
   handler: async (ctx, args) => {
-    // Try looking up by Convex _id first, then fall back to sessionId string field
-    let session = null;
-    try { session = await ctx.db.get(args.sessionId as any); } catch {}
+    // First, try the bySessionId index (handles the sessionId field)
+    let session = await ctx.db
+      .query("sessions")
+      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
+      .first();
+
+    // If not found, try suffix match (short ID like "c981y6rv")
     if (!session) {
-      session = await ctx.db
-        .query("sessions")
-        .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
-        .first();
-    }
+      const allSessions = await ctx.db.query("sessions").collect();
+      session = allSessions.find(s => s._id.endsWith(args.sessionId!)) || null;
+    } 
 
     if (!session) {
       return null;
@@ -212,20 +221,9 @@ export const updateStatus = mutation({
   },
 });
 
-// Query: List sessions by agent
-export const listByAgent = query({
-  args: { agentId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("sessions")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-      .collect();
-  },
-});
-
 // Mutation: Delete session
 export const remove = mutation({
-  args: { sessionId: v.string() },
+  args: { sessionId: v.optional(v.string()) },
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
