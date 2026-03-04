@@ -207,7 +207,7 @@ export const updateStatus = mutation({
     }
     
     const updates: any = {
-      status: args.status,
+      status: args.status as "active" | "paused" | "completed" | "error",
       lastActivityAt: Date.now(),
     };
     
@@ -267,9 +267,9 @@ export const bulkUpdateStatus = mutation({
   args: { status: v.string() },
   handler: async (ctx, args) => {
     const all = await ctx.db.query("sessions").collect();
-    const stale = all.filter(s => s.status !== "completed" && s.status !== "deleted");
+    const stale = all.filter(s => s.status !== "completed");
     for (const s of stale) {
-      await ctx.db.patch(s._id, { status: args.status });
+      await ctx.db.patch(s._id, { status: args.status as "active" | "paused" | "completed" | "error" });
     }
     return { updated: stale.length };
   },

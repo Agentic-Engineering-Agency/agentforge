@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 // Query: List MCP connections
 export const list = query({

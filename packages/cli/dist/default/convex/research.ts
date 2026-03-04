@@ -31,19 +31,27 @@ export const list = query({
     ),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db.query("researchJobs");
+    let result;
 
     if (args.status) {
-      query = query.withIndex("byStatus", (q) => q.eq("status", args.status!));
+      result = await ctx.db.query("researchJobs")
+        .withIndex("byStatus", (q) => q.eq("status", args.status!))
+        .take(50);
     } else if (args.userId) {
-      query = query.withIndex("byUserId", (q) => q.eq("userId", args.userId!));
+      result = await ctx.db.query("researchJobs")
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .take(50);
     } else if (args.projectId) {
-      query = query.withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!));
+      result = await ctx.db.query("researchJobs")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .take(50);
     } else {
-      query = query.withIndex("byCreatedAt");
+      result = await ctx.db.query("researchJobs")
+        .withIndex("byCreatedAt")
+        .take(50);
     }
 
-    return await query.take(50); // Limit to most recent 50 jobs
+    return result;
   },
 });
 
@@ -130,7 +138,7 @@ export const start = action({
     const agentCount = args.depth === "shallow" ? 3 : args.depth === "medium" ? 5 : 10;
 
     // Create the research job
-    const jobId = await ctx.runMutation(internal.research.createInternal, {
+    const jobId = await ctx.runMutation(api.research.createInternal, {
       topic: args.topic,
       depth: args.depth,
       agentCount,
@@ -139,7 +147,7 @@ export const start = action({
     });
 
     // Update status to running
-    await ctx.runMutation(internal.research.update, {
+    await ctx.runMutation(api.research.update, {
       jobId,
       status: "running",
     });
@@ -173,7 +181,7 @@ export const start = action({
       });
 
       // Update job with results
-      await ctx.runMutation(internal.research.update, {
+      await ctx.runMutation(api.research.update, {
         jobId,
         status: "completed",
         results: JSON.stringify(report.findings, null, 2),
@@ -188,7 +196,7 @@ export const start = action({
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Update job with error
-      await ctx.runMutation(internal.research.update, {
+      await ctx.runMutation(api.research.update, {
         jobId,
         status: "failed",
         error: errorMessage,

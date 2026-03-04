@@ -155,6 +155,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     userId: v.optional(v.string()),
     settings: v.optional(v.any()),
+    agentIds: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
     isDefault: v.optional(v.boolean()),
