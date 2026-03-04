@@ -26,6 +26,7 @@ import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SessionsSessionIdRouteImport } from './routes/sessions.$sessionId'
 import { Route as RunsRunIdRouteImport } from './routes/runs.$runId'
+import { Route as AgentsAgentIdRouteImport } from './routes/agents.$agentId'
 
 const WorkflowsRoute = WorkflowsRouteImport.update({
   id: '/workflows',
@@ -112,10 +113,15 @@ const RunsRunIdRoute = RunsRunIdRouteImport.update({
   path: '/runs/$runId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentsAgentIdRoute = AgentsAgentIdRouteImport.update({
+  id: '/$agentId',
+  path: '/$agentId',
+  getParentRoute: () => AgentsRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/agents': typeof AgentsRoute
+  '/agents': typeof AgentsRouteWithChildren
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
   '/cron': typeof CronRoute
@@ -129,12 +135,13 @@ export interface FileRoutesByFullPath {
   '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
   '/workflows': typeof WorkflowsRoute
+  '/agents/$agentId': typeof AgentsAgentIdRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/agents': typeof AgentsRoute
+  '/agents': typeof AgentsRouteWithChildren
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
   '/cron': typeof CronRoute
@@ -148,13 +155,14 @@ export interface FileRoutesByTo {
   '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
   '/workflows': typeof WorkflowsRoute
+  '/agents/$agentId': typeof AgentsAgentIdRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/agents': typeof AgentsRoute
+  '/agents': typeof AgentsRouteWithChildren
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
   '/cron': typeof CronRoute
@@ -168,6 +176,7 @@ export interface FileRoutesById {
   '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
   '/workflows': typeof WorkflowsRoute
+  '/agents/$agentId': typeof AgentsAgentIdRoute
   '/runs/$runId': typeof RunsRunIdRoute
   '/sessions/$sessionId': typeof SessionsSessionIdRoute
 }
@@ -189,6 +198,7 @@ export interface FileRouteTypes {
     | '/skills-marketplace'
     | '/usage'
     | '/workflows'
+    | '/agents/$agentId'
     | '/runs/$runId'
     | '/sessions/$sessionId'
   fileRoutesByTo: FileRoutesByTo
@@ -208,6 +218,7 @@ export interface FileRouteTypes {
     | '/skills-marketplace'
     | '/usage'
     | '/workflows'
+    | '/agents/$agentId'
     | '/runs/$runId'
     | '/sessions/$sessionId'
   id:
@@ -227,13 +238,14 @@ export interface FileRouteTypes {
     | '/skills-marketplace'
     | '/usage'
     | '/workflows'
+    | '/agents/$agentId'
     | '/runs/$runId'
     | '/sessions/$sessionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AgentsRoute: typeof AgentsRoute
+  AgentsRoute: typeof AgentsRouteWithChildren
   ChatRoute: typeof ChatRoute
   ConnectionsRoute: typeof ConnectionsRoute
   CronRoute: typeof CronRoute
@@ -371,8 +383,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RunsRunIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agents/$agentId': {
+      id: '/agents/$agentId'
+      path: '/$agentId'
+      fullPath: '/agents/$agentId'
+      preLoaderRoute: typeof AgentsAgentIdRouteImport
+      parentRoute: typeof AgentsRoute
+    }
   }
 }
+
+interface AgentsRouteChildren {
+  AgentsAgentIdRoute: typeof AgentsAgentIdRoute
+}
+
+const AgentsRouteChildren: AgentsRouteChildren = {
+  AgentsAgentIdRoute: AgentsAgentIdRoute,
+}
+
+const AgentsRouteWithChildren =
+  AgentsRoute._addFileChildren(AgentsRouteChildren)
 
 interface SessionsRouteChildren {
   SessionsSessionIdRoute: typeof SessionsSessionIdRoute
@@ -388,7 +418,7 @@ const SessionsRouteWithChildren = SessionsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AgentsRoute: AgentsRoute,
+  AgentsRoute: AgentsRouteWithChildren,
   ChatRoute: ChatRoute,
   ConnectionsRoute: ConnectionsRoute,
   CronRoute: CronRoute,

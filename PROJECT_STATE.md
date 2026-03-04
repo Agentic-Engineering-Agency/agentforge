@@ -9,7 +9,7 @@
 
 | Metric | Value |
 |--------|-------|
-| Total Specs | 2 |
+| Total Specs | 3 |
 | Completion Rate | 0.0% |
 | Avg Cycle Time | 0.0 days |
 
@@ -17,7 +17,7 @@
 
 | Stage | Count | Percentage |
 |-------|-------|------------|
-| SPEC | 2 | 100.0% |
+| SPEC | 3 | 100.0% |
 | TEST | 0 | 0.0% |
 | CODE | 0 | 0.0% |
 | QA | 0 | 0.0% |
@@ -30,6 +30,7 @@
 
 | ID | Name | Stage | Progress | Last Updated |
 |----|------|-------|----------|--------------|
+| SPEC-20260304-006 | SPEC-20260304-006 | SPEC | 20% | 2026-03-04 |
 | SPEC-20260304-004 | SPEC-20260304-004 | SPEC | 20% | 2026-03-04 |
 | SPEC-20260304-003 | SPEC-20260304-003 | SPEC | 20% | 2026-03-04 |
 
