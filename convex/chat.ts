@@ -250,6 +250,7 @@ export const sendMessage = action({
     threadId: v.id("threads"),
     content: v.string(),
     userId: v.optional(v.string()),
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     // 1. Get agent configuration
@@ -525,6 +526,7 @@ export const startNewChat = action({
     content: v.string(),
     threadName: v.optional(v.string()),
     userId: v.optional(v.string()),
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     // Create a new thread

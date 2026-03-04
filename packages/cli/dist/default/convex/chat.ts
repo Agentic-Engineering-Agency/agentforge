@@ -52,10 +52,12 @@ function buildFailoverChain(agent: {
 }): Array<{ provider: string; model: string }> {
   const chain: Array<{ provider: string; model: string }> = [];
 
-  // Primary model
+  // Primary model — strip provider: prefix if stored as "openai:gpt-4o-mini" format
+  const rawModel = agent.model || "openai/gpt-4o-mini";
+  const cleanModel = rawModel.includes(":") ? rawModel.split(":").slice(1).join(":") : rawModel;
   chain.push({
     provider: agent.provider || "openrouter",
-    model: agent.model || "openai/gpt-4o-mini",
+    model: cleanModel,
   });
 
   // Agent-specific failover models
@@ -248,6 +250,7 @@ export const sendMessage = action({
     threadId: v.id("threads"),
     content: v.string(),
     userId: v.optional(v.string()),
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     // 1. Get agent configuration
@@ -523,6 +526,7 @@ export const startNewChat = action({
     content: v.string(),
     threadName: v.optional(v.string()),
     userId: v.optional(v.string()),
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     // Create a new thread

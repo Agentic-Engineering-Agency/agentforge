@@ -19,9 +19,10 @@
  * to a global default chain.
  */
 import { action } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { Agent } from "./lib/agent";
+import { Agent, getBaseModelId, getProviderBaseUrl } from "./lib/agent";
 
 // ============================================================
 // Default Failover Chain Configuration
@@ -51,10 +52,12 @@ function buildFailoverChain(agent: {
 }): Array<{ provider: string; model: string }> {
   const chain: Array<{ provider: string; model: string }> = [];
 
-  // Primary model
+  // Primary model — strip provider: prefix if stored as "openai:gpt-4o-mini" format
+  const rawModel = agent.model || "openai/gpt-4o-mini";
+  const cleanModel = rawModel.includes(":") ? rawModel.split(":").slice(1).join(":") : rawModel;
   chain.push({
     provider: agent.provider || "openrouter",
-    model: agent.model || "openai/gpt-4o-mini",
+    model: cleanModel,
   });
 
   // Agent-specific failover models
@@ -120,7 +123,7 @@ function shouldFailover(category: string): boolean {
  * Returns the response from the first successful provider.
  */
 async function executeWithFailover(
-  chain: Array<{ provider: string; model: string }>,
+  chain: Array<{ provider: string; model: string; apiKey?: string }>,
   systemPrompt: string,
   messages: Array<{ role: "user" | "assistant" | "system"; content: string }>,
   options: { temperature?: number; maxTokens?: number; maxRetries?: number; backoffMs?: number }
@@ -150,9 +153,17 @@ async function executeWithFailover(
 
       try {
         const mastraAgent = new Agent({
+          id: `exec-${chainPos}-${attempt}`,
           name: "agentforge-executor",
           instructions: systemPrompt,
-          model: modelKey,
+          model: {
+            providerId: provider,
+            modelId: getBaseModelId(provider, modelId),
+            apiKey: chain[chainPos].apiKey || process.env[`${provider.toUpperCase()}_API_KEY`] || "",
+            url: getProviderBaseUrl(provider),
+          },
+          temperature: options.temperature,
+          maxTokens: options.maxTokens,
         });
 
         const result = await mastraAgent.generate(messages);
@@ -239,6 +250,7 @@ export const sendMessage = action({
     threadId: v.id("threads"),
     content: v.string(),
     userId: v.optional(v.string()),
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     // 1. Get agent configuration
@@ -270,13 +282,13 @@ export const sendMessage = action({
     }
 
     // 2. Store the user message
-    await ctx.runMutation(api.chat.addUserMessage, {
+    await ctx.runMutation(api.chatMutations.addUserMessage, {
       threadId: args.threadId,
       content: args.content,
     });
 
     // 3. Get conversation history for context
-    const history = await ctx.runQuery(api.chat.getThreadMessages, {
+    const history = await ctx.runQuery(api.chatMutations.getThreadMessages, {
       threadId: args.threadId,
     });
 
@@ -300,11 +312,52 @@ export const sendMessage = action({
       failoverModels?: Array<{ provider: string; model: string }>;
     });
 
-    // 5. Build system prompt with project override (project settings override agent instructions)
+    // 5. Load installed skills and MCP connections for tool injection
+    const systemPromptParts: string[] = [];
+
+    // Load skills for this agent/project
+    if (agent.projectId) {
+      try {
+        const skills = await ctx.runQuery(api.skills.listInstalled, { projectId: agent.projectId });
+        for (const skill of skills as any[]) {
+          const md = skill.skillMdContent ?? `# ${skill.displayName ?? skill.name}\n\n${skill.description ?? ""}`;
+          systemPromptParts.push(`\n<skill name="${skill.name}">\n${md}\n</skill>`);
+          const refs = (skill.references ?? []) as {name:string;content:string}[];
+          for (const ref of refs) {
+            systemPromptParts.push(`\n<skill-reference name="${ref.name}" skill="${skill.name}">\n${ref.content}\n</skill-reference>`);
+          }
+        }
+      } catch (e) {
+        console.debug("[chat.sendMessage] Skills loading skipped:", e);
+      }
+
+      // Load MCP connections for this agent/project
+      try {
+        const mcpConnections = await ctx.runQuery(api.mcpConnections.list, {
+          projectId: agent.projectId,
+          isEnabled: true,
+        });
+        for (const mcp of mcpConnections as Array<{ name: string; serverUrl: string; capabilities?: any }>) {
+          const toolList = mcp.capabilities?.tools
+            ? Object.keys(mcp.capabilities.tools).map((t) => `  - ${t}`).join("\n")
+            : "  (tools listed in server capabilities)";
+          systemPromptParts.push(`\n## MCP Connection: ${mcp.name}\n${toolList}`);
+        }
+      } catch (e) {
+        console.debug("[chat.sendMessage] MCP loading skipped:", e);
+      }
+    }
+
+    // 6. Build system prompt with project override and available tools
     const baseInstructions = agent.instructions || "You are a helpful AI assistant built with AgentForge.";
-    const systemPrompt = projectSystemPrompt
+    let systemPrompt = projectSystemPrompt
       ? `${projectSystemPrompt}\n\n${baseInstructions}`
       : baseInstructions;
+
+    // Inject available tools into the system prompt
+    if (systemPromptParts.length > 0) {
+      systemPrompt += `\n\n## Available Tools\n\n${systemPromptParts.join("\n")}\n\nWhen you need to use a tool, mention it in your response and the system will execute it.`;
+    }
 
     // 6. Execute with failover
     let responseText: string;
@@ -316,8 +369,37 @@ export const sendMessage = action({
     let latencyMs = 0;
 
     try {
+      // Inject BYOK API keys — build a per-provider key map and attach to chain entries
+      const { LLM_PROVIDERS } = await import("./llmProviders");
+      const keyMap: Record<string, string> = {};
+      const providersSeen = new Set<string>();
+      for (const { provider } of failoverChain) {
+        if (providersSeen.has(provider)) continue;
+        providersSeen.add(provider);
+        try {
+          const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+          if (keyData?.apiKey) {
+            keyMap[provider] = keyData.apiKey;
+            // Also inject into process.env as belt-and-suspenders for Mastra's env reader
+            const providerCfg = LLM_PROVIDERS.find(p => p.key === provider);
+            const envVar = providerCfg?.envVar ?? `${provider.toUpperCase()}_API_KEY`;
+            process.env[envVar] = keyData.apiKey;
+          }
+        } catch {
+          // Key not found for this provider — will fail with 401 and trigger failover
+        }
+      }
+
+      // Attach apiKey to each chain entry for explicit injection into Agent constructor
+      const chainWithKeys = failoverChain.map(entry => ({
+        ...entry,
+        apiKey: keyMap[entry.provider] ?? process.env[
+          (LLM_PROVIDERS.find(p => p.key === entry.provider)?.envVar ?? `${entry.provider.toUpperCase()}_API_KEY`)
+        ] ?? "",
+      }));
+
       const result = await executeWithFailover(
-        failoverChain,
+        chainWithKeys,
         systemPrompt,
         conversationMessages,
         {
@@ -354,7 +436,7 @@ export const sendMessage = action({
     }
     metadata.latencyMs = latencyMs;
 
-    await ctx.runMutation(api.chat.addAssistantMessage, {
+    await ctx.runMutation(api.chatMutations.addAssistantMessage, {
       threadId: args.threadId,
       content: responseText,
       metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
@@ -444,10 +526,11 @@ export const startNewChat = action({
     content: v.string(),
     threadName: v.optional(v.string()),
     userId: v.optional(v.string()),
+    fileIds: v.optional(v.array(v.string())),
   },
   handler: async (ctx, args) => {
     // Create a new thread
-    const threadId = await ctx.runMutation(api.chat.createThread, {
+    const threadId = await ctx.runMutation(api.chatMutations.createThread, {
       agentId: args.agentId,
       name: args.threadName || "New Chat",
       userId: args.userId,
