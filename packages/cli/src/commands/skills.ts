@@ -1629,6 +1629,72 @@ See \`scripts/\` for executable scripts the agent can run.
       info('The skill will be auto-discovered by the Mastra Workspace.');
     });
 
+  // ─── skills show ──────────────────────────────────────────────────
+  skills
+    .command('show <name>')
+    .description('Show full SKILL.md content for installed skill')
+    .action(async (name) => {
+      const skillsDir = resolveSkillsDir();
+      const skillDir = path.join(skillsDir, name);
+      const skillMdPath = path.join(skillDir, 'SKILL.md');
+
+      if (!fs.existsSync(skillMdPath)) {
+        error(`Skill "${name}" not found or SKILL.md missing.`);
+        info('Install a skill first: agentforge skills install <name>');
+        process.exit(1);
+      }
+
+      const content = fs.readFileSync(skillMdPath, 'utf-8');
+      header(`SKILL.md: ${name}`);
+      console.log(content);
+    });
+
+  // ─── skills refs ───────────────────────────────────────────────────
+  skills
+    .command('refs <name>')
+    .description('List reference files for a skill')
+    .action(async (name) => {
+      const skillsDir = resolveSkillsDir();
+      const skillDir = path.join(skillsDir, name);
+      const refsDir = path.join(skillDir, 'references');
+
+      if (!fs.existsSync(skillDir)) {
+        error(`Skill "${name}" not found.`);
+        process.exit(1);
+      }
+
+      if (!fs.existsSync(refsDir)) {
+        warn(`No references/ directory for skill "${name}".`);
+        dim(`Path: ${refsDir}`);
+        return;
+      }
+
+      header(`References: ${name}`);
+      dim(`Path: ${refsDir}`);
+      console.log();
+
+      const files = fs.readdirSync(refsDir);
+      if (files.length === 0) {
+        info('References directory is empty.');
+        return;
+      }
+
+      for (const file of files) {
+        const filePath = path.join(refsDir, file);
+        const stat = fs.statSync(filePath);
+        if (stat.isFile()) {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          console.log(colors.cyan(`📄 ${file}`));
+          console.log('─'.repeat(60));
+          dim(content.trim().split('\n').slice(0, 20).map((l: string) => `  ${l}`).join('\n'));
+          if (content.trim().split('\n').length > 20) {
+            dim('  ...');
+          }
+          console.log();
+        }
+      }
+    });
+
   // ─── skills info ──────────────────────────────────────────────────
   skills
     .command('info')

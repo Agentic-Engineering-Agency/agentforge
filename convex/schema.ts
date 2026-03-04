@@ -191,6 +191,8 @@ export default defineSchema({
     documentation: v.optional(v.string()),
     code: v.string(), // The actual skill code
     schema: v.optional(v.any()), // JSON schema for skill parameters
+    skillMdContent: v.optional(v.string()), // Full SKILL.md content for injection
+    references: v.optional(v.array(v.object({ name: v.string(), content: v.string() }))), // Reference files
     isInstalled: v.boolean(),
     isEnabled: v.boolean(),
     userId: v.optional(v.string()),
