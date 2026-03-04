@@ -79,6 +79,30 @@ export const update = mutation({
   },
 });
 
+// Mutation: Rename thread (accepts string ID for short/long ID support)
+export const rename = mutation({
+  args: {
+    id: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Try to find the thread by string ID
+    let thread = null;
+    const allThreads = await ctx.db.query("threads").collect();
+    thread = allThreads.find(t => String(t._id) === args.id || t._id === args.id);
+
+    if (!thread) {
+      throw new Error(`Thread "${args.id}" not found`);
+    }
+
+    await ctx.db.patch(thread._id, {
+      name: args.name,
+      updatedAt: Date.now(),
+    });
+    return thread._id;
+  },
+});
+
 // Mutation: Delete thread
 export const remove = mutation({
   args: { id: v.id("threads") },

@@ -1376,7 +1376,7 @@ function registerSessionsCommand(program2) {
     }
     const filtered = opts.status ? items.filter((s) => s.status === opts.status) : items;
     table(filtered.map((s) => ({
-      ID: s._id?.slice(-8) || "N/A",
+      ID: s._id || "N/A",
       Session: s.sessionId,
       Agent: s.agentId,
       Status: s.status,
@@ -1426,9 +1426,9 @@ function registerThreadsCommand(program2) {
   });
   threads.command("inspect").argument("<id>", "Thread ID").description("Show thread messages").action(async (id) => {
     const client = await createClient();
-    const messages = await safeCall(() => client.query("messages:list", { threadId: id }), "Failed to fetch messages");
+    const messages = await safeCall(() => client.query("messages:list", { threadId: id, paginationOpts: { cursor: null, numItems: 50 } }), "Failed to fetch messages");
     header(`Thread: ${id}`);
-    const items = messages || [];
+    const items = messages?.page || [];
     if (items.length === 0) {
       info("No messages in this thread.");
       return;
@@ -1443,6 +1443,11 @@ function registerThreadsCommand(program2) {
     const client = await createClient();
     await safeCall(() => client.mutation("threads:remove", { id }), "Failed to delete thread");
     success(`Thread "${id}" deleted.`);
+  });
+  threads.command("rename").argument("<id>", "Thread ID").argument("<name>", "New name").description("Rename a thread").action(async (id, name) => {
+    const client = await createClient();
+    await safeCall(() => client.mutation("threads:rename", { id, name }), "Failed to rename thread");
+    success(`Thread renamed to "${name}"`);
   });
 }
 
@@ -4397,7 +4402,9 @@ function registerStatusCommand(program2) {
   });
   program2.command("logs").description("Show recent activity logs").option("-n, --lines <count>", "Number of log entries", "20").option("--agent <id>", "Filter by agent ID").option("--json", "Output as JSON").action(async (opts) => {
     const client = await createClient();
-    const args = {};
+    const args = {
+      paginationOpts: { cursor: null, numItems: parseInt(opts.lines) }
+    };
     if (opts.agent) args.agentId = opts.agent;
     const result = await safeCall(
       () => client.query("usage:list", args),
@@ -4408,7 +4415,7 @@ function registerStatusCommand(program2) {
       return;
     }
     header("Activity Logs");
-    const items = (result || []).slice(0, parseInt(opts.lines));
+    const items = result?.page || [];
     if (items.length === 0) {
       info("No activity logs found.");
       return;
