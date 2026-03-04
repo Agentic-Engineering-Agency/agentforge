@@ -33,19 +33,39 @@ export function registerStatusCommand(program: Command) {
       }
 
       // Check LLM provider
+      let providerStatus = 'Not configured';
+      let storedKeysCount = 0;
+
+      // Check environment variables first
       const envFiles = ['.env.local', '.env'];
-      let provider = 'Not configured';
       for (const envFile of envFiles) {
         const envPath = path.join(cwd, envFile);
         if (fs.existsSync(envPath)) {
           const content = fs.readFileSync(envPath, 'utf-8');
           const match = content.match(/LLM_PROVIDER=(.+)/);
-          if (match) { provider = match[1].trim(); break; }
-          if (content.includes('OPENAI_API_KEY=')) { provider = 'openai'; break; }
-          if (content.includes('OPENROUTER_API_KEY=')) { provider = 'openrouter'; break; }
+          if (match) { providerStatus = match[1].trim(); break; }
+          if (content.includes('OPENAI_API_KEY=')) { providerStatus = 'openai'; break; }
+          if (content.includes('OPENROUTER_API_KEY=')) { providerStatus = 'openrouter'; break; }
         }
       }
-      checks['LLM Provider'] = provider !== 'Not configured' ? `✔ ${provider}` : '✖ Not configured';
+
+      // Also check stored keys in Convex
+      try {
+        const client = await createClient();
+        const keys = await client.query('apiKeys:list' as any, {}) as any[] || [];
+        const activeKeys = keys.filter((k: any) => k.isActive);
+        storedKeysCount = activeKeys.length;
+        if (storedKeysCount > 0) {
+          const providers = [...new Set(activeKeys.map((k: any) => k.provider))];
+          providerStatus = `Configured (${storedKeysCount} key${storedKeysCount > 1 ? 's' : ''}: ${providers.join(', ')})`;
+        }
+      } catch {
+        // Fall back to env check if Convex query fails
+      }
+
+      checks['LLM Provider'] = storedKeysCount > 0 || providerStatus !== 'Not configured'
+        ? `✔ ${providerStatus}`
+        : '✖ Not configured';
 
       details(checks);
     });

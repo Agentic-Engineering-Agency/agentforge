@@ -148,6 +148,21 @@ export declare const api: {
       any
     >;
   };
+  apiAccessTokens: {
+    generate: FunctionReference<
+      "mutation",
+      "public",
+      { expiresAt?: number; name: string },
+      any
+    >;
+    list: FunctionReference<"query", "public", {}, any>;
+    revoke: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"apiAccessTokens"> },
+      any
+    >;
+  };
   apiKeys: {
     create: FunctionReference<
       "mutation",
