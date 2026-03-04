@@ -130,6 +130,8 @@ export interface FileRoutesByFullPath {
   '/projects': typeof ProjectsRoute
   '/research': typeof ResearchRoute
   '/sessions': typeof SessionsRouteWithChildren
+  '/login': typeof LoginRoute
+  '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/skills-marketplace': typeof SkillsMarketplaceRoute
@@ -150,6 +152,7 @@ export interface FileRoutesByTo {
   '/projects': typeof ProjectsRoute
   '/research': typeof ResearchRoute
   '/sessions': typeof SessionsRouteWithChildren
+  '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/skills-marketplace': typeof SkillsMarketplaceRoute
@@ -171,6 +174,7 @@ export interface FileRoutesById {
   '/projects': typeof ProjectsRoute
   '/research': typeof ResearchRoute
   '/sessions': typeof SessionsRouteWithChildren
+  '/login': typeof LoginRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/skills-marketplace': typeof SkillsMarketplaceRoute
@@ -193,7 +197,9 @@ export interface FileRouteTypes {
     | '/projects'
     | '/research'
     | '/sessions'
-    | '/settings'
+    | '/login'
+  | '/login'
+  | '/settings'
     | '/skills'
     | '/skills-marketplace'
     | '/usage'
@@ -213,7 +219,8 @@ export interface FileRouteTypes {
     | '/projects'
     | '/research'
     | '/sessions'
-    | '/settings'
+    | '/login'
+  | '/settings'
     | '/skills'
     | '/skills-marketplace'
     | '/usage'
@@ -233,7 +240,8 @@ export interface FileRouteTypes {
     | '/projects'
     | '/research'
     | '/sessions'
-    | '/settings'
+    | '/login'
+  | '/settings'
     | '/skills'
     | '/skills-marketplace'
     | '/usage'
@@ -254,6 +262,7 @@ export interface RootRouteChildren {
   ProjectsRoute: typeof ProjectsRoute
   ResearchRoute: typeof ResearchRoute
   SessionsRoute: typeof SessionsRouteWithChildren
+  LoginRoute: typeof LoginRoute
   SettingsRoute: typeof SettingsRoute
   SkillsRoute: typeof SkillsRoute
   SkillsMarketplaceRoute: typeof SkillsMarketplaceRoute

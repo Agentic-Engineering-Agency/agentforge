@@ -60,6 +60,15 @@ export function registerChatCommand(program: Command) {
 
       const a = agent as any;
 
+      // SPEC-016 Task 3: Show sandbox warning if agent has sandbox enabled
+      if (a.sandboxEnabled && a.sandboxImage) {
+        console.log();
+        console.log(`${colors.yellow}⚠  Agent has Docker Sandbox enabled (image: ${a.sandboxImage})${colors.reset}`);
+        console.log(`${colors.dim}   To execute with full sandbox isolation, run:${colors.reset}`);
+        console.log(`${colors.cyan}   agentforge sandbox run ${a.id} --message "your message"${colors.reset}`);
+        console.log();
+      }
+
       // One-shot --message mode (non-interactive)
       if (opts.message) {
         const validation = validateMessage(opts.message);

@@ -9,19 +9,19 @@
 
 | Metric | Value |
 |--------|-------|
-| Total Specs | 5 |
-| Completion Rate | 80.0% |
+| Total Specs | 7 |
+| Completion Rate | 57.1% |
 | Avg Cycle Time | 0.0 days |
 
 ### By Stage
 
 | Stage | Count | Percentage |
 |-------|-------|------------|
-| SPEC | 1 | 20.0% |
+| SPEC | 3 | 42.9% |
 | TEST | 0 | 0.0% |
 | CODE | 0 | 0.0% |
 | QA | 0 | 0.0% |
-| COMPLETE | 4 | 80.0% |
+| COMPLETE | 4 | 57.1% |
 | ARCHIVED | 0 | 0.0% |
 
 ---
@@ -30,11 +30,9 @@
 
 | ID | Name | Stage | Progress | Last Updated |
 |----|------|-------|----------|--------------|
-<<<<<<< HEAD
+| SPEC-20260304-016 | SPEC-20260304-016 | SPEC | 20% | 2026-03-04 |
 | SPEC-20260304-014 | SPEC-20260304-014 | SPEC | 20% | 2026-03-04 |
-=======
 | SPEC-20260304-012 | SPEC-20260304-012 | SPEC | 20% | 2026-03-04 |
->>>>>>> origin/feat/overnite-c
 | SPEC-20260304-005 | SPEC-20260304-005 | COMPLETE | 100% | 2026-03-04 |
 | SPEC-20260304-003 | SPEC-20260304-001 | COMPLETE | 100% | 2026-03-04 |
 | SPEC-20260304-002 | SPEC-20260304-002 | COMPLETE | 100% | 2026-03-04 |
