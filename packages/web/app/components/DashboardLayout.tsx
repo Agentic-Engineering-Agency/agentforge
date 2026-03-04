@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import {
   MessageSquare, LayoutDashboard, Radio, Server, Activity, Clock,
   Bot, Sparkles, Network, Settings, Bug, FileText, Menu, X,
@@ -134,30 +134,6 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const { location } = useRouterState();
-  const navigate = useNavigate();
-
-  // Auth check: redirect to /login if no valid session
-  useEffect(() => {
-    const authDisabled = (import.meta as any).env.VITE_AUTH_DISABLED === 'true';
-    if (authDisabled) return; // Skip auth check in dev mode
-
-    const token = localStorage.getItem('agentforge_session');
-    const expires = localStorage.getItem('agentforge_session_expires');
-
-    if (!token) {
-      // No token found, redirect to login
-      navigate({ to: '/login', replace: true });
-      return;
-    }
-
-    // Check if session is expired
-    if (expires && Date.now() > parseInt(expires, 10)) {
-      localStorage.removeItem('agentforge_session');
-      localStorage.removeItem('agentforge_session_expires');
-      navigate({ to: '/login', replace: true });
-      return;
-    }
-  }, [navigate]);
 
   const NavLink = ({ item }: { item: any }) => {
     const isActive = location.pathname === item.href;
