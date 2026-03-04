@@ -4798,7 +4798,7 @@ function registerModelsCommand(program2) {
     for (const provider of providers) {
       const cached = await client.action("modelFetcher:getModelsForProvider", { provider }).catch(() => null);
       if (cached && !opts.refresh) {
-        allModels[provider] = cached.models;
+        allModels[provider] = Array.isArray(cached) ? cached : cached.models ?? cached;
       } else {
         info(`Fetching ${provider} models...`);
         const result = await client.action("modelFetcher:refreshAllModels", { provider, apiKey: "" }).catch(() => null);
