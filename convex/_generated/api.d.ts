@@ -1104,6 +1104,12 @@ export declare const api: {
     >;
   };
   sessions: {
+    bulkUpdateStatus: FunctionReference<
+      "mutation",
+      "public",
+      { status: string },
+      any
+    >;
     create: FunctionReference<
       "mutation",
       "public",
