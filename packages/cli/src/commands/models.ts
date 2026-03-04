@@ -19,7 +19,7 @@ export function registerModelsCommand(program: Command) {
       const allModels: Record<string, string[]> = {};
 
       for (const provider of providers) {
-        const cached = await client.query('modelFetcher:getModelsForProvider' as any, { provider }).catch(() => null);
+        const cached = await client.action('modelFetcher:getModelsForProvider' as any, { provider }).catch(() => null);
         if (cached && !opts.refresh) {
           allModels[provider] = (cached as any).models;
         } else {

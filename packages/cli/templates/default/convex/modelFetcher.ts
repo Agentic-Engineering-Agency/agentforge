@@ -360,7 +360,7 @@ export const getModelsForProvider = action({
 // Internal action — fetch all providers (for background refresh)
 // ---------------------------------------------------------------------------
 
-export const refreshAllModels = internalAction({
+export const refreshAllModels = action({
   args: {},
   handler: async (ctx): Promise<Record<string, number>> => {
     const counts: Record<string, number> = {};
