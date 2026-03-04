@@ -280,7 +280,7 @@ export const generateContext = action({
     // Get thread and messages
     const thread = await ctx.runQuery(api.threads.getThread, { threadId: args.threadId });
     const messages = await ctx.runQuery(api.messages.getByThread, {
-      threadId: args.threadId as string,
+      threadId: args.threadId as any,
     });
 
     if (!thread) {

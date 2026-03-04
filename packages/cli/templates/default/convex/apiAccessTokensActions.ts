@@ -28,7 +28,23 @@ export const generate = action({
       throw new Error("Token name must be 1-100 characters");
     const plaintext = generatePlaintext();
     const tokenHash = hashToken(plaintext);
-    await ctx.runMutation(internal.apiAccessTokens.insertToken, { tokenHash, name, agentId });
+    await ctx.runMutation(internal.apiAccessTokensActions.insertToken, { tokenHash, name, agentId });
     return { plaintext, name, agentId };
+  },
+});
+
+export const insertToken = internalMutation({
+  args: {
+    tokenHash: v.string(),
+    name: v.string(),
+    agentId: v.optional(v.string()),
+  },
+  handler: async (ctx, { tokenHash, name, agentId }) => {
+    await ctx.db.insert('apiAccessTokens', {
+      tokenHash,
+      name,
+      agentId,
+      createdAt: Date.now(),
+    });
   },
 });

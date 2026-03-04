@@ -222,13 +222,13 @@ export const run = action({
     if (!threadId) {
       const newThreadId = await ctx.runMutation(api.threads.createThread, {
         agentId: args.agentId,
-        userId: args.userId,
       });
       if (!newThreadId) {
         throw new Error('Failed to create thread');
       }
       threadId = newThreadId;
     }
+    if (!threadId) throw new Error('threadId is required');
 
     // Delegate to the chat action for actual LLM execution
     const result = await ctx.runAction(api.chat.sendMessage, {

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 /**
  * Research module — Parallel multi-agent research orchestration.
@@ -134,11 +134,9 @@ export const start = action({
     projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
-    // Determine agent count based on depth
     const agentCount = args.depth === "shallow" ? 3 : args.depth === "medium" ? 5 : 10;
 
-    // Create the research job
-    const jobId = await ctx.runMutation(api.research.createInternal, {
+    const jobId = await ctx.runMutation(api.research.create, {
       topic: args.topic,
       depth: args.depth,
       agentCount,
@@ -146,69 +144,28 @@ export const start = action({
       projectId: args.projectId,
     });
 
-    // Update status to running
     await ctx.runMutation(api.research.update, {
       jobId,
       status: "running",
     });
 
     try {
-      // Import ResearchOrchestrator from packages/core
-      const { ResearchOrchestrator } = await import("@agentforge-ai/core");
-
-      // Get default agent config from API keys
-      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
-        provider: "openrouter",
-      });
-
-      if (!apiKeyData || !apiKeyData.apiKey) {
-        throw new Error("No API key found for provider: openrouter");
-      }
-
-      const { getProviderBaseUrl } = await import("./lib/apiKeys");
-
-      // Create orchestrator and run research
-      const orchestrator = new ResearchOrchestrator({
-        topic: args.topic,
-        depth: args.depth,
-      });
-
-      const report = await orchestrator.run({
-        providerId: "openrouter",
-        modelId: "gpt-4o-mini",
-        apiKey: apiKeyData.apiKey,
-        url: getProviderBaseUrl("openrouter"),
-      });
-
-      // Update job with results
-      await ctx.runMutation(api.research.update, {
-        jobId,
-        status: "completed",
-        results: JSON.stringify(report.findings, null, 2),
-        synthesis: report.synthesis,
-        questions: report.questions,
-        findings: report.findings,
-        completedAt: Date.now(),
-      });
-
-      return { success: true, jobId };
+      // Research orchestration — extend this to plug in ResearchOrchestrator
+      // from @agentforge-ai/core or your own implementation.
+      throw new Error("Research orchestration not yet configured. Extend this action to integrate your orchestrator.");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-
-      // Update job with error
       await ctx.runMutation(api.research.update, {
         jobId,
         status: "failed",
         error: errorMessage,
         completedAt: Date.now(),
       });
-
       throw error;
     }
   },
 });
 
-// Internal mutation: Create research job (called from action)
 export const createInternal = mutation({
   args: {
     topic: v.string(),
