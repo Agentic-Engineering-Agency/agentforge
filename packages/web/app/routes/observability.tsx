@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
 import { useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 import { Activity, DollarSign, Zap, Target } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 
@@ -43,36 +45,16 @@ function statusBadgeClass(status: TraceRecord["status"]) {
 }
 
 function ObservabilityPage() {
-  const [traces] = useState<TraceRecord[]>([
-    { id: "t1", timestamp: Date.now() - 60000, agent: "Customer Support", model: "claude-opus-4-6", latency: 1240, inputTokens: 1200, outputTokens: 580, status: "success" },
-    { id: "t2", timestamp: Date.now() - 180000, agent: "Code Review", model: "gpt-4o", latency: 2100, inputTokens: 3400, outputTokens: 1200, status: "success" },
-    { id: "t3", timestamp: Date.now() - 360000, agent: "Research Agent", model: "gemini-pro", latency: 4500, inputTokens: 5000, outputTokens: 2100, status: "timeout" },
-    { id: "t4", timestamp: Date.now() - 720000, agent: "Data Analyst", model: "mixtral-8x7b", latency: 980, inputTokens: 800, outputTokens: 350, status: "success" },
-    { id: "t5", timestamp: Date.now() - 1440000, agent: "Writer Agent", model: "claude-opus-4-6", latency: 3200, inputTokens: 4200, outputTokens: 3800, status: "success" },
-    { id: "t6", timestamp: Date.now() - 2880000, agent: "Customer Support", model: "gpt-4o-mini", latency: 650, inputTokens: 600, outputTokens: 240, status: "error" },
-    { id: "t7", timestamp: Date.now() - 5760000, agent: "Code Review", model: "gpt-4o", latency: 1870, inputTokens: 2900, outputTokens: 980, status: "success" },
-  ]);
+  // For now, show empty state - the usageEvents table needs to be populated
+  // by agent runs before we can show traces
+  const traces: TraceRecord[] = [];
+  const costData: CostRecord[] = [];
+  const scorerResults: ScorerRecord[] = [];
 
-  const [costData] = useState<CostRecord[]>([
-    { model: "claude-opus-4-6", calls: 42, inputTokens: 185000, outputTokens: 94000, totalCost: 8.24 },
-    { model: "gpt-4o", calls: 38, inputTokens: 142000, outputTokens: 61000, totalCost: 6.15 },
-    { model: "gpt-4o-mini", calls: 120, inputTokens: 210000, outputTokens: 88000, totalCost: 1.34 },
-    { model: "gemini-pro", calls: 25, inputTokens: 95000, outputTokens: 42000, totalCost: 0.69 },
-    { model: "mixtral-8x7b", calls: 60, inputTokens: 78000, outputTokens: 32000, totalCost: 0.42 },
-  ]);
-
-  const [scorerResults] = useState<ScorerRecord[]>([
-    { id: "s1", agent: "Customer Support", qualityScore: 92, latencyScore: 88, efficiencyScore: 85, lastEvaluated: Date.now() - 3600000 },
-    { id: "s2", agent: "Code Review", qualityScore: 87, latencyScore: 72, efficiencyScore: 91, lastEvaluated: Date.now() - 7200000 },
-    { id: "s3", agent: "Research Agent", qualityScore: 79, latencyScore: 55, efficiencyScore: 68, lastEvaluated: Date.now() - 14400000 },
-    { id: "s4", agent: "Data Analyst", qualityScore: 95, latencyScore: 94, efficiencyScore: 90, lastEvaluated: Date.now() - 28800000 },
-    { id: "s5", agent: "Writer Agent", qualityScore: 83, latencyScore: 70, efficiencyScore: 76, lastEvaluated: Date.now() - 86400000 },
-  ]);
-
-  const totalSpend = costData.reduce((s, r) => s + r.totalCost, 0);
-  const totalCalls = costData.reduce((s, r) => s + r.calls, 0);
-  const avgCostPerCall = totalCalls > 0 ? totalSpend / totalCalls : 0;
-  const totalTokens = costData.reduce((s, r) => s + r.inputTokens + r.outputTokens, 0);
+  const totalSpend = 0;
+  const totalCalls = 0;
+  const avgCostPerCall = 0;
+  const totalTokens = 0;
 
   const formatTokens = (n: number) => {
     if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
@@ -110,36 +92,44 @@ function ObservabilityPage() {
                   Recent LLM Traces
                 </h3>
               </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground text-left">
-                    <th className="px-5 py-3 font-medium">Timestamp</th>
-                    <th className="px-5 py-3 font-medium">Agent</th>
-                    <th className="px-5 py-3 font-medium">Model</th>
-                    <th className="px-5 py-3 font-medium text-right">Latency (ms)</th>
-                    <th className="px-5 py-3 font-medium text-right">Input Tokens</th>
-                    <th className="px-5 py-3 font-medium text-right">Output Tokens</th>
-                    <th className="px-5 py-3 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {traces.map((trace) => (
-                    <tr key={trace.id} className="border-b hover:bg-accent/50">
-                      <td className="px-5 py-3 text-muted-foreground">
-                        {new Date(trace.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                      </td>
-                      <td className="px-5 py-3 font-medium">{trace.agent}</td>
-                      <td className="px-5 py-3 text-muted-foreground">{trace.model}</td>
-                      <td className="px-5 py-3 text-right font-mono">{trace.latency.toLocaleString()}</td>
-                      <td className="px-5 py-3 text-right text-muted-foreground">{trace.inputTokens.toLocaleString()}</td>
-                      <td className="px-5 py-3 text-right text-muted-foreground">{trace.outputTokens.toLocaleString()}</td>
-                      <td className="px-5 py-3">
-                        <span className={statusBadgeClass(trace.status)}>{trace.status}</span>
-                      </td>
+              {traces.length === 0 ? (
+                <div className="text-center py-16">
+                  <Activity className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-medium">No traces yet</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">Run an agent to see LLM traces.</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground text-left">
+                      <th className="px-5 py-3 font-medium">Timestamp</th>
+                      <th className="px-5 py-3 font-medium">Agent</th>
+                      <th className="px-5 py-3 font-medium">Model</th>
+                      <th className="px-5 py-3 font-medium text-right">Latency (ms)</th>
+                      <th className="px-5 py-3 font-medium text-right">Input Tokens</th>
+                      <th className="px-5 py-3 font-medium text-right">Output Tokens</th>
+                      <th className="px-5 py-3 font-medium">Status</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {traces.map((trace) => (
+                      <tr key={trace.id} className="border-b hover:bg-accent/50">
+                        <td className="px-5 py-3 text-muted-foreground">
+                          {new Date(trace.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        </td>
+                        <td className="px-5 py-3 font-medium">{trace.agent}</td>
+                        <td className="px-5 py-3 text-muted-foreground">{trace.model}</td>
+                        <td className="px-5 py-3 text-right font-mono">{trace.latency.toLocaleString()}</td>
+                        <td className="px-5 py-3 text-right text-muted-foreground">{trace.inputTokens.toLocaleString()}</td>
+                        <td className="px-5 py-3 text-right text-muted-foreground">{trace.outputTokens.toLocaleString()}</td>
+                        <td className="px-5 py-3">
+                          <span className={statusBadgeClass(trace.status)}>{trace.status}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </TabsContent>
 
@@ -206,30 +196,38 @@ function ObservabilityPage() {
                   Scorer Results by Agent
                 </h3>
               </div>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground text-left">
-                    <th className="px-5 py-3 font-medium">Agent</th>
-                    <th className="px-5 py-3 font-medium text-right">Quality Score</th>
-                    <th className="px-5 py-3 font-medium text-right">Latency Score</th>
-                    <th className="px-5 py-3 font-medium text-right">Efficiency Score</th>
-                    <th className="px-5 py-3 font-medium">Last Evaluated</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {scorerResults.map((row) => (
-                    <tr key={row.id} className="border-b hover:bg-accent/50">
-                      <td className="px-5 py-3 font-medium">{row.agent}</td>
-                      <td className={`px-5 py-3 text-right font-bold ${scoreColor(row.qualityScore)}`}>{row.qualityScore}</td>
-                      <td className={`px-5 py-3 text-right font-bold ${scoreColor(row.latencyScore)}`}>{row.latencyScore}</td>
-                      <td className={`px-5 py-3 text-right font-bold ${scoreColor(row.efficiencyScore)}`}>{row.efficiencyScore}</td>
-                      <td className="px-5 py-3 text-muted-foreground">
-                        {new Date(row.lastEvaluated).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                      </td>
+              {scorerResults.length === 0 ? (
+                <div className="text-center py-16">
+                  <Target className="mx-auto h-12 w-12 text-muted-foreground" />
+                  <h3 className="mt-4 text-lg font-medium">No scores yet</h3>
+                  <p className="mt-1 text-sm text-muted-foreground">Quality scoring is not yet configured for your agents.</p>
+                </div>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-muted-foreground text-left">
+                      <th className="px-5 py-3 font-medium">Agent</th>
+                      <th className="px-5 py-3 font-medium text-right">Quality Score</th>
+                      <th className="px-5 py-3 font-medium text-right">Latency Score</th>
+                      <th className="px-5 py-3 font-medium text-right">Efficiency Score</th>
+                      <th className="px-5 py-3 font-medium">Last Evaluated</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {scorerResults.map((row) => (
+                      <tr key={row.id} className="border-b hover:bg-accent/50">
+                        <td className="px-5 py-3 font-medium">{row.agent}</td>
+                        <td className={`px-5 py-3 text-right font-bold ${scoreColor(row.qualityScore)}`}>{row.qualityScore}</td>
+                        <td className={`px-5 py-3 text-right font-bold ${scoreColor(row.latencyScore)}`}>{row.latencyScore}</td>
+                        <td className={`px-5 py-3 text-right font-bold ${scoreColor(row.efficiencyScore)}`}>{row.efficiencyScore}</td>
+                        <td className="px-5 py-3 text-muted-foreground">
+                          {new Date(row.lastEvaluated).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </TabsContent>
         </Tabs>

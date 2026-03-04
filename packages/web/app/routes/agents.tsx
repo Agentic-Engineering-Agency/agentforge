@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useMatch } from '@tanstack/react-router';
+import { createFileRoute, Link, useMatch, Outlet } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, useEffect, ChangeEvent, FormEvent } from 'react';
 import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X, ChevronDown, ChevronUp, HardDrive, Container } from 'lucide-react';
@@ -236,12 +236,7 @@ function AgentCard({ agent, onEdit, onDelete }: AgentCardProps) {
           <div className="flex items-center"><Zap className="h-3 w-3 mr-1" /> {agent.provider}</div>
         </div>
       </div>
-      <a
-        href={`/agents/${agent.id}`}
-        className="w-full bg-background border border-border text-center py-2 rounded-lg hover:bg-primary/10 text-sm block"
-      >
-        View Details
-      </a>
+      <a  href={`/agents/${agent.id}`} className="w-full bg-background border border-border text-center py-2 rounded-lg hover:bg-primary/10 text-sm block">View Details</a>
     </div>
   );
 }
@@ -270,6 +265,10 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
     storageSecretAccessKey: agent?.workspaceStorage?.secretAccessKey || '',
     failoverModels: agent?.failoverModels || [],
   });
+
+  // Check if the selected provider has active API keys
+  const providerApiKeys = useQuery(api.apiKeys.list, { provider: formData.provider });
+  const hasActiveProviderKey = providerApiKeys && providerApiKeys.some((k: any) => k.isActive);
 
   const handleChange = (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -388,6 +387,11 @@ function AgentModal({ agent, onSave, onClose }: AgentModalProps) {
               }} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
                 {providers.map(p => <option key={p.key} value={p.key}>{p.displayName}</option>)}
               </select>
+              {providerApiKeys !== undefined && !hasActiveProviderKey && (
+                <div className="text-yellow-400 text-sm mt-1 p-2 bg-yellow-400/10 rounded border border-yellow-400/20">
+                  ⚠️ {providers.find(p => p.key === formData.provider)?.displayName || formData.provider} has no active API key. Add one in Settings → API Keys before creating agents with this provider.
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Model {modelsLoading && <span className="text-xs text-muted-foreground ml-1">(loading…)</span>}</label>

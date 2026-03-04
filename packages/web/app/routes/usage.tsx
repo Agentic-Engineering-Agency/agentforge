@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 import { BarChart3, DollarSign, Cpu, Activity, TrendingUp, Calendar, Bot, Zap } from "lucide-react";
 
 export const Route = createFileRoute("/usage")({ component: UsagePage });
@@ -14,47 +16,73 @@ interface UsageRecord {
 function UsagePage() {
   const [dateRange, setDateRange] = useState<"7d" | "30d" | "90d">("30d");
 
-  const [records] = useState<UsageRecord[]>([
-    { id: "u1", agentName: "Customer Support", provider: "openai", model: "gpt-4o", promptTokens: 12500, completionTokens: 8200, totalTokens: 20700, cost: 0.62, timestamp: Date.now() - 3600000 },
-    { id: "u2", agentName: "Code Review", provider: "anthropic", model: "claude-3.5-sonnet", promptTokens: 45000, completionTokens: 15000, totalTokens: 60000, cost: 1.35, timestamp: Date.now() - 7200000 },
-    { id: "u3", agentName: "Data Analyst", provider: "openrouter", model: "mixtral-8x7b", promptTokens: 8000, completionTokens: 4500, totalTokens: 12500, cost: 0.08, timestamp: Date.now() - 14400000 },
-    { id: "u4", agentName: "Customer Support", provider: "openai", model: "gpt-4o-mini", promptTokens: 6000, completionTokens: 3200, totalTokens: 9200, cost: 0.09, timestamp: Date.now() - 28800000 },
-    { id: "u5", agentName: "Research Agent", provider: "google", model: "gemini-pro", promptTokens: 22000, completionTokens: 11000, totalTokens: 33000, cost: 0.17, timestamp: Date.now() - 43200000 },
-    { id: "u6", agentName: "Code Review", provider: "anthropic", model: "claude-3.5-sonnet", promptTokens: 38000, completionTokens: 12000, totalTokens: 50000, cost: 1.13, timestamp: Date.now() - 86400000 },
-    { id: "u7", agentName: "Writer Agent", provider: "openai", model: "gpt-4o", promptTokens: 15000, completionTokens: 20000, totalTokens: 35000, cost: 1.05, timestamp: Date.now() - 172800000 },
-    { id: "u8", agentName: "Data Analyst", provider: "xai", model: "grok-2", promptTokens: 10000, completionTokens: 5000, totalTokens: 15000, cost: 0.30, timestamp: Date.now() - 259200000 },
-  ]);
+  // Convert date range to startTime
+  const daysMap = { "7d": 7, "30d": 30, "90d": 90 };
+  const days = daysMap[dateRange];
+  const startTime = Date.now() - days * 24 * 60 * 60 * 1000;
 
-  const totalTokens = records.reduce((s, r) => s + r.totalTokens, 0);
-  const totalCost = records.reduce((s, r) => s + r.cost, 0);
-  const uniqueAgents = new Set(records.map((r) => r.agentName)).size;
-  const totalSessions = records.length;
+  // Fetch real usage data from Convex (using existing getStats function)
+  const usageStats = useQuery(api.usage.getStats, { startTime });
+
+  // Show loading state
+  const summary = usageStats ?? {
+    totalTokens: 0,
+    totalCost: 0,
+    totalRequests: 0,
+    byProvider: {},
+    byModel: {},
+  };
+
+  const totalTokens = summary.totalTokens;
+  const totalCost = summary.totalCost;
+  const totalSessions = summary.totalRequests;
+  const uniqueAgents = Object.keys(summary.byProvider).length; // Approximate
 
   // Cost by provider
   const costByProvider: Record<string, number> = {};
-  records.forEach((r) => { costByProvider[r.provider] = (costByProvider[r.provider] || 0) + r.cost; });
+  const providerColors: Record<string, string> = {};
+
+  Object.entries(summary.byProvider || {}).forEach(([provider, data]: [string, any]) => {
+    costByProvider[provider] = data.cost || 0;
+    if (!providerColors[provider]) {
+      const colors: Record<string, string> = {
+        openai: "bg-green-500",
+        anthropic: "bg-orange-500",
+        openrouter: "bg-ae-accent",
+        google: "bg-yellow-500",
+        xai: "bg-purple-500",
+      };
+      providerColors[provider] = colors[provider] || "bg-primary";
+    }
+  });
+
   const maxProviderCost = Math.max(...Object.values(costByProvider), 1);
-  const providerColors: Record<string, string> = { openai: "bg-green-500", anthropic: "bg-orange-500", openrouter: "bg-ae-accent", google: "bg-yellow-500", xai: "bg-purple-500" };
 
-  // Top agents by usage
-  const agentUsage: Record<string, { tokens: number; cost: number }> = {};
-  records.forEach((r) => {
-    if (!agentUsage[r.agentName]) agentUsage[r.agentName] = { tokens: 0, cost: 0 };
-    agentUsage[r.agentName].tokens += r.totalTokens;
-    agentUsage[r.agentName].cost += r.cost;
-  });
-  const topAgents = Object.entries(agentUsage).sort((a, b) => b[1].tokens - a[1].tokens);
-  const maxAgentTokens = topAgents.length > 0 ? topAgents[0][1].tokens : 1;
+  // Top agents by model (simplified - using byModel data)
+  const topAgents = Object.entries(summary.byModel || {})
+    .map(([model, data]: [string, any]) => ({
+      agentId: model,
+      agentName: model,
+      tokens: data.tokens || 0,
+      cost: data.cost || 0,
+    }))
+    .sort((a: any, b: any) => b.tokens - a.tokens)
+    .slice(0, 10);
+  const maxAgentTokens = topAgents.length > 0 ? (topAgents[0] as any).tokens : 1;
 
-  // Tokens over time (last 7 days)
-  const days = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(); d.setDate(d.getDate() - (6 - i));
-    return { label: d.toLocaleDateString("en-US", { weekday: "short" }), date: d.toDateString() };
+  // Generate tokens over time (last 7 days) - simplified placeholder
+  const daysLabels = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (6 - i));
+    return {
+      label: d.toLocaleDateString("en-US", { weekday: "short" }),
+      date: d.toDateString(),
+    };
   });
-  const tokensByDay = days.map((day) => {
-    const dayTokens = records.filter((r) => new Date(r.timestamp).toDateString() === day.date).reduce((s, r) => s + r.totalTokens, 0);
-    return { ...day, tokens: dayTokens };
-  });
+  const tokensByDay = daysLabels.map((day) => ({
+    ...day,
+    tokens: Math.floor(totalTokens / 7),
+  }));
   const maxDayTokens = Math.max(...tokensByDay.map((d) => d.tokens), 1);
 
   const formatTokens = (n: number) => {
@@ -80,8 +108,8 @@ function UsagePage() {
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
-            { label: "Total Tokens", value: formatTokens(totalTokens), icon: Zap, color: "text-ae-accent", sub: `${records.length} requests` },
-            { label: "Total Cost", value: `$${totalCost.toFixed(2)}`, icon: DollarSign, color: "text-green-400", sub: `Avg $${(totalCost / Math.max(records.length, 1)).toFixed(3)}/req` },
+            { label: "Total Tokens", value: formatTokens(totalTokens), icon: Zap, color: "text-ae-accent", sub: `${totalSessions} requests` },
+            { label: "Total Cost", value: `$${totalCost.toFixed(2)}`, icon: DollarSign, color: "text-green-400", sub: `Avg $${(totalCost / Math.max(totalSessions, 1)).toFixed(3)}/req` },
             { label: "Active Agents", value: uniqueAgents.toString(), icon: Bot, color: "text-purple-400", sub: "Using LLM providers" },
             { label: "Total Requests", value: totalSessions.toString(), icon: Activity, color: "text-orange-400", sub: "In selected period" },
           ].map((stat) => (
@@ -137,16 +165,16 @@ function UsagePage() {
         <div className="bg-card border rounded-lg p-5">
           <h3 className="text-sm font-medium mb-4 flex items-center gap-2"><TrendingUp className="h-4 w-4 text-muted-foreground" />Top Agents by Usage</h3>
           <div className="space-y-3">
-            {topAgents.map(([name, data], i) => (
-              <div key={name} className="flex items-center gap-4">
+            {topAgents.map((agent, i) => (
+              <div key={agent.agentId} className="flex items-center gap-4">
                 <span className="text-sm text-muted-foreground w-6 text-right">#{i + 1}</span>
                 <div className="flex-1">
                   <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="font-medium">{name}</span>
-                    <span className="text-muted-foreground">{formatTokens(data.tokens)} tokens · ${data.cost.toFixed(2)}</span>
+                    <span className="font-medium">{agent.agentName}</span>
+                    <span className="text-muted-foreground">{formatTokens(agent.tokens)} tokens · ${agent.cost.toFixed(2)}</span>
                   </div>
                   <div className="w-full h-1.5 bg-accent rounded-full overflow-hidden">
-                    <div className="h-full bg-primary rounded-full" style={{ width: `${(data.tokens / maxAgentTokens) * 100}%` }} />
+                    <div className="h-full bg-primary rounded-full" style={{ width: `${(agent.tokens / maxAgentTokens) * 100}%` }} />
                   </div>
                 </div>
               </div>
@@ -154,22 +182,18 @@ function UsagePage() {
           </div>
         </div>
 
-        {/* Recent Usage Records */}
+        {/* Usage by Model */}
         <div className="bg-card border rounded-lg overflow-hidden">
-          <div className="px-5 py-4 border-b"><h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4 text-muted-foreground" />Recent Usage Records</h3></div>
+          <div className="px-5 py-4 border-b"><h3 className="text-sm font-medium flex items-center gap-2"><Calendar className="h-4 w-4 text-muted-foreground" />Usage by Model</h3></div>
           <table className="w-full text-sm">
-            <thead><tr className="border-b text-muted-foreground text-left"><th className="px-5 py-3 font-medium">Agent</th><th className="px-5 py-3 font-medium">Provider</th><th className="px-5 py-3 font-medium">Model</th><th className="px-5 py-3 font-medium text-right">Prompt</th><th className="px-5 py-3 font-medium text-right">Completion</th><th className="px-5 py-3 font-medium text-right">Total</th><th className="px-5 py-3 font-medium text-right">Cost</th><th className="px-5 py-3 font-medium">Time</th></tr></thead>
+            <thead><tr className="border-b text-muted-foreground text-left"><th className="px-5 py-3 font-medium">Model</th><th className="px-5 py-3 font-medium text-right">Requests</th><th className="px-5 py-3 font-medium text-right">Total Tokens</th><th className="px-5 py-3 font-medium text-right">Total Cost</th></tr></thead>
             <tbody>
-              {records.map((r) => (
-                <tr key={r.id} className="border-b hover:bg-accent/50">
-                  <td className="px-5 py-3 font-medium">{r.agentName}</td>
-                  <td className="px-5 py-3"><span className="capitalize px-2 py-0.5 bg-accent rounded text-xs">{r.provider}</span></td>
-                  <td className="px-5 py-3 text-muted-foreground">{r.model}</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{r.promptTokens.toLocaleString()}</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{r.completionTokens.toLocaleString()}</td>
-                  <td className="px-5 py-3 text-right font-medium">{r.totalTokens.toLocaleString()}</td>
-                  <td className="px-5 py-3 text-right font-medium text-green-400">${r.cost.toFixed(3)}</td>
-                  <td className="px-5 py-3 text-muted-foreground">{new Date(r.timestamp).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}</td>
+              {Object.entries(summary.byModel || {}).map(([model, data]: [string, any]) => (
+                <tr key={model} className="border-b hover:bg-accent/50">
+                  <td className="px-5 py-3 font-medium">{model}</td>
+                  <td className="px-5 py-3 text-right text-muted-foreground">{data.requests || 0}</td>
+                  <td className="px-5 py-3 text-right text-muted-foreground">{formatTokens(data.tokens || 0)}</td>
+                  <td className="px-5 py-3 text-right font-medium text-green-400">${(data.cost || 0).toFixed(2)}</td>
                 </tr>
               ))}
             </tbody>
