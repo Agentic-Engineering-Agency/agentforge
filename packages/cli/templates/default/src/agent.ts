@@ -48,12 +48,12 @@ When you don't know something, say so honestly.
 When asked about your capabilities, mention that you're powered by AgentForge.`,
 
   // Choose your model — supports multiple providers:
-  //   OpenAI:      "openai:gpt-4o-mini", "openai:gpt-4o"
+  //   OpenAI:      "openai/gpt-4o-mini", "openai:gpt-4o"
   //   OpenRouter:  "openrouter:anthropic/claude-3.5-sonnet", "openrouter:google/gemini-pro"
   //   Anthropic:   "anthropic:claude-3-5-sonnet-20241022"
   //   Google:      "google:gemini-2.0-flash"
   //   xAI:         "xai:grok-2"
-  model: 'openai:gpt-4o-mini',
+  model: 'openai/gpt-4o-mini',
 });
 
 export { workspace };

@@ -15,7 +15,7 @@ This repo is the complete product. CLI, local dashboard, Convex functions — al
 ## 🚨 RULES — Read Before Writing Any Code
 
 ### 1 · Audit first
-Before implementing: search the codebase, test against `watchful-chipmunk-946.convex.cloud`. Does it exist? Is it broken? Is it a stub? Document what you find.
+Before implementing: search the codebase, test against `<your-convex-deployment>.convex.cloud`. Does it exist? Is it broken? Is it a stub? Document what you find.
 
 ### 2 · SpecSafe-first
 ```bash
@@ -97,7 +97,7 @@ Every change in `dist/default/` must be made identically in `templates/default/`
 ### 9 · QA + Security after every sprint
 - `pnpm test` — all green
 - all mutations have server-side input validation
-- live test on `watchful-chipmunk-946.convex.cloud`
+- live test on `<your-convex-deployment>.convex.cloud`
 - document what was tested
 
 ---
@@ -128,7 +128,7 @@ Every change in `dist/default/` must be made identically in `templates/default/`
 ## Live Test Deployment
 
 ```
-Deployment: watchful-chipmunk-946.convex.cloud
+Deployment: <your-convex-deployment>.convex.cloud
 Dir:        /tmp/agentforge-test/agentforge-test
 Run:        agentforge dashboard --dir /tmp/agentforge-test/agentforge-test
 ```
