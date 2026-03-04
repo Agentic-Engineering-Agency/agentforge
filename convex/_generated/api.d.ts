@@ -1054,6 +1054,12 @@ export declare const api: {
       any
     >;
     get: FunctionReference<"query", "public", { sessionId: string }, any>;
+    getWithMessages: FunctionReference<
+      "query",
+      "public",
+      { sessionId: string },
+      any
+    >;
     list: FunctionReference<
       "query",
       "public",

@@ -191,7 +191,9 @@ export function registerStatusCommand(program: Command) {
     .option('--json', 'Output as JSON')
     .action(async (opts) => {
       const client = await createClient();
-      const args: Record<string, any> = {};
+      const args: Record<string, any> = {
+        paginationOpts: { cursor: null, numItems: parseInt(opts.lines) }
+      };
       if (opts.agent) args.agentId = opts.agent;
 
       const result = await safeCall(
@@ -201,7 +203,7 @@ export function registerStatusCommand(program: Command) {
 
       if (opts.json) { console.log(JSON.stringify(result, null, 2)); return; }
       header('Activity Logs');
-      const items = ((result as any[]) || []).slice(0, parseInt(opts.lines));
+      const items = (result as any)?.page || [];
       if (items.length === 0) { info('No activity logs found.'); return; }
 
       items.forEach((log: any) => {
