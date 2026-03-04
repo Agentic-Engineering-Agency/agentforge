@@ -72,7 +72,6 @@ export function registerThreadsCommand(program: Command) {
         ID: t._id?.slice(-8) || 'N/A',
         Name: t.name || 'Unnamed',
         Agent: t.agentId,
-        Messages: t.metadata?.messageCount || '-',
         Created: formatDate(t.createdAt),
       })));
     });

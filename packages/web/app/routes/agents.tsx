@@ -3,7 +3,7 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, useEffect, ChangeEvent, FormEvent } from 'react';
 import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X, ChevronDown, ChevronUp, HardDrive, Container } from 'lucide-react';
 import { LLM_PROVIDERS, getModelsByProvider } from '../../../../convex/llmProviders';
-import { useAction } from 'convex/react';
+import { useAction, useQuery, useMutation } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import * as Switch from '@radix-ui/react-switch';
 import * as Select from '@radix-ui/react-select';
@@ -38,53 +38,6 @@ interface Agent {
   workspaceStorage?: WorkspaceStorage;
   failoverModels?: FailoverModel[];
 }
-
-// MOCK DATA (to be replaced by Convex)
-const initialAgents: Agent[] = [
-  {
-    id: 'agent-1',
-    name: 'Research Assistant',
-    description: 'An agent specialized in gathering and summarizing information from the web.',
-    instructions: 'You are a research assistant. Your goal is to find the most relevant and up-to-date information on any given topic. Use search tools and summarize your findings clearly.',
-    model: 'gpt-4.1-mini',
-    provider: 'openai',
-    temperature: 0.7,
-    maxTokens: 4096,
-    status: 'active',
-    sandboxEnabled: false,
-    workspaceStorage: { type: 'local' },
-    failoverModels: [],
-  },
-  {
-    id: 'agent-2',
-    name: 'Code Generator',
-    description: 'Generates code in various programming languages based on user requirements.',
-    instructions: 'You are a senior software engineer. Write clean, efficient, and well-documented code. Always ask for clarification if the requirements are ambiguous.',
-    model: 'gemini-2.5-flash',
-    provider: 'google',
-    temperature: 0.5,
-    maxTokens: 8192,
-    status: 'inactive',
-    sandboxEnabled: true,
-    sandboxImage: 'node:20',
-    workspaceStorage: { type: 'local' },
-    failoverModels: [{ provider: 'openai', model: 'gpt-4.1-mini' }],
-  },
-  {
-    id: 'agent-3',
-    name: 'Creative Writer',
-    description: 'A creative partner for brainstorming and writing stories, scripts, and more.',
-    instructions: 'You are a creative writer. Help users brainstorm ideas, develop characters, and write compelling narratives. Be imaginative and inspiring.',
-    model: 'grok-3',
-    provider: 'xai',
-    temperature: 0.9,
-    maxTokens: 2048,
-    status: 'active',
-    sandboxEnabled: false,
-    workspaceStorage: { type: 'local' },
-    failoverModels: [],
-  },
-];
 
 export const Route = createFileRoute('/agents')({ component: AgentsPage });
 
@@ -132,7 +85,24 @@ function useProviderModels(provider: string) {
 }
 
 function AgentsPage() {
-  const [agents, setAgents] = useState<Agent[]>(initialAgents);
+  const rawAgents = useQuery(api.agents.listActive, {});
+  const agents: Agent[] = (rawAgents ?? []).map((a: any) => ({
+    id: a.id,
+    name: a.name,
+    description: a.description ?? '',
+    instructions: a.instructions ?? '',
+    model: a.model ?? 'gpt-4o-mini',
+    provider: (a.provider ?? 'openai') as any,
+    status: a.isActive ? 'active' : 'inactive',
+    temperature: a.temperature ?? 0.7,
+    maxTokens: a.maxTokens ?? 4096,
+    failoverModels: (a.failoverModels ?? []) as any,
+  }));
+
+  const createAgentMutation = useMutation(api.agents.create);
+  const updateAgentMutation = useMutation(api.agents.update);
+  const deleteAgentMutation = useMutation(api.agents.remove);
+
   const [searchQuery, setSearchQuery] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
@@ -140,7 +110,7 @@ function AgentsPage() {
   const filteredAgents = useMemo(() =>
     agents.filter(agent =>
       agent.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      agent.description.toLowerCase().includes(searchQuery.toLowerCase())
+      (agent.description || '').toLowerCase().includes(searchQuery.toLowerCase())
     ),
     [agents, searchQuery]
   );
@@ -155,19 +125,36 @@ function AgentsPage() {
     setIsModalOpen(false);
   };
 
-  const handleSaveAgent = (agentData: Omit<Agent, 'id' | 'status'>) => {
+  const handleSaveAgent = async (agentData: Omit<Agent, 'id' | 'status'>) => {
     if (editingAgent) {
-      setAgents(agents.map(a => a.id === editingAgent.id ? { ...a, ...agentData } : a));
+      await updateAgentMutation({
+        id: editingAgent.id,
+        name: agentData.name,
+        description: agentData.description,
+        instructions: agentData.instructions,
+        model: agentData.model,
+        provider: agentData.provider,
+        temperature: agentData.temperature,
+        maxTokens: agentData.maxTokens,
+      });
     } else {
-      setAgents([...agents, { id: `agent-${Date.now()}`, status: 'active', ...agentData }]);
+      const newId = `agent-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      await createAgentMutation({
+        id: newId,
+        name: agentData.name,
+        description: agentData.description,
+        instructions: agentData.instructions,
+        model: agentData.model,
+        provider: agentData.provider,
+        temperature: agentData.temperature,
+        maxTokens: agentData.maxTokens,
+      });
     }
     closeModal();
   };
 
-  const handleDeleteAgent = (agentId: string) => {
-    if (window.confirm('Are you sure you want to delete this agent?')) {
-      setAgents(agents.filter(a => a.id !== agentId));
-    }
+  const handleDeleteAgent = async (agentId: string) => {
+    await deleteAgentMutation({ id: agentId });
   };
 
   return (

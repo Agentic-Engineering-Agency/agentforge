@@ -166,6 +166,32 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  apiAccessTokens: {
+    document: {
+      createdAt: number;
+      expiresAt?: number;
+      isActive: boolean;
+      name: string;
+      token: string;
+      _id: Id<"apiAccessTokens">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "expiresAt"
+      | "isActive"
+      | "name"
+      | "token";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      byToken: ["token", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   apiKeys: {
     document: {
       createdAt: number;

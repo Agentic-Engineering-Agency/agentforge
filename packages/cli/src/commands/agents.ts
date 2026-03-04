@@ -60,7 +60,14 @@ export function registerAgentsCommand(program: Command) {
         process.exit(1);
       }
 
-      const provider = model.includes(':') ? model.split(':')[0] : 'openai';
+      let agentProvider = 'openai';
+      let agentModel = model || 'gpt-4o-mini';
+      if (agentModel.includes(':')) {
+        const [p, m] = agentModel.split(':');
+        agentProvider = p;
+        agentModel = m;
+      }
+
       const agentId = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
       const client = await createClient();
@@ -69,8 +76,8 @@ export function registerAgentsCommand(program: Command) {
           id: agentId,
           name,
           instructions,
-          model,
-          provider,
+          model: agentModel,
+          provider: agentProvider,
         }),
         'Failed to create agent'
       );
@@ -126,8 +133,15 @@ export function registerAgentsCommand(program: Command) {
       const updates: Record<string, any> = {};
       if (opts.name) updates.name = opts.name;
       if (opts.model) {
-        updates.model = opts.model;
-        updates.provider = opts.model.includes(':') ? opts.model.split(':')[0] : 'openai';
+        let agentProvider = 'openai';
+        let agentModel = opts.model;
+        if (agentModel.includes(':')) {
+          const [p, m] = agentModel.split(':');
+          agentProvider = p;
+          agentModel = m;
+        }
+        updates.model = agentModel;
+        updates.provider = agentProvider;
       }
       if (opts.instructions) updates.instructions = opts.instructions;
 
@@ -137,7 +151,17 @@ export function registerAgentsCommand(program: Command) {
         const model = await prompt(`Model [${a.model}]: `);
         const instr = await prompt(`Instructions [keep current]: `);
         if (name) updates.name = name;
-        if (model) { updates.model = model; updates.provider = model.includes(':') ? model.split(':')[0] : 'openai'; }
+        if (model) {
+          let agentProvider = 'openai';
+          let agentModel = model;
+          if (agentModel.includes(':')) {
+            const [p, m] = agentModel.split(':');
+            agentProvider = p;
+            agentModel = m;
+          }
+          updates.model = agentModel;
+          updates.provider = agentProvider;
+        }
         if (instr) updates.instructions = instr;
       }
 
