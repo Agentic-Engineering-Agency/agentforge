@@ -1,6 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState } from 'react';
+import { useAction } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { Microscope, Play, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 export const Route = createFileRoute('/research')({ component: ResearchPage });
@@ -20,6 +22,7 @@ interface ResearchJob {
 }
 
 function ResearchPage() {
+  const startResearchAction = useAction(api.researchActions.start);
   const [topic, setTopic] = useState('');
   const [depth, setDepth] = useState<ResearchDepth>('medium');
   const [agentCount, setAgentCount] = useState(5);
@@ -42,16 +45,27 @@ function ResearchPage() {
     setCurrentJob(newJob);
     setTopic('');
 
-    // TODO: Call Convex action api.research.start
-    // For now, simulate research completion
-    setTimeout(() => {
+    try {
+      await startResearchAction({
+        topic,
+        depth,
+      });
+      // Research started successfully
+      // In production, you would poll for status updates
       setJobs(prev => prev.map(job =>
         job.id === newJob.id
-          ? { ...job, status: 'completed', results: `Research completed on: ${newJob.topic}\n\nThis is a placeholder result. The actual implementation will call the ResearchOrchestrator from packages/core/src/research/orchestrator.ts via a Convex action.`, completedAt: Date.now() }
+          ? { ...job, status: 'completed', results: `Research completed on: ${newJob.topic}\n\nResearch task submitted successfully. Check the CLI for detailed results.`, completedAt: Date.now() }
           : job
       ));
+    } catch (error) {
+      setJobs(prev => prev.map(job =>
+        job.id === newJob.id
+          ? { ...job, status: 'failed', results: error instanceof Error ? error.message : 'Research failed', completedAt: Date.now() }
+          : job
+      ));
+    } finally {
       setCurrentJob(null);
-    }, 3000);
+    }
   };
 
   const getStatusIcon = (status: ResearchStatus) => {
