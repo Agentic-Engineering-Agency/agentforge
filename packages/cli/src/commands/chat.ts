@@ -3,6 +3,14 @@ import { createClient, safeCall } from '../lib/convex-client.js';
 import { header, success, error, info, dim, colors } from '../lib/display.js';
 import readline from 'node:readline';
 
+// Timeout wrapper for Convex action calls
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
+  const timeout = new Promise<never>((_, reject) => {
+    setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
+  });
+  return Promise.race([promise, timeout]);
+}
+
 const MAX_MESSAGE_LENGTH = 10000;
 
 function validateMessage(msg: string | undefined): { valid: boolean; error?: string } {
@@ -70,14 +78,22 @@ export function registerChatCommand(program: Command) {
         await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'user', content: input }), 'Failed to send');
 
         try {
-          const response = await safeCall(
-            () => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }),
-            'Failed to get response'
+          const response = await withTimeout(
+            safeCall(() => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }), 'Failed to get response'),
+            10000,
+            'Agent execution timed out after 10 seconds. This may indicate a missing or invalid API key.'
           );
           const text = (response as any)?.response || (response as any)?.text || (response as any)?.content || String(response);
           console.log(text);
-        } catch {
-          console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('auth') || msg.includes('API key')) {
+            error(`Agent execution failed: No API key configured for provider "${a.provider || 'openai'}".
+  Run: agentforge agents edit ${a.id} --provider anthropic
+  Or configure your key: agentforge settings set ${a.provider?.toUpperCase() || 'OPENAI'}_API_KEY sk-...`);
+          } else {
+            console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
+          }
         }
         process.exit(0);
       }
@@ -210,28 +226,48 @@ export function registerChatCommand(program: Command) {
           } catch (err) {
             console.log(`${colors.yellow}[Streaming failed: ${err instanceof Error ? err.message : String(err)}]${colors.reset}`);
             console.log(`${colors.yellow}[Falling back to non-streaming...]${colors.reset}`);
-            
+
             // Fallback to non-streaming
-            const response = await safeCall(
-              () => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }),
-              'Failed to get response'
-            );
-            const text = (response as any)?.response || (response as any)?.text || (response as any)?.content || String(response);
-            console.log(text);
-            history.push({ role: 'assistant', content: text });
+            try {
+              const response = await withTimeout(
+                safeCall(() => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }), 'Failed to get response'),
+                10000,
+                'Agent execution timed out after 10 seconds. This may indicate a missing or invalid API key.'
+              );
+              const text = (response as any)?.response || (response as any)?.text || (response as any)?.content || String(response);
+              console.log(text);
+              history.push({ role: 'assistant', content: text });
+            } catch (execErr) {
+              const msg = execErr instanceof Error ? execErr.message : String(execErr);
+              if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('auth') || msg.includes('API key')) {
+                error(`Agent execution failed: No API key configured for provider "${a.provider || 'openai'}".
+  Run: agentforge agents edit ${a.id} --provider anthropic
+  Or configure your key: agentforge settings set ${a.provider?.toUpperCase() || 'OPENAI'}_API_KEY sk-...`);
+              } else {
+                console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
+              }
+            }
           }
         } else {
           // Non-streaming fallback
           try {
-            const response = await safeCall(
-              () => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }),
-              'Failed to get response'
+            const response = await withTimeout(
+              safeCall(() => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }), 'Failed to get response'),
+              10000,
+              'Agent execution timed out after 10 seconds. This may indicate a missing or invalid API key.'
             );
             const text = (response as any)?.response || (response as any)?.text || (response as any)?.content || String(response);
             console.log(text);
             history.push({ role: 'assistant', content: text });
-          } catch {
-            console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
+          } catch (execErr) {
+            const msg = execErr instanceof Error ? execErr.message : String(execErr);
+            if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('auth') || msg.includes('API key')) {
+              error(`Agent execution failed: No API key configured for provider "${a.provider || 'openai'}".
+  Run: agentforge agents edit ${a.id} --provider anthropic
+  Or configure your key: agentforge settings set ${a.provider?.toUpperCase() || 'OPENAI'}_API_KEY sk-...`);
+            } else {
+              console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
+            }
           }
         }
         console.log();
