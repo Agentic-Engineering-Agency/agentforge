@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Key, Plus, Trash2, Eye, EyeOff, Check, X, Shield, AlertTriangle, ExternalLink, Settings } from 'lucide-react';
 
@@ -20,7 +20,7 @@ const AI_PROVIDERS = [
   {
     id: 'anthropic',
     name: 'Anthropic',
-    description: 'Claude 3.5 Sonnet, Claude 3 Haiku, Claude 3 Opus',
+    description: 'Claude Sonnet 4.5, Claude Haiku 4.5, Claude Opus 4',
     prefix: 'sk-ant-',
     docsUrl: 'https://console.anthropic.com/settings/keys',
     color: 'bg-orange-500',
@@ -36,7 +36,7 @@ const AI_PROVIDERS = [
   {
     id: 'google',
     name: 'Google AI',
-    description: 'Gemini 2.5 Flash, Gemini 1.5 Pro',
+    description: 'Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro',
     prefix: 'AIza',
     docsUrl: 'https://aistudio.google.com/apikey',
     color: 'bg-blue-500',
@@ -44,7 +44,7 @@ const AI_PROVIDERS = [
   {
     id: 'xai',
     name: 'xAI',
-    description: 'Grok 4, Grok 3',
+    description: 'Grok 3, Grok 3 Mini, Grok 2',
     prefix: 'xai-',
     docsUrl: 'https://console.x.ai/',
     color: 'bg-gray-500',
@@ -52,7 +52,7 @@ const AI_PROVIDERS = [
   {
     id: 'groq',
     name: 'Groq',
-    description: 'Ultra-fast inference — Llama, Mixtral, Gemma',
+    description: 'Ultra-fast inference — Llama 3.3, DeepSeek-R1, Qwen',
     prefix: 'gsk_',
     docsUrl: 'https://console.groq.com/keys',
     color: 'bg-red-500',
@@ -60,7 +60,7 @@ const AI_PROVIDERS = [
   {
     id: 'together',
     name: 'Together AI',
-    description: 'Open-source models — Llama, Mistral, Code Llama',
+    description: 'Llama 4, DeepSeek-R1, Qwen 2.5 — open-source models',
     prefix: '',
     docsUrl: 'https://api.together.xyz/settings/api-keys',
     color: 'bg-indigo-500',
@@ -68,7 +68,7 @@ const AI_PROVIDERS = [
   {
     id: 'perplexity',
     name: 'Perplexity',
-    description: 'Sonar — real-time web-grounded AI search',
+    description: 'Sonar Pro, Sonar — real-time web-grounded search',
     prefix: 'pplx-',
     docsUrl: 'https://www.perplexity.ai/settings/api',
     color: 'bg-teal-500',
@@ -83,6 +83,10 @@ function SettingsPage() {
   const toggleApiKey = useMutation(api.apiKeys.toggleActive);
   const storeVaultSecret = useMutation(api.vault.store);
   const removeVaultSecret = useMutation(api.vault.remove);
+  const getModelsForProvider = useAction(api.modelFetcher.getModelsForProvider);
+
+  // Live model names per provider — fetched dynamically when a key is present
+  const [liveModels, setLiveModels] = useState<Record<string, string>>({});
 
   const [tab, setTab] = useState<'providers' | 'vault' | 'general'>('providers');
   const [addingProvider, setAddingProvider] = useState<typeof AI_PROVIDERS[0] | null>(null);
@@ -99,6 +103,22 @@ function SettingsPage() {
     acc[key.provider].push(key);
     return acc;
   }, {} as Record<string, any[]>);
+
+  // Fetch live model names for providers that have a key configured
+  useEffect(() => {
+    const providersWithKeys = AI_PROVIDERS.filter(p => (keysByProvider[p.id] || []).length > 0);
+    for (const provider of providersWithKeys) {
+      if (liveModels[provider.id]) continue; // already fetched
+      getModelsForProvider({ provider: provider.id })
+        .then((models: any[]) => {
+          if (models && models.length > 0) {
+            const top = models.slice(0, 3).map((m: any) => m.displayName || m.id.split('/').slice(1).join('/')).join(', ');
+            setLiveModels(prev => ({ ...prev, [provider.id]: top }));
+          }
+        })
+        .catch(() => {}); // silently fall back to static description
+    }
+  }, [apiKeys]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleAddKey = async () => {
     if (!addingProvider || !newKeyValue.trim()) return;
@@ -170,7 +190,7 @@ function SettingsPage() {
                         <div className={`w-3 h-3 rounded-full ${provider.color}`} />
                         <div>
                           <h3 className="font-semibold text-foreground">{provider.name}</h3>
-                          <p className="text-xs text-muted-foreground">{provider.description}</p>
+                          <p className="text-xs text-muted-foreground">{liveModels[provider.id] || provider.description}</p>
                         </div>
                       </div>
                       <a href={provider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
