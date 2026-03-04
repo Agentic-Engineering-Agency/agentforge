@@ -1,46 +1,42 @@
 import { v } from "convex/values";
+import { paginationOptsValidator } from "convex/server";
 import { mutation, query } from "./_generated/server";
 
-// Query: Get usage records
+// Query: Get usage records (paginated)
 export const list = query({
   args: {
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
     agentId: v.optional(v.string()),
     provider: v.optional(v.string()),
-    startTime: v.optional(v.number()),
-    endTime: v.optional(v.number()),
+    paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
-    let records;
-    
-    if (args.provider) {
-      records = await ctx.db
+    if (args.projectId) {
+      return await ctx.db
+        .query("usage")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .paginate(args.paginationOpts);
+    } else if (args.provider) {
+      return await ctx.db
         .query("usage")
         .withIndex("byProvider", (q) => q.eq("provider", args.provider!))
-        .collect();
+        .paginate(args.paginationOpts);
     } else if (args.agentId) {
-      records = await ctx.db
+      return await ctx.db
         .query("usage")
         .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
-        .collect();
+        .paginate(args.paginationOpts);
     } else if (args.userId) {
-      records = await ctx.db
+      return await ctx.db
         .query("usage")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
-        .collect();
+        .paginate(args.paginationOpts);
     } else {
-      records = await ctx.db.query("usage").collect();
+      return await ctx.db
+        .query("usage")
+        .paginate(args.paginationOpts);
     }
-    
-    // Filter by time range if provided
-    if (args.startTime) {
-      records = records.filter((r) => r.timestamp >= args.startTime!);
-    }
-    if (args.endTime) {
-      records = records.filter((r) => r.timestamp <= args.endTime!);
-    }
-    
-    return records;
   },
 });
 
@@ -163,6 +159,7 @@ export const record = mutation({
     totalTokens: v.number(),
     cost: v.optional(v.number()),
     userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
     const usageId = await ctx.db.insert("usage", {

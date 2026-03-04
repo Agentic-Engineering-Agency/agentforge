@@ -89,7 +89,7 @@ export const rename = mutation({
     // Try to find the thread by string ID
     let thread = null;
     const allThreads = await ctx.db.query("threads").collect();
-    thread = allThreads.find(t => String(t._id) === args.id || t._id === args.id);
+    thread = allThreads.find(t => t._id === args.id || t._id.endsWith(args.id));
 
     if (!thread) {
       throw new Error(`Thread "${args.id}" not found`);
