@@ -1,21 +1,28 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { DashboardLayout } from "../components/DashboardLayout";
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
-import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
-import { Activity, Clock, MessageSquare, XCircle, Loader2 } from "lucide-react";
+import { createFileRoute, Outlet, useMatch } from '@tanstack/react-router';
+import { DashboardLayout } from '../components/DashboardLayout';
+import { useState, useMemo, useEffect } from 'react';
+// import { useQuery, useMutation } from 'convex/react';
+// import { api } from '../../convex/_generated/api';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter, SheetClose } from '../components/ui/sheet';
+import { Badge } from '../components/ui/badge';
+import { Activity, Clock, MessageSquare, XCircle, Loader2 } from 'lucide-react';
 
 export const Route = createFileRoute("/sessions")({ component: SessionsPage });
 
 type StatusFilter = "all" | "active" | "completed" | "error";
 
-function statusColor(status: string) {
-  if (status === "active") return "bg-green-500/20 text-green-400 border-green-700/40";
-  if (status === "completed") return "bg-blue-500/20 text-blue-400 border-blue-700/40";
-  return "bg-red-500/20 text-red-400 border-red-700/40";
+export const Route = createFileRoute('/sessions')({ component: SessionsPageLayout });
+
+function SessionsPageLayout() {
+  const childMatch = useMatch({ from: '/sessions/$sessionId', shouldThrow: false });
+  if (childMatch) return <Outlet />;
+  return <SessionsPage />;
 }
+
 
 function formatDuration(startedAt: number, completedAt?: number | null): string {
   const end = completedAt ?? Date.now();

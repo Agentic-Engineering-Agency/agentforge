@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet, useMatch } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, useEffect, ChangeEvent, FormEvent } from 'react';
 import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X, ChevronDown, ChevronUp, HardDrive, Container } from 'lucide-react';
@@ -236,7 +236,13 @@ function AgentCard({ agent, onEdit, onDelete }: AgentCardProps) {
           <div className="flex items-center"><Zap className="h-3 w-3 mr-1" /> {agent.provider}</div>
         </div>
       </div>
-      <Link to="/agents/$agentId" params={{ agentId: agent.id }} className="w-full bg-background border border-border text-center py-2 rounded-lg hover:bg-primary/10 text-sm block">View Details</Link>
+      <Link
+        to="/agents/$agentId"
+        params={{ agentId: agent.id }}
+        className="w-full bg-background border border-border text-center py-2 rounded-lg hover:bg-primary/10 text-sm block"
+      >
+        View Details
+      </Link>
     </div>
   );
 }
