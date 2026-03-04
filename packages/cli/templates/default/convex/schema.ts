@@ -2,6 +2,15 @@ import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
 export default defineSchema({
+  // API access tokens for external API authentication
+  apiAccessTokens: defineTable({
+    name: v.string(),
+    token: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    isActive: v.boolean(),
+  }).index("byToken", ["token"]),
+
   // Core agent definitions
   agents: defineTable({
     id: v.string(),
@@ -315,13 +324,25 @@ export default defineSchema({
     userId: v.optional(v.string()),
     timestamp: v.number(),
     projectId: v.optional(v.id("projects")),
+    // Token usage tracking for observability
+    agentId: v.optional(v.string()),
+    sessionId: v.optional(v.string()),
+    threadId: v.optional(v.id("threads")),
+    inputTokens: v.optional(v.float64()),
+    outputTokens: v.optional(v.float64()),
+    totalTokens: v.optional(v.float64()),
+    costUsd: v.optional(v.float64()),
+    model: v.optional(v.string()),
+    provider: v.optional(v.string()),
   })
     .index("byLevel", ["level"])
     .index("bySource", ["source"])
     .index("byTimestamp", ["timestamp"])
     .index("byUserId", ["userId"])
     .index("byProjectId", ["projectId"])
-    .index("byProjectAndTimestamp", ["projectId", "timestamp"]),
+    .index("byProjectAndTimestamp", ["projectId", "timestamp"])
+    .index("byAgentId", ["agentId"])
+    .index("bySessionId", ["sessionId"]),
 
   // Channels for multi-platform support
   channels: defineTable({

@@ -434,6 +434,30 @@ export const executeAgent = action({
           userId: args.userId,
           cost,
         });
+
+        // Also log token usage to logs table for observability
+        await ctx.runMutation(api.logs.add, {
+          level: "info",
+          source: "mastraIntegration",
+          message: `Agent execution successful: ${result.text.slice(0, 100)}`,
+          metadata: {
+            agentId: args.agentId,
+            threadId,
+            sessionId,
+            latencyMs: result.latencyMs,
+            didFailover: result.didFailover,
+          },
+          userId: args.userId,
+          agentId: args.agentId,
+          sessionId,
+          threadId: threadId,
+          inputTokens: result.usage.promptTokens,
+          outputTokens: result.usage.completionTokens,
+          totalTokens: result.usage.totalTokens,
+          costUsd: cost,
+          model: result.model,
+          provider: result.provider,
+        });
       }
 
       return {
