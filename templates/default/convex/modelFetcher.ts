@@ -343,9 +343,9 @@ export const getModelsForProvider = action({
 
     try {
       const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
-      if (!keyData?.apiKey) return staticModels;
+      if (!keyData) return staticModels;
 
-      const liveModels = await fetchModelsForProvider(provider, keyData.apiKey);
+      const liveModels = await fetchModelsForProvider(provider, keyData as string);
       if (liveModels.length === 0) return staticModels;
 
       return liveModels.map(m => ({ ...m, isFromAPI: true }));
