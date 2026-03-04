@@ -1,4 +1,5 @@
 import { mutation, query } from "./_generated/server";
+import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 
 // Mutation: Add a message to a thread
@@ -13,7 +14,6 @@ export const add = mutation({
     ),
     content: v.string(),
     tool_calls: v.optional(v.any()),
-    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
     projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
@@ -43,7 +43,6 @@ export const create = mutation({
     ),
     content: v.string(),
     tool_calls: v.optional(v.any()),
-    fileIds: v.optional(v.array(v.id("files"))), // AGE-144: Attached files
     projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
@@ -55,18 +54,32 @@ export const create = mutation({
   },
 });
 
-// Query: Get messages by thread
+// Query: Get messages by thread (paginated)
 export const list = query({
-  args: { threadId: v.id("threads") },
+  args: {
+    threadId: v.id("threads"),
+    paginationOpts: paginationOptsValidator,
+  },
   handler: async (ctx, args) => {
-    const messages = await ctx.db
+    return await ctx.db
       .query("messages")
       .withIndex("byThread", (q) => q.eq("threadId", args.threadId!))
-      .collect();
-    return messages;
+      .paginate(args.paginationOpts);
   },
 });
 
+
+// Query: Get all messages by thread (non-paginated, for internal use)
+export const getByThread = query({
+  args: { threadId: v.id("threads") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("messages")
+      .withIndex("byThread", (q) => q.eq("threadId", args.threadId!))
+      .order("asc")
+      .collect();
+  },
+});
 // Mutation: Delete a message
 export const remove = mutation({
   args: { id: v.id("messages") },
