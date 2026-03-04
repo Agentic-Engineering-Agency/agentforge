@@ -999,17 +999,15 @@ function registerAgentsCommand(program2) {
       }))
     );
   });
-  agents.command("create").description("Create a new agent (interactive)").option("--name <name>", "Agent name").option("--model <model>", "Model identifier (e.g., openai:gpt-4o-mini)").option("--instructions <text>", "System instructions").option("--description <text>", "Agent description").option("--provider <provider>", "Provider (openai, anthropic, etc.)").action(async (opts) => {
+  agents.command("create").description("Create a new agent (interactive)").option("--name <name>", "Agent name").option("--model <model>", "Model identifier (e.g., openai:gpt-4o-mini)").option("--instructions <text>", "System instructions").action(async (opts) => {
     const name = opts.name || await prompt("Agent name: ");
     const model = opts.model || await prompt("Model (e.g., openai:gpt-4o-mini): ");
     const instructions = opts.instructions || await prompt("Instructions: ");
-    const description = opts.description || await prompt("Description (optional): ");
-    const provider = opts.provider || await prompt("Provider (openai, anthropic, etc.) [default: openai]: ") || "openai";
     if (!name || !model || !instructions) {
       error("Name, model, and instructions are required.");
       process.exit(1);
     }
-    let agentProvider = provider;
+    let agentProvider = "openai";
     let agentModel = model || "gpt-4o-mini";
     if (agentModel.includes(":")) {
       const [p, m] = agentModel.split(":");
@@ -1022,7 +1020,6 @@ function registerAgentsCommand(program2) {
       () => client.mutation("agents:create", {
         id: agentId,
         name,
-        description: description || void 0,
         instructions,
         model: agentModel,
         provider: agentProvider
@@ -1059,7 +1056,7 @@ function registerAgentsCommand(program2) {
   ${a.instructions.split("\n").join("\n  ")}
 `);
   });
-  agents.command("edit").argument("<id>", "Agent ID").option("--name <name>", "New name").option("--model <model>", "New model").option("--instructions <text>", "New instructions").description("Edit an agent").action(async (id, opts) => {
+  agents.command("edit").argument("<id>", "Agent ID").option("--name <name>", "New name").option("--model <model>", "New model").option("--description <text>", "New description").option("--provider <provider>", "New provider").option("--active <true|false>", "Set active status").option("--instructions <text>", "New instructions").description("Edit an agent").action(async (id, opts) => {
     const client = await createClient();
     const agent = await safeCall(
       () => client.query("agents:get", { id }),
@@ -1071,6 +1068,9 @@ function registerAgentsCommand(program2) {
     }
     const updates = {};
     if (opts.name) updates.name = opts.name;
+    if (opts.description) updates.description = opts.description;
+    if (opts.provider) updates.provider = opts.provider;
+    if (opts.active !== void 0) updates.isActive = opts.active === "true" || opts.active === true;
     if (opts.model) {
       let agentProvider = "openai";
       let agentModel = opts.model;
@@ -1086,9 +1086,15 @@ function registerAgentsCommand(program2) {
     if (Object.keys(updates).length === 0) {
       const a = agent;
       const name = await prompt(`Name [${a.name}]: `);
+      const description = await prompt(`Description [${a.description || "none"}]: `);
       const model = await prompt(`Model [${a.model}]: `);
+      const provider = await prompt(`Provider [${a.provider || "openai"}]: `);
+      const active = await prompt(`Active [${a.isActive ? "true" : "false"}]: `);
       const instr = await prompt(`Instructions [keep current]: `);
       if (name) updates.name = name;
+      if (description) updates.description = description;
+      if (provider) updates.provider = provider;
+      if (active) updates.isActive = active === "true" || active === "1";
       if (model) {
         let agentProvider = "openai";
         let agentModel = model;
@@ -1362,7 +1368,6 @@ ${colors.yellow}[Error: ${data.error}]${colors.reset}`);
 }
 
 // src/commands/sessions.ts
-import readline3 from "readline";
 function registerSessionsCommand(program2) {
   const sessions = program2.command("sessions").description("Manage sessions");
   sessions.command("list").option("--status <status>", "Filter by status (active, ended)").option("--json", "Output as JSON").description("List all sessions").action(async (opts) => {
@@ -1403,28 +1408,6 @@ function registerSessionsCommand(program2) {
     const client = await createClient();
     await safeCall(() => client.mutation("sessions:updateStatus", { sessionId: id, status: "completed" }), "Failed to end session");
     success(`Session "${id}" ended.`);
-  });
-  sessions.command("delete").argument("<id>", "Session ID").option("-f, --force", "Skip confirmation").description("Delete a session").action(async (id, opts) => {
-    const rl = readline3.createInterface({ input: process.stdin, output: process.stdout });
-    const confirmPrompt = (question) => new Promise((resolve4) => rl.question(question, (ans) => {
-      rl.close();
-      resolve4(ans.trim());
-    }));
-    if (!opts.force) {
-      const confirm = await confirmPrompt(`Delete session "${id}"? (y/N): `);
-      if (confirm.toLowerCase() !== "y") {
-        info("Cancelled.");
-        return;
-      }
-    }
-    const client = await createClient();
-    const session = await safeCall(() => client.query("sessions:get", { sessionId: id }), "Failed to fetch session");
-    if (!session) {
-      error(`Session "${id}" not found.`);
-      process.exit(1);
-    }
-    await safeCall(() => client.mutation("sessions:remove", { sessionId: id }), "Failed to delete session");
-    success(`Session "${id}" deleted.`);
   });
 }
 function registerThreadsCommand(program2) {
@@ -1480,7 +1463,7 @@ function registerThreadsCommand(program2) {
 // src/commands/skills.ts
 import fs6 from "fs-extra";
 import path6 from "path";
-import readline4 from "readline";
+import readline3 from "readline";
 import { execSync as execSync3 } from "child_process";
 var SKILLS_DIR_NAME = "skills";
 var SKILLS_LOCK_FILE = "skills.lock.json";
@@ -1544,7 +1527,7 @@ var BUILTIN_REGISTRY = [
   }
 ];
 function prompt2(q) {
-  const rl = readline4.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline3.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3284,9 +3267,9 @@ function registerSkillCommand(program2) {
 }
 
 // src/commands/cron.ts
-import readline5 from "readline";
+import readline4 from "readline";
 function prompt3(q) {
-  const rl = readline5.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline4.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3352,7 +3335,7 @@ function registerCronCommand(program2) {
 
 // src/commands/mcp.ts
 import { MCPExecutor } from "@agentforge-ai/core";
-import readline6 from "readline";
+import readline5 from "readline";
 function mutationRef(name) {
   return name;
 }
@@ -3360,7 +3343,7 @@ function queryRef(name) {
   return name;
 }
 function prompt4(q) {
-  const rl = readline6.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline5.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3706,9 +3689,9 @@ function formatSize(bytes) {
 }
 
 // src/commands/projects.ts
-import readline7 from "readline";
+import readline6 from "readline";
 function prompt5(q) {
-  const rl = readline7.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline6.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3793,9 +3776,9 @@ function registerProjectsCommand(program2) {
 // src/commands/config.ts
 import fs9 from "fs-extra";
 import path9 from "path";
-import readline8 from "readline";
+import readline7 from "readline";
 function prompt6(q) {
-  const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline7.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3923,9 +3906,9 @@ function registerConfigCommand(program2) {
 }
 
 // src/commands/vault.ts
-import readline9 from "readline";
+import readline8 from "readline";
 function prompt7(q) {
-  const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3933,7 +3916,7 @@ function prompt7(q) {
 }
 function promptSecret(q) {
   return new Promise((resolve4) => {
-    const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
     if (process.stdin.isTTY) {
       process.stdout.write(q);
       let input = "";
@@ -4278,7 +4261,7 @@ function registerKeysCommand(program2) {
 import { spawn as spawn2 } from "child_process";
 import path10 from "path";
 import fs10 from "fs-extra";
-import readline10 from "readline";
+import readline9 from "readline";
 function registerStatusCommand(program2) {
   program2.command("status").description("Show system health and connection status").action(async () => {
     header("AgentForge Status");
@@ -4475,7 +4458,7 @@ function registerStatusCommand(program2) {
       console.log(`     ${colors.dim}Status: ${task.status} | Pending: ${(task.pendingTasks || []).length} task(s)${colors.reset}`);
     });
     console.log();
-    const rl = readline10.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise((r) => rl.question("Reset stalled heartbeats? (y/N): ", (a) => {
       rl.close();
       r(a.trim());
@@ -4822,6 +4805,15 @@ Troubleshooting:`);
 }
 
 // src/commands/tokens.ts
+import readline10 from "readline";
+import { randomBytes } from "crypto";
+function prompt8(question) {
+  const rl = readline10.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve4) => rl.question(question, (ans) => {
+    rl.close();
+    resolve4(ans.trim());
+  }));
+}
 function registerTokensCommand(program2) {
   const tokens = program2.command("tokens").description("Manage API access tokens (for /v1/chat/completions)");
   tokens.command("generate").option("--name <name>", "Token name (required)").description("Generate a new API access token (shown once only)").action(async (opts) => {
@@ -4874,13 +4866,67 @@ Use it as: Authorization: Bearer ${result.token}`);
       process.exit(1);
     }
   });
+  tokens.command("create").option("--name <name>", "Token name (required)").option("--expires <date>", "Expiration date (YYYY-MM-DD format)").description("Create a new API access token").action(async (opts) => {
+    if (!opts.name) {
+      error("--name is required");
+      process.exit(1);
+    }
+    const client = await createClient();
+    let expiresAt;
+    if (opts.expires) {
+      expiresAt = new Date(opts.expires).getTime();
+      if (isNaN(expiresAt)) {
+        error(`Invalid date format: ${opts.expires}. Use YYYY-MM-DD format.`);
+        process.exit(1);
+      }
+    }
+    try {
+      const token = "agf_" + randomBytes(16).toString("hex");
+      const result = await client.mutation("apiAccessTokens:generate", {
+        name: opts.name,
+        expiresAt
+      });
+      success(`Token created: ${result.token}`);
+      info(`Name: ${opts.name} | Expires: ${opts.expires || "Never"} | Status: Active`);
+      info(`
+  \u26A0\uFE0F  This token will NOT be shown again. Store it securely.`);
+    } catch (err) {
+      error(`Failed to create token: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+  });
+  tokens.command("delete <nameOrId>").option("-f, --force", "Skip confirmation").description("Delete an API access token").action(async (nameOrId, opts) => {
+    const client = await createClient();
+    const tokens2 = await client.query("apiAccessTokens:list", {});
+    const token = tokens2.find(
+      (t) => t.name === nameOrId || t._id.toString().endsWith(nameOrId) || t.token?.endsWith(nameOrId)
+    );
+    if (!token) {
+      error(`Token "${nameOrId}" not found.`);
+      process.exit(1);
+    }
+    if (!opts.force) {
+      const confirm = await prompt8(`Delete token "${token.name}"? (y/N): `);
+      if (confirm.toLowerCase() !== "y") {
+        info("Cancelled.");
+        return;
+      }
+    }
+    try {
+      await client.mutation("apiAccessTokens:remove", { id: token._id });
+      success(`Token "${token.name}" deleted.`);
+    } catch (err) {
+      error(`Failed to delete token: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(1);
+    }
+  });
 }
 
 // src/commands/channel-telegram.ts
 import fs11 from "fs-extra";
 import path11 from "path";
 import readline11 from "readline";
-function prompt8(q) {
+function prompt9(q) {
   const rl = readline11.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
@@ -4954,7 +5000,7 @@ function registerChannelTelegramCommand(program2) {
         );
       });
       console.log();
-      const choice = await prompt8("Select agent (number or ID): ");
+      const choice = await prompt9("Select agent (number or ID): ");
       const idx = parseInt(choice) - 1;
       agentId = idx >= 0 && idx < agents.length ? agents[idx].id : choice;
     }
@@ -5020,7 +5066,7 @@ function registerChannelTelegramCommand(program2) {
     dim("  2. Send /newbot and follow the instructions");
     dim("  3. Copy the token provided");
     console.log();
-    const token = await prompt8("Telegram Bot Token: ");
+    const token = await prompt9("Telegram Bot Token: ");
     if (!token) {
       error("Bot token is required.");
       process.exit(1);
@@ -5044,7 +5090,7 @@ function registerChannelTelegramCommand(program2) {
     writeEnvValue("TELEGRAM_BOT_TOKEN", token);
     success("Token saved to .env.local");
     console.log();
-    const defaultAgent = await prompt8("Default agent ID (optional, press Enter to skip): ");
+    const defaultAgent = await prompt9("Default agent ID (optional, press Enter to skip): ");
     if (defaultAgent) {
       writeEnvValue("AGENTFORGE_AGENT_ID", defaultAgent);
       success(`Default agent set to: ${defaultAgent}`);
@@ -5245,7 +5291,7 @@ Commands:
 import fs12 from "fs-extra";
 import path12 from "path";
 import readline12 from "readline";
-function prompt9(q) {
+function prompt10(q) {
   const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
@@ -5335,7 +5381,7 @@ function registerChannelWhatsAppCommand(program2) {
         );
       });
       console.log();
-      const choice = await prompt9("Select agent (number or ID): ");
+      const choice = await prompt10("Select agent (number or ID): ");
       const idx = parseInt(choice) - 1;
       agentId = idx >= 0 && idx < agents.length ? agents[idx].id : choice;
     }
@@ -5409,7 +5455,7 @@ function registerChannelWhatsAppCommand(program2) {
       const masked = currentToken.slice(0, 10) + "****" + currentToken.slice(-4);
       info(`Current access token: ${masked}`);
     }
-    const accessToken = await prompt9("WhatsApp Access Token: ");
+    const accessToken = await prompt10("WhatsApp Access Token: ");
     if (!accessToken) {
       error("Access token is required.");
       process.exit(1);
@@ -5437,7 +5483,7 @@ function registerChannelWhatsAppCommand(program2) {
     if (currentPhoneId) {
       info(`Current Phone Number ID: ${currentPhoneId}`);
     }
-    const phoneNumberId = await prompt9("WhatsApp Phone Number ID: ");
+    const phoneNumberId = await prompt10("WhatsApp Phone Number ID: ");
     if (!phoneNumberId) {
       error("Phone Number ID is required.");
       process.exit(1);
@@ -5463,7 +5509,7 @@ function registerChannelWhatsAppCommand(program2) {
     if (currentVerifyToken) {
       info(`Current verify token: ${currentVerifyToken.slice(0, 6)}****`);
     }
-    let verifyToken = await prompt9("Webhook Verify Token (press Enter to auto-generate): ");
+    let verifyToken = await prompt10("Webhook Verify Token (press Enter to auto-generate): ");
     if (!verifyToken) {
       verifyToken = `agentforge_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
       info(`Generated verify token: ${verifyToken}`);
@@ -5471,7 +5517,7 @@ function registerChannelWhatsAppCommand(program2) {
     writeEnvValue2("WHATSAPP_VERIFY_TOKEN", verifyToken);
     success("Verify token saved to .env.local");
     console.log();
-    const defaultAgent = await prompt9("Default agent ID (optional, press Enter to skip): ");
+    const defaultAgent = await prompt10("Default agent ID (optional, press Enter to skip): ");
     if (defaultAgent) {
       writeEnvValue2("AGENTFORGE_AGENT_ID", defaultAgent);
       success(`Default agent set to: ${defaultAgent}`);
@@ -5718,7 +5764,7 @@ async function runMinimalWhatsAppBot(config) {
 import fs13 from "fs-extra";
 import path13 from "path";
 import readline13 from "readline";
-function prompt10(q) {
+function prompt11(q) {
   const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
@@ -5809,7 +5855,7 @@ function registerChannelSlackCommand(program2) {
         );
       });
       console.log();
-      const choice = await prompt10("Select agent (number or ID): ");
+      const choice = await prompt11("Select agent (number or ID): ");
       const idx = parseInt(choice) - 1;
       agentId = idx >= 0 && idx < agents.length ? agents[idx].id : choice;
     }
@@ -5875,7 +5921,7 @@ function registerChannelSlackCommand(program2) {
       const masked = currentBotToken.slice(0, 8) + "****" + currentBotToken.slice(-4);
       info(`Current bot token: ${masked}`);
     }
-    const botToken = await prompt10("Slack Bot Token (xoxb-...): ");
+    const botToken = await prompt11("Slack Bot Token (xoxb-...): ");
     if (!botToken) {
       error("Bot token is required.");
       process.exit(1);
@@ -5911,7 +5957,7 @@ function registerChannelSlackCommand(program2) {
       const masked = currentAppToken.slice(0, 8) + "****" + currentAppToken.slice(-4);
       info(`Current app token: ${masked}`);
     }
-    const appToken = await prompt10("Slack App-Level Token (xapp-..., for socket mode): ");
+    const appToken = await prompt11("Slack App-Level Token (xapp-..., for socket mode): ");
     if (!appToken) {
       warn("App-level token not provided. Socket mode will not be available.");
     } else {
@@ -5926,7 +5972,7 @@ function registerChannelSlackCommand(program2) {
     if (currentSigningSecret) {
       info(`Current signing secret: ${currentSigningSecret.slice(0, 6)}****`);
     }
-    const signingSecret = await prompt10("Slack Signing Secret: ");
+    const signingSecret = await prompt11("Slack Signing Secret: ");
     if (!signingSecret) {
       error("Signing secret is required.");
       process.exit(1);
@@ -5937,7 +5983,7 @@ function registerChannelSlackCommand(program2) {
     writeEnvValue3("SLACK_SIGNING_SECRET", signingSecret);
     success("Signing secret saved to .env.local");
     console.log();
-    const defaultAgent = await prompt10("Default agent ID (optional, press Enter to skip): ");
+    const defaultAgent = await prompt11("Default agent ID (optional, press Enter to skip): ");
     if (defaultAgent) {
       writeEnvValue3("AGENTFORGE_AGENT_ID", defaultAgent);
       success(`Default agent set to: ${defaultAgent}`);
@@ -6258,7 +6304,7 @@ async function runMinimalSlackBot(config) {
 import fs14 from "fs-extra";
 import path14 from "path";
 import readline14 from "readline";
-function prompt11(q) {
+function prompt12(q) {
   const rl = readline14.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
@@ -6335,7 +6381,7 @@ function registerChannelDiscordCommand(program2) {
         );
       });
       console.log();
-      const choice = await prompt11("Select agent (number or ID): ");
+      const choice = await prompt12("Select agent (number or ID): ");
       const idx = parseInt(choice) - 1;
       agentId = idx >= 0 && idx < agents.length ? agents[idx].id : choice;
     }
@@ -6404,7 +6450,7 @@ function registerChannelDiscordCommand(program2) {
       const masked = currentBotToken.slice(0, 10) + "****" + currentBotToken.slice(-4);
       info(`Current bot token: ${masked}`);
     }
-    const botToken = await prompt11("Discord Bot Token: ");
+    const botToken = await prompt12("Discord Bot Token: ");
     if (!botToken) {
       error("Bot token is required.");
       process.exit(1);
@@ -6438,19 +6484,19 @@ function registerChannelDiscordCommand(program2) {
     if (currentClientId) {
       info(`Current client ID: ${currentClientId}`);
     }
-    const clientId = await prompt11("Discord Client ID (optional, for slash commands, press Enter to skip): ");
+    const clientId = await prompt12("Discord Client ID (optional, for slash commands, press Enter to skip): ");
     if (clientId) {
       writeEnvValue4("DISCORD_CLIENT_ID", clientId);
       success("Client ID saved to .env.local");
     }
     console.log();
-    const guildId = await prompt11("Discord Guild ID (optional, for guild-specific commands, press Enter to skip): ");
+    const guildId = await prompt12("Discord Guild ID (optional, for guild-specific commands, press Enter to skip): ");
     if (guildId) {
       writeEnvValue4("DISCORD_GUILD_ID", guildId);
       success("Guild ID saved to .env.local");
     }
     console.log();
-    const defaultAgent = await prompt11("Default agent ID (optional, press Enter to skip): ");
+    const defaultAgent = await prompt12("Default agent ID (optional, press Enter to skip): ");
     if (defaultAgent) {
       writeEnvValue4("AGENTFORGE_AGENT_ID", defaultAgent);
       success(`Default agent set to: ${defaultAgent}`);
@@ -7090,38 +7136,6 @@ function registerVoiceCommand(program2) {
 // src/commands/workflows.ts
 function registerWorkflowsCommand(program2) {
   const workflowsCmd = program2.command("workflows").description("Multi-agent workflow commands");
-  workflowsCmd.command("create").description("Create a new workflow").option("--name <name>", "Workflow name").option("--agent <id>", "Agent ID to assign").option("--trigger <type>", "Trigger type (manual, cron, webhook)", "manual").option("--schedule <cron>", "Cron schedule (for cron trigger)").action(async (opts) => {
-    const name = opts.name;
-    const agent = opts.agent;
-    const trigger = opts.trigger || "manual";
-    const schedule = opts.schedule;
-    if (!name) {
-      error("--name is required");
-      process.exit(1);
-    }
-    if (!agent) {
-      error("--agent is required");
-      process.exit(1);
-    }
-    if (trigger === "cron" && !schedule) {
-      error("--schedule is required for cron triggers");
-      process.exit(1);
-    }
-    const client = await createClient();
-    let triggersData = { type: trigger };
-    if (trigger === "cron" && schedule) {
-      triggersData.schedule = schedule;
-    }
-    await safeCall(
-      () => client.mutation("workflows:create", {
-        name,
-        triggers: JSON.stringify(triggersData),
-        steps: JSON.stringify([{ agentId: agent, name: "Step 1" }])
-      }),
-      "Failed to create workflow"
-    );
-    success(`Workflow "${name}" created`);
-  });
   workflowsCmd.command("list").option("-p, --project <projectId>", "Filter by project ID").option("--active", "Show only active workflows").option("--inactive", "Show only inactive workflows").description("List workflow definitions").action(async (opts) => {
     const client = await createClient();
     const args = {};

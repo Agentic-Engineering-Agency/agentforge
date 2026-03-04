@@ -43,16 +43,6 @@ export const add = mutation({
     metadata: v.optional(v.any()),
     userId: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
-    // Token usage fields (optional)
-    agentId: v.optional(v.string()),
-    sessionId: v.optional(v.string()),
-    threadId: v.optional(v.id("threads")),
-    inputTokens: v.optional(v.float64()),
-    outputTokens: v.optional(v.float64()),
-    totalTokens: v.optional(v.float64()),
-    costUsd: v.optional(v.float64()),
-    model: v.optional(v.string()),
-    provider: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("logs", {
