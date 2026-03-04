@@ -6,7 +6,7 @@
  */
 
 import { v } from "convex/values";
-import { action, internalMutation } from "./_generated/server";
+import { action } from "./_generated/server";
 import { internal } from "./_generated/api";
 import crypto from "node:crypto";
 
@@ -28,22 +28,9 @@ export const generate = action({
       throw new Error("Token name must be 1-100 characters");
     const plaintext = generatePlaintext();
     const tokenHash = hashToken(plaintext);
-    await ctx.runMutation(internal.apiAccessTokensActions.insertToken, { token: plaintext, name });
+    await ctx.runMutation(internal.apiAccessTokens.insertToken, { token: plaintext, name });
     return { plaintext, name, agentId };
   },
 });
-
-export const insertToken = internalMutation({
-  args: {
-    token: v.string(),
-    name: v.string(),
-  },
-  handler: async (ctx, { token, name }) => {
-    await ctx.db.insert('apiAccessTokens', {
-      token,
-      name,
-      isActive: true,
-      createdAt: Date.now(),
-    });
   },
 });
