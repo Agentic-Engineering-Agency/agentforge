@@ -45,3 +45,12 @@ export const revoke = mutation({
     await ctx.db.patch(args.id, { isActive: false });
   },
 });
+
+// Mutation: remove an API access token
+export const remove = mutation({
+  args: { id: v.id("apiAccessTokens") },
+  handler: async (ctx, args) => {
+    await ctx.db.delete(args.id);
+    return { success: true };
+  },
+});
