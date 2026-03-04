@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
 import { useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 import {
   Activity,
   MessageSquare,
@@ -100,71 +102,65 @@ function messageRoleBadge(role: Message["role"]): string {
 function SessionDetailPage() {
   const { sessionId } = Route.useParams();
 
-  // In production, this would use Convex useQuery for real-time data.
-  // For now, using mock data.
-  const [session] = useState<SessionDetail>({
-    _id: sessionId,
-    sessionId: sessionId,
-    agentId: "agent-001",
-    userId: "user-123",
-    status: "completed",
-    startedAt: Date.now() - 1000 * 60 * 30,
-    completedAt: Date.now() - 1000 * 60 * 5,
-    lastActivityAt: Date.now() - 1000 * 60 * 5,
-    messages: [
-      {
-        _id: "m1",
-        role: "system",
-        content: "You are a helpful assistant.",
-        timestamp: Date.now() - 1000 * 60 * 30,
-      },
-      {
-        _id: "m2",
-        role: "user",
-        content: "Hello, can you help me with something?",
-        timestamp: Date.now() - 1000 * 60 * 29,
-      },
-      {
-        _id: "m3",
-        role: "assistant",
-        content: "Of course! I'd be happy to help you. What do you need assistance with?",
-        timestamp: Date.now() - 1000 * 60 * 28,
-      },
-      {
-        _id: "m4",
-        role: "user",
-        content: "I need to understand how AgentForge works.",
-        timestamp: Date.now() - 1000 * 60 * 25,
-      },
-      {
-        _id: "m5",
-        role: "assistant",
-        content: "AgentForge is an AI agent framework that provides a CLI and local dashboard. It's built on Mastra and Convex, offering self-hosted, developer-focused, and secure-by-default capabilities.",
-        timestamp: Date.now() - 1000 * 60 * 20,
-      },
-    ],
-  });
+  // Real Convex queries
+  const sessionData = useQuery(api.sessions.getWithMessages, { sessionId });
+  const isLoading = sessionData === undefined;
 
-  const [isLoading] = useState(false);
+  // Handle not found
+  if (!isLoading && !sessionData) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6">
+          <div className="flex items-center gap-3 mb-4">
+            <a href="/sessions" className="text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="w-5 h-5" />
+            </a>
+            <h1 className="text-3xl font-bold">Session Not Found</h1>
+          </div>
+          <p className="text-muted-foreground">Session with ID "{sessionId}" could not be found.</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  // Transform session data to component format
+  const session: SessionDetail | null = sessionData ? {
+    _id: sessionData._id,
+    sessionId: sessionData.sessionId || sessionData._id,
+    agentId: sessionData.agentId,
+    userId: sessionData.userId,
+    status: sessionData.status as SessionDetail["status"],
+    startedAt: sessionData.startedAt,
+    completedAt: sessionData.completedAt ?? undefined,
+    lastActivityAt: sessionData.lastActivityAt,
+    messages: (sessionData.messagePreview || []).map((msg: any) => ({
+      _id: msg._id,
+      role: msg.role as Message["role"],
+      content: msg.content,
+      timestamp: msg.createdAt,
+    })),
+  } : null;
 
   return (
     <DashboardLayout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <a href="/sessions" className="text-muted-foreground hover:text-foreground transition-colors">
-                <ArrowLeft className="w-5 h-5" />
-              </a>
-              <h1 className="text-3xl font-bold">Session Details</h1>
-              <span className={statusBadgeClass(session.status)}>{session.status}</span>
+        {session && (
+          <>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="flex items-center gap-3 mb-1">
+                  <a href="/sessions" className="text-muted-foreground hover:text-foreground transition-colors">
+                    <ArrowLeft className="w-5 h-5" />
+                  </a>
+                  <h1 className="text-3xl font-bold">Session Details</h1>
+                  <span className={statusBadgeClass(session.status)}>{session.status}</span>
+                </div>
+                <p className="text-muted-foreground mt-1 ml-8">
+                  Session ID: <code className="text-xs bg-card px-1.5 py-0.5 rounded border border-border">{session.sessionId}</code>
+                </p>
+              </div>
             </div>
-            <p className="text-muted-foreground mt-1 ml-8">
-              Session ID: <code className="text-xs bg-card px-1.5 py-0.5 rounded border border-border">{session.sessionId}</code>
-            </p>
-          </div>
-        </div>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
@@ -282,6 +278,8 @@ function SessionDetailPage() {
             </div>
           </CardContent>
         </Card>
+          </>
+        )}
       </div>
     </DashboardLayout>
   );

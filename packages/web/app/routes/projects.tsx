@@ -1,8 +1,9 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import React, { useState, useMemo } from 'react';
-// import { useQuery, useMutation } from 'convex/react';
-// import { api } from '../../convex/_generated/api';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
+import { Id } from '../../../../convex/_generated/dataModel';
 import { FolderKanban, Plus, Settings, Users, FileText, Trash2, Edit, X, Search, MoreVertical } from 'lucide-react';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Tabs from '@radix-ui/react-tabs';
@@ -10,7 +11,7 @@ import { LLM_PROVIDERS, getModelsByProvider } from '../../../../convex/llmProvid
 
 
 
-// --- MOCK DATA & TYPES ---
+// --- TYPES ---
 type ProjectSettings = {
   systemPrompt?: string;
   defaultModel?: string;
@@ -20,47 +21,35 @@ type ProjectSettings = {
 };
 
 type Project = {
-  id: string;
+  _id: Id<'projects'>;
   name: string;
-  description: string;
+  description?: string;
   settings?: ProjectSettings;
-  agentCount: number;
-  fileCount: number;
-  createdAt: string;
+  createdAt: number;
+  updatedAt: number;
 };
-
-const initialProjects: Project[] = [
-  { id: 'proj_1', name: 'AgentForge UI Revamp', description: 'Complete overhaul of the dashboard UI using TanStack and Tailwind.', agentCount: 5, fileCount: 42, createdAt: '2024-07-21' },
-  { id: 'proj_2', name: 'Customer Support Bot', description: 'An AI-powered chatbot to handle customer queries in real-time.', agentCount: 2, fileCount: 15, createdAt: '2024-07-20' },
-  { id: 'proj_3', name: 'Data Analysis Pipeline', description: 'Automated workflow for processing and analyzing sales data.', agentCount: 8, fileCount: 128, createdAt: '2024-06-15' },
-  { id: 'proj_4', name: 'Internal Documentation Hub', description: 'A centralized place for all internal project documentation.', agentCount: 1, fileCount: 256, createdAt: '2024-05-01' },
-];
 
 // --- HELPER COMPONENTS ---
 
-const ProjectCard = ({ project, onEdit, onDelete, onSelect }: { project: Project, onEdit: (project: Project) => void, onDelete: (id: string) => void, onSelect: (project: Project) => void }) => (
+const ProjectCard = ({ project, onEdit, onDelete, onSelect }: { project: Project, onEdit: (project: Project) => void, onDelete: (id: Id<'projects'>) => void, onSelect: (project: Project) => void }) => (
   <div className="bg-card border border-border rounded-lg shadow-sm hover:shadow-md transition-shadow duration-200 flex flex-col">
     <div className="p-4 flex-grow cursor-pointer" onClick={() => onSelect(project)}>
       <div className="flex items-start justify-between">
         <h3 className="font-bold text-lg text-foreground mb-2">{project.name}</h3>
         <FolderKanban className="w-6 h-6 text-muted-foreground" />
       </div>
-      <p className="text-sm text-muted-foreground mb-4 h-10 overflow-hidden">{project.description}</p>
+      <p className="text-sm text-muted-foreground mb-4 h-10 overflow-hidden">{project.description || 'No description'}</p>
     </div>
-    <div className="border-t border-border p-4 flex justify-between items-center text-xs text-muted-foreground">
-      <div className="flex items-center gap-4">
-        <span className="flex items-center gap-1"><Users className="w-4 h-4" /> {project.agentCount}</span>
-        <span className="flex items-center gap-1"><FileText className="w-4 h-4" /> {project.fileCount}</span>
-      </div>
+    <div className="border-t border-border p-4 flex justify-end items-center text-xs text-muted-foreground">
       <div className="flex items-center gap-2">
         <button onClick={() => onEdit(project)} className="hover:text-foreground"><Edit className="w-4 h-4" /></button>
-        <button onClick={() => onDelete(project.id)} className="hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
+        <button onClick={() => onDelete(project._id)} className="hover:text-destructive"><Trash2 className="w-4 h-4" /></button>
       </div>
     </div>
   </div>
 );
 
-const ProjectForm = ({ project, onSave, onCancel }: { project?: Project | null, onSave: (p: Omit<Project, 'id' | 'agentCount' | 'fileCount' | 'createdAt'>) => void, onCancel: () => void }) => {
+const ProjectForm = ({ project, onSave, onCancel }: { project?: Project | null, onSave: (p: Omit<Project, '_id' | 'createdAt' | 'updatedAt'>) => void, onCancel: () => void }) => {
   const [name, setName] = useState(project?.name || '');
   const [description, setDescription] = useState(project?.description || '');
   const [settings, setSettings] = useState<ProjectSettings>(project?.settings || {});
@@ -174,7 +163,7 @@ const ProjectDetailView = ({ project, onBack }: { project: Project, onBack: () =
       <div>
         <button onClick={onBack} className="text-sm text-primary hover:underline mb-2">&larr; Back to Projects</button>
         <h2 className="text-2xl font-bold text-foreground">{project.name}</h2>
-        <p className="text-muted-foreground">{project.description}</p>
+        <p className="text-muted-foreground">{project.description || 'No description'}</p>
       </div>
       <div className="text-sm text-muted-foreground">Created: {new Date(project.createdAt).toLocaleDateString()}</div>
     </div>
@@ -188,10 +177,7 @@ const ProjectDetailView = ({ project, onBack }: { project: Project, onBack: () =
       </Tabs.List>
       <Tabs.Content value="overview" className="p-4 bg-card rounded-b-lg border border-t-0 border-border">
         <h4 className="font-bold text-lg mb-2">Project Overview</h4>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-            <div className="bg-background p-4 rounded-lg border border-border"><p className="text-2xl font-bold">{project.agentCount}</p><p className="text-sm text-muted-foreground">Agents</p></div>
-            <div className="bg-background p-4 rounded-lg border border-border"><p className="text-2xl font-bold">{project.fileCount}</p><p className="text-sm text-muted-foreground">Files</p></div>
-        </div>
+        <p className="text-sm text-muted-foreground">Project management and configuration.</p>
       </Tabs.Content>
       <Tabs.Content value="agents" className="p-4 bg-card rounded-b-lg border border-t-0 border-border"><p className="text-muted-foreground">Agent management UI will be here.</p></Tabs.Content>
       <Tabs.Content value="files" className="p-4 bg-card rounded-b-lg border border-t-0 border-border"><p className="text-muted-foreground">File management UI will be here.</p></Tabs.Content>
@@ -274,7 +260,13 @@ const ProjectDetailView = ({ project, onBack }: { project: Project, onBack: () =
 export const Route = createFileRoute('/projects')({ component: ProjectsPage });
 
 function ProjectsPage() {
-  const [projects, setProjects] = useState<Project[]>(initialProjects);
+  // Real Convex hooks
+  const projectsData = useQuery(api.projects.list, {});
+  const createProject = useMutation(api.projects.create);
+  const updateProject = useMutation(api.projects.update);
+  const deleteProject = useMutation(api.projects.remove);
+
+  const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -282,19 +274,12 @@ function ProjectsPage() {
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
 
-  // --- Commented-out Convex Hooks ---
-  /*
-  const projectsData = useQuery(api.projects.list, { search: searchQuery });
-  const createProject = useMutation(api.projects.create);
-  const updateProject = useMutation(api.projects.update);
-  const deleteProject = useMutation(api.projects.delete);
-
-  React.useEffect(() => {
+  // Sync projects from Convex
+  useEffect(() => {
     if (projectsData) {
       setProjects(projectsData);
     }
   }, [projectsData]);
-  */
 
   const handleCreate = () => {
     setEditingProject(null);
@@ -306,40 +291,33 @@ function ProjectsPage() {
     setIsModalOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: Id<'projects'>) => {
     if (window.confirm('Are you sure you want to delete this project?')) {
-      // await deleteProject({ id });
-      setProjects(projects.filter(p => p.id !== id));
+      await deleteProject({ id });
     }
   };
 
-  const handleSave = (data: Omit<Project, 'id' | 'agentCount' | 'fileCount' | 'createdAt'>) => {
+  const handleSave = async (data: Omit<Project, '_id' | 'createdAt' | 'updatedAt'>) => {
     setIsLoading(true);
-    setTimeout(() => { // Simulate async operation
+    try {
       if (editingProject) {
-        // await updateProject({ id: editingProject.id, ...data });
-        setProjects(projects.map(p => p.id === editingProject.id ? { ...p, ...data } : p));
+        await updateProject({ id: editingProject._id, ...data });
       } else {
-        const newProject: Project = {
-          id: `proj_${Date.now()}`,
-          ...data,
-          agentCount: 0,
-          fileCount: 0,
-          createdAt: new Date().toISOString().split('T')[0],
-        };
-        // await createProject(newProject);
-        setProjects([newProject, ...projects]);
+        await createProject({ ...data });
       }
-      setIsLoading(false);
       setIsModalOpen(false);
       setEditingProject(null);
-    }, 500);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to save project');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const filteredProjects = useMemo(() =>
     projects.filter(p =>
       p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      p.description.toLowerCase().includes(searchQuery.toLowerCase())
+      (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase()))
     ), [projects, searchQuery]);
 
   if (selectedProject) {
@@ -379,7 +357,7 @@ function ProjectsPage() {
           filteredProjects.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredProjects.map(project => (
-                <ProjectCard key={project.id} project={project} onEdit={handleEdit} onDelete={handleDelete} onSelect={setSelectedProject} />
+                <ProjectCard key={project._id} project={project} onEdit={handleEdit} onDelete={handleDelete} onSelect={setSelectedProject} />
               ))}
             </div>
           ) : (
