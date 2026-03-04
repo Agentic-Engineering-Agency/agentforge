@@ -1007,7 +1007,13 @@ function registerAgentsCommand(program2) {
       error("Name, model, and instructions are required.");
       process.exit(1);
     }
-    const provider = model.includes(":") ? model.split(":")[0] : "openai";
+    let agentProvider = "openai";
+    let agentModel = model || "gpt-4o-mini";
+    if (agentModel.includes(":")) {
+      const [p, m] = agentModel.split(":");
+      agentProvider = p;
+      agentModel = m;
+    }
     const agentId = name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
     const client = await createClient();
     await safeCall(
@@ -1015,8 +1021,8 @@ function registerAgentsCommand(program2) {
         id: agentId,
         name,
         instructions,
-        model,
-        provider
+        model: agentModel,
+        provider: agentProvider
       }),
       "Failed to create agent"
     );
@@ -1063,8 +1069,15 @@ function registerAgentsCommand(program2) {
     const updates = {};
     if (opts.name) updates.name = opts.name;
     if (opts.model) {
-      updates.model = opts.model;
-      updates.provider = opts.model.includes(":") ? opts.model.split(":")[0] : "openai";
+      let agentProvider = "openai";
+      let agentModel = opts.model;
+      if (agentModel.includes(":")) {
+        const [p, m] = agentModel.split(":");
+        agentProvider = p;
+        agentModel = m;
+      }
+      updates.model = agentModel;
+      updates.provider = agentProvider;
     }
     if (opts.instructions) updates.instructions = opts.instructions;
     if (Object.keys(updates).length === 0) {
@@ -1074,8 +1087,15 @@ function registerAgentsCommand(program2) {
       const instr = await prompt(`Instructions [keep current]: `);
       if (name) updates.name = name;
       if (model) {
-        updates.model = model;
-        updates.provider = model.includes(":") ? model.split(":")[0] : "openai";
+        let agentProvider = "openai";
+        let agentModel = model;
+        if (agentModel.includes(":")) {
+          const [p, m] = agentModel.split(":");
+          agentProvider = p;
+          agentModel = m;
+        }
+        updates.model = agentModel;
+        updates.provider = agentProvider;
       }
       if (instr) updates.instructions = instr;
     }
@@ -1401,7 +1421,6 @@ function registerThreadsCommand(program2) {
       ID: t._id?.slice(-8) || "N/A",
       Name: t.name || "Unnamed",
       Agent: t.agentId,
-      Messages: t.metadata?.messageCount || "-",
       Created: formatDate(t.createdAt)
     })));
   });
@@ -4246,28 +4265,40 @@ function registerStatusCommand(program2) {
     } catch {
       checks["Convex Connection"] = "\u2716 Not connected (run `npx convex dev`)";
     }
+    let providerStatus = "Not configured";
+    let storedKeysCount = 0;
     const envFiles = [".env.local", ".env"];
-    let provider = "Not configured";
     for (const envFile of envFiles) {
       const envPath = path10.join(cwd, envFile);
       if (fs10.existsSync(envPath)) {
         const content = fs10.readFileSync(envPath, "utf-8");
         const match = content.match(/LLM_PROVIDER=(.+)/);
         if (match) {
-          provider = match[1].trim();
+          providerStatus = match[1].trim();
           break;
         }
         if (content.includes("OPENAI_API_KEY=")) {
-          provider = "openai";
+          providerStatus = "openai";
           break;
         }
         if (content.includes("OPENROUTER_API_KEY=")) {
-          provider = "openrouter";
+          providerStatus = "openrouter";
           break;
         }
       }
     }
-    checks["LLM Provider"] = provider !== "Not configured" ? `\u2714 ${provider}` : "\u2716 Not configured";
+    try {
+      const client = await createClient();
+      const keys = await client.query("apiKeys:list", {}) || [];
+      const activeKeys = keys.filter((k) => k.isActive);
+      storedKeysCount = activeKeys.length;
+      if (storedKeysCount > 0) {
+        const providers = [...new Set(activeKeys.map((k) => k.provider))];
+        providerStatus = `Configured (${storedKeysCount} key${storedKeysCount > 1 ? "s" : ""}: ${providers.join(", ")})`;
+      }
+    } catch {
+    }
+    checks["LLM Provider"] = storedKeysCount > 0 || providerStatus !== "Not configured" ? `\u2714 ${providerStatus}` : "\u2716 Not configured";
     details(checks);
   });
   program2.command("dashboard").description("Launch the web dashboard").option("-p, --port <port>", "Port for the dashboard", "3000").option("-d, --dir <path>", "Project directory (defaults to current directory)").option("--install", "Install dashboard dependencies before starting").action(async (opts) => {
