@@ -156,12 +156,9 @@ const Button = ({ children, variant = 'primary', ...props }: { children: React.R
 
 function GeneralTab({ settings, setSettings }: { settings: any, setSettings: any }) {
   const updateSettings = useMutation(api.settings.set);
-  const setPassword = useMutation(api.auth.setPassword);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState(false);
-  const [newPassword, setNewPassword] = useState('');
-  const [isSettingPassword, setIsSettingPassword] = useState(false);
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -185,23 +182,6 @@ function GeneralTab({ settings, setSettings }: { settings: any, setSettings: any
     }
   };
 
-  const handleSetPassword = async () => {
-    if (!newPassword.trim()) return;
-    setIsSettingPassword(true);
-    setSaveError(null);
-
-    try {
-      await setPassword({ password: newPassword.trim() });
-      setSaveSuccess(true);
-      setNewPassword('');
-      setTimeout(() => setSaveSuccess(false), 2000);
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to set password');
-    } finally {
-      setIsSettingPassword(false);
-    }
-  };
-
   return (
     <Card>
       <CardHeader title="General Settings" description="Configure the core settings for your application." />
@@ -217,22 +197,6 @@ function GeneralTab({ settings, setSettings }: { settings: any, setSettings: any
         <div>
           <label className="block text-sm font-medium mb-1">Default Provider</label>
           <input type="text" value={settings.defaultProvider} onChange={e => setSettings({...settings, defaultProvider: e.target.value})} className="w-full bg-background border border-border rounded-md px-3 py-2" />
-        </div>
-        <div className="border-t border-border pt-4">
-          <label className="block text-sm font-medium mb-1">Dashboard Password</label>
-          <p className="text-xs text-muted-foreground mb-2">Set a password to protect the dashboard. Leave empty to keep current password.</p>
-          <div className="flex gap-2">
-            <input
-              type="password"
-              value={newPassword}
-              onChange={e => setNewPassword(e.target.value)}
-              placeholder="Enter new password"
-              className="flex-1 bg-background border border-border rounded-md px-3 py-2"
-            />
-            <Button onClick={handleSetPassword} disabled={isSettingPassword || !newPassword.trim()}>
-              {isSettingPassword ? 'Setting...' : 'Set Password'}
-            </Button>
-          </div>
         </div>
       </div>
       {saveError && (

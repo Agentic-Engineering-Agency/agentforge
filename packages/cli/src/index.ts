@@ -15,7 +15,6 @@ import { registerConfigCommand } from './commands/config.js';
 import { registerVaultCommand } from './commands/vault.js';
 import { registerKeysCommand } from './commands/keys.js';
 import { registerStatusCommand } from './commands/status.js';
-import { registerLoginCommand } from './commands/login.js';
 import { registerModelsCommand } from './commands/models.js';
 import { registerWorkspaceCommand } from './commands/workspace.js';
 import { registerTokensCommand } from './commands/tokens.js';
@@ -25,7 +24,6 @@ import { registerChannelSlackCommand } from './commands/channel-slack.js';
 import { registerChannelDiscordCommand } from './commands/channel-discord.js';
 import { registerSandboxCommand } from './commands/sandbox.js';
 import { registerResearchCommand } from './commands/research.js';
-import { authCommand } from './commands/auth.js';
 import { browserCommand } from './commands/browser.js';
 import { registerVoiceCommand } from './commands/voice.js';
 import { registerWorkflowsCommand } from './commands/workflows.js';
@@ -86,10 +84,9 @@ program
   });
 
 // ─── Cloud Authentication ────────────────────────────────────────
-registerLoginCommand(program);
-  registerModelsCommand(program);
-  registerWorkspaceCommand(program);
-  registerTokensCommand(program);
+registerModelsCommand(program);
+registerWorkspaceCommand(program);
+registerTokensCommand(program);
 
 // ─── Agent Management ────────────────────────────────────────────
 registerAgentsCommand(program);
@@ -143,7 +140,6 @@ registerResearchCommand(program);
 // ─── Dashboard Auth ───────────────────────────────────────────────
 // ─── Voice ─────────────────────────────────────────────────────
 // ─── Workflows ─────────────────────────────────────────────────
-program.addCommand(authCommand);
 program.addCommand(browserCommand);
 registerVoiceCommand(program);
 registerWorkflowsCommand(program);
