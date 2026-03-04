@@ -286,17 +286,17 @@ export const executeAgent = action({
     if (!threadId) {
       const newThreadId = await ctx.runMutation(api.threads.createThread, {
         agentId: args.agentId,
-        userId: args.userId,
       });
       if (!newThreadId) {
         throw new Error('Failed to create thread');
       }
       threadId = newThreadId;
     }
+    if (!threadId) throw new Error('threadId is required');
 
     // Add user message to thread
     await ctx.runMutation(api.messages.add, {
-      threadId,
+      threadId: threadId as any,
       role: "user",
       content: args.prompt,
     });
@@ -305,7 +305,7 @@ export const executeAgent = action({
     const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     await ctx.runMutation(api.sessions.create, {
       sessionId,
-      threadId,
+      threadId: threadId as any,
       agentId: args.agentId,
       userId: args.userId,
       channel: "api",
@@ -374,7 +374,7 @@ export const executeAgent = action({
       }));
 
       // Get conversation history for context
-      const messages = await ctx.runQuery(api.messages.getByThread, { threadId });
+      const messages = await ctx.runQuery(api.messages.getByThread, { threadId: threadId as any });
       const conversationMessages = (messages as Array<{ role: string; content: string }>)
         .slice(-20)
         .map((m) => ({
@@ -517,7 +517,7 @@ export const executeAgent = action({
           threadId: threadId as string,
           sessionId,
           response: `Agent execution failed: No API key configured for provider "${agent.provider || "openai"}".
-Run: agentforge agents edit ${agentId} --provider anthropic
+Run: agentforge agents edit ${args.agentId} --provider anthropic
 Or configure your key: agentforge settings set ${agent.provider?.toUpperCase() || "OPENAI"}_API_KEY sk-...`,
           provider: agent.provider || "openai",
           model: agent.model || "unknown",
@@ -601,7 +601,7 @@ export const executeWorkflow = action({
         steps,
       };
 
-      const result = await runWorkflow(workflowData, (args.input as Record<string, unknown>) || {});
+      const result: any = await runWorkflow(workflowData, (args.input as Record<string, unknown>) || {});
 
       // 4. Persist run result
       await ctx.runMutation(api.workflows.updateRun, {

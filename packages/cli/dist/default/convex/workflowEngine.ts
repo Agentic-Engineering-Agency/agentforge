@@ -92,7 +92,7 @@ export const executeWorkflow = internalAction({
             let toolDescriptions: string[] = [];
             if (run.projectId) {
               try {
-                const skills = await ctx.runQuery(api.skills.listInstalled, { projectId: run.projectId });
+                const skills = await ctx.runQuery(api.skills.listInstalled, {});
                 for (const skill of skills as Array<{ name: string; displayName: string; description: string }>) {
                   toolDescriptions.push(`- ${skill.name}: ${skill.description}`);
                 }

@@ -60,7 +60,6 @@ export const testConnection = action({
         await ctx.runMutation(api.mcpConnections.updateStatus, {
           id: args.id,
           isConnected: true,
-          lastConnectedAt: Date.now(),
         });
         return {
           ok: true,
@@ -90,8 +89,6 @@ export const testConnection = action({
       await ctx.runMutation(api.mcpConnections.updateStatus, {
         id: args.id,
         isConnected: true,
-        lastConnectedAt: Date.now(),
-        toolCount: tools.length,
       });
 
       return {

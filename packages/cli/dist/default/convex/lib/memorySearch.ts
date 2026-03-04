@@ -221,7 +221,7 @@ export async function vectorSearch(
     })
   );
 
-  const validDocs = docs.filter(
+  const validDocs = (docs as Array<{ doc: any; score: number } | null>).filter(
     (d): d is { doc: any; score: number } => d !== null && d.doc !== null
   );
 

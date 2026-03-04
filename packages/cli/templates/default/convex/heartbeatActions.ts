@@ -25,7 +25,7 @@ export const executeTask = internalAction({
     const modelId = (agent as any).model || "gpt-4o-mini";
 
     try {
-      const result = await ctx.runAction(internal.mastraIntegration.generateResponse, {
+      const result = await ctx.runAction(api.mastraIntegration.generateResponse, {
         provider,
         modelKey: `${provider}/${modelId}`,
         instructions: (agent as any).instructions || "You are a helpful AI assistant.",
