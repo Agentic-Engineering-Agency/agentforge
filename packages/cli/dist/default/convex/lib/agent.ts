@@ -49,6 +49,7 @@ export class Agent {
 
     // Create the AI SDK client
     const client = createOpenAICompatible({
+      name: 'custom',
       baseURL: baseUrl,
       apiKey: this.config.model.apiKey,
     });
@@ -64,7 +65,6 @@ export class Agent {
         model: client(this.config.model.modelId),
         messages: allMessages,
         temperature: this.config.temperature ?? 0.7,
-        maxTokens: this.config.maxTokens ?? 2048,
       });
 
       // Collect the full response
@@ -73,16 +73,16 @@ export class Agent {
         fullText += chunk;
       }
 
-      // Wait for usage metadata
-      const { usage } = await result.usage;
+      // Get usage metadata directly from result in AI SDK v5
+      const { usage } = result;
 
       return {
         text: fullText,
         usage: usage
           ? {
-              promptTokens: usage.promptTokens,
-              completionTokens: usage.completionTokens,
-              totalTokens: usage.totalTokens,
+              promptTokens: usage.inputTokens,
+              completionTokens: usage.outputTokens,
+              totalTokens: usage.inputTokens + usage.outputTokens,
             }
           : undefined,
       };
@@ -100,6 +100,7 @@ export class Agent {
 
     // Create the AI SDK client
     const client = createOpenAICompatible({
+      name: 'custom',
       baseURL: baseUrl,
       apiKey: this.config.model.apiKey,
     });
@@ -115,7 +116,6 @@ export class Agent {
         model: client(this.config.model.modelId),
         messages,
         temperature: this.config.temperature ?? 0.7,
-        maxTokens: this.config.maxTokens ?? 2048,
       });
 
       for await (const chunk of result.textStream) {

@@ -183,11 +183,13 @@ async function executeWithFailover(
       try {
         const mastraAgent = getCachedAgent(modelKey, systemPrompt, chain[chainPos].apiKey);
 
-        const generateOptions: Record<string, unknown> = {};
+        const generateOptions: Record<string, unknown> = {
+          messages,
+        };
         if (options.temperature !== undefined) generateOptions.temperature = options.temperature;
         if (options.maxTokens !== undefined) generateOptions.maxTokens = options.maxTokens;
 
-        const result = await mastraAgent.generate(messages, generateOptions);
+        const result = await mastraAgent.generate(generateOptions as any);
 
         const usage = result.usage
           ? {
@@ -282,10 +284,14 @@ export const executeAgent = action({
     // Create or get thread
     let threadId = args.threadId;
     if (!threadId) {
-      threadId = await ctx.runMutation(api.threads.create, {
+      const newThreadId = await ctx.runMutation(api.threads.createThread, {
         agentId: args.agentId,
         userId: args.userId,
       });
+      if (!newThreadId) {
+        throw new Error('Failed to create thread');
+      }
+      threadId = newThreadId;
     }
 
     // Add user message to thread
@@ -397,16 +403,18 @@ export const executeAgent = action({
       // Store interaction as memory if enabled
       if (memoryConfig.enabled && memoryConfig.autoStore) {
         try {
-          const interactionText = `User: ${args.prompt}\nAssistant: ${result.text}`;
-          await ctx.runMutation(api.memory.add, {
-            content: interactionText,
-            type: "conversation",
-            agentId: args.agentId,
-            threadId: threadId,
-            projectId: agent?.projectId,
-            userId: args.userId,
-            importance: 0.5,
-          });
+          // TODO: memory.ts not yet implemented, skip for now
+          // const interactionText = `User: ${args.prompt}\nAssistant: ${result.text}`;
+          // await ctx.runMutation(api.memory.add, {
+          //   content: interactionText,
+          //   type: "conversation",
+          //   agentId: args.agentId,
+          //   threadId: threadId,
+          //   projectId: agent?.projectId,
+          //   userId: args.userId,
+          //   importance: 0.5,
+          // });
+          console.warn("[memory] Memory storage not yet implemented");
         } catch (error) {
           console.warn("[memory] Failed to store interaction:", error);
         }

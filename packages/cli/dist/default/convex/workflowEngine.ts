@@ -16,13 +16,13 @@ export const executeWorkflow = internalAction({
   },
   handler: async (ctx, args) => {
     // Get the workflow run
-    const run = await ctx.runQuery(internal.workflows.getRun, { id: args.runId });
+    const run = await ctx.runQuery(api.workflows.getRun, { id: args.runId });
     if (!run) {
       throw new Error(`Workflow run not found: ${args.runId}`);
     }
 
     // Get the workflow definition
-    const workflow = await ctx.runQuery(internal.workflows.get, { id: run.workflowId });
+    const workflow = await ctx.runQuery(api.workflows.get, { id: run.workflowId });
     if (!workflow) {
       throw new Error(`Workflow definition not found: ${run.workflowId}`);
     }
@@ -59,7 +59,7 @@ export const executeWorkflow = internalAction({
           }
 
           // Create step record in database
-          const stepRecordId = await ctx.runMutation(internal.workflows.createStep, {
+          const stepRecordId = await ctx.runMutation(api.workflows.createStep, {
             runId: args.runId,
             stepId: stepConfig.agentId,
             name: stepConfig.name,
@@ -68,7 +68,7 @@ export const executeWorkflow = internalAction({
           });
 
           // Update step to running
-          await ctx.runMutation(internal.workflows.updateStep, {
+          await ctx.runMutation(api.workflows.updateStep, {
             id: stepRecordId,
             status: "running",
             startedAt: Date.now(),
@@ -145,7 +145,7 @@ ${toolList}`);
             }
 
             // Update step to completed
-            await ctx.runMutation(internal.workflows.updateStep, {
+            await ctx.runMutation(api.workflows.updateStep, {
               id: stepRecordId,
               status: "completed",
               output: fullResponse,
@@ -157,7 +157,7 @@ ${toolList}`);
             const errorMessage = error instanceof Error ? error.message : String(error);
 
             // Update step to failed
-            await ctx.runMutation(internal.workflows.updateStep, {
+            await ctx.runMutation(api.workflows.updateStep, {
               id: stepRecordId,
               status: "failed",
               error: errorMessage,
@@ -171,7 +171,7 @@ ${toolList}`);
     }
 
     // Update run status to running
-    await ctx.runMutation(internal.workflows.updateRun, {
+    await ctx.runMutation(api.workflows.updateRun, {
       id: args.runId,
       status: "running",
     });
@@ -181,7 +181,7 @@ ${toolList}`);
       const result = await pipeline.run(run.input);
 
       // Update run to completed
-      await ctx.runMutation(internal.workflows.updateRun, {
+      await ctx.runMutation(api.workflows.updateRun, {
         id: args.runId,
         status: "completed",
         output: result,
@@ -193,7 +193,7 @@ ${toolList}`);
       const errorMessage = error instanceof Error ? error.message : String(error);
 
       // Update run to failed
-      await ctx.runMutation(internal.workflows.updateRun, {
+      await ctx.runMutation(api.workflows.updateRun, {
         id: args.runId,
         status: "failed",
         error: errorMessage,

@@ -220,10 +220,14 @@ export const run = action({
     // Create or get thread
     let threadId = args.threadId;
     if (!threadId) {
-      threadId = await ctx.runMutation(api.threads.create, {
+      const newThreadId = await ctx.runMutation(api.threads.createThread, {
         agentId: args.agentId,
         userId: args.userId,
       });
+      if (!newThreadId) {
+        throw new Error('Failed to create thread');
+      }
+      threadId = newThreadId;
     }
 
     // Delegate to the chat action for actual LLM execution
