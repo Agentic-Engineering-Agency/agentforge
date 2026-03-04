@@ -114,9 +114,9 @@ const RunsRunIdRoute = RunsRunIdRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentsAgentIdRoute = AgentsAgentIdRouteImport.update({
-  id: '/$agentId',
-  path: '/$agentId',
-  getParentRoute: () => AgentsRoute,
+  id: '/agents/$agentId',
+  path: '/agents/$agentId',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
