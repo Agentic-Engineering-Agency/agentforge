@@ -310,14 +310,19 @@ export const sendMessage = action({
     });
 
     // 5. Load installed skills and MCP connections for tool injection
-    let toolDescriptions: string[] = [];
+    const systemPromptParts: string[] = [];
 
     // Load skills for this agent/project
     if (agent.projectId) {
       try {
         const skills = await ctx.runQuery(api.skills.listInstalled, { projectId: agent.projectId });
-        for (const skill of skills as Array<{ name: string; displayName: string; description: string }>) {
-          toolDescriptions.push(`- ${skill.name}: ${skill.description}`);
+        for (const skill of skills as any[]) {
+          const md = skill.skillMdContent ?? `# ${skill.displayName ?? skill.name}\n\n${skill.description ?? ""}`;
+          systemPromptParts.push(`\n<skill name="${skill.name}">\n${md}\n</skill>`);
+          const refs = (skill.references ?? []) as {name:string;content:string}[];
+          for (const ref of refs) {
+            systemPromptParts.push(`\n<skill-reference name="${ref.name}" skill="${skill.name}">\n${ref.content}\n</skill-reference>`);
+          }
         }
       } catch (e) {
         console.debug("[chat.sendMessage] Skills loading skipped:", e);
@@ -333,8 +338,7 @@ export const sendMessage = action({
           const toolList = mcp.capabilities?.tools
             ? Object.keys(mcp.capabilities.tools).map((t) => `  - ${t}`).join("\n")
             : "  (tools listed in server capabilities)";
-          toolDescriptions.push(`- MCP:${mcp.name}:
-${toolList}`);
+          systemPromptParts.push(`\n## MCP Connection: ${mcp.name}\n${toolList}`);
         }
       } catch (e) {
         console.debug("[chat.sendMessage] MCP loading skipped:", e);
@@ -348,8 +352,8 @@ ${toolList}`);
       : baseInstructions;
 
     // Inject available tools into the system prompt
-    if (toolDescriptions.length > 0) {
-      systemPrompt += `\n\n## Available Tools\n\nYou have access to the following tools:\n${toolDescriptions.join("\n")}\n\nWhen you need to use a tool, mention it in your response and the system will execute it.`;
+    if (systemPromptParts.length > 0) {
+      systemPrompt += `\n\n## Available Tools\n\n${systemPromptParts.join("\n")}\n\nWhen you need to use a tool, mention it in your response and the system will execute it.`;
     }
 
     // 6. Execute with failover
