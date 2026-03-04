@@ -4796,7 +4796,7 @@ function registerModelsCommand(program2) {
     const providers = opts.provider ? [opts.provider] : PROVIDERS2;
     const allModels = {};
     for (const provider of providers) {
-      const cached = await client.query("modelFetcher:getModelsForProvider", { provider }).catch(() => null);
+      const cached = await client.action("modelFetcher:getModelsForProvider", { provider }).catch(() => null);
       if (cached && !opts.refresh) {
         allModels[provider] = cached.models;
       } else {
