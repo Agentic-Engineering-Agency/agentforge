@@ -100,34 +100,42 @@ export async function createProject(
 
   console.log(`  ✅ Project scaffolded at ./${projectName}`);
 
-  // Install root dependencies
+  // Install root dependencies (pnpm preferred, npm fallback)
   console.log(`\n📦 Installing dependencies...\n`);
-  try {
-    execSync('pnpm install', {
-      cwd: targetDir,
-      stdio: 'inherit',
-    });
-    console.log(`\n  ✅ Dependencies installed`);
-  } catch {
-    console.warn(
-      `\n  ⚠️  Could not install dependencies. Run "cd ${projectName} && pnpm install" manually.`
-    );
+  let rootInstalled = false;
+  for (const pm of ['pnpm', 'npm']) {
+    try {
+      execSync(`${pm} install`, { cwd: targetDir, stdio: 'inherit' });
+      console.log(`\n  ✅ Dependencies installed (via ${pm})`);
+      rootInstalled = true;
+      break;
+    } catch {
+      // try next package manager
+    }
+  }
+  if (!rootInstalled) {
+    console.warn(`\n  ⚠️  Could not install dependencies automatically.`);
+    console.warn(`  Run: cd ${projectName} && npm install`);
   }
 
   // Install dashboard dependencies
   const dashDir = path.join(targetDir, 'dashboard');
   if (await fs.pathExists(dashDir)) {
     console.log(`\n📦 Installing dashboard dependencies...\n`);
-    try {
-      execSync('pnpm install', {
-        cwd: dashDir,
-        stdio: 'inherit',
-      });
-      console.log(`\n  ✅ Dashboard dependencies installed`);
-    } catch {
-      console.warn(
-        `\n  ⚠️  Could not install dashboard dependencies. Run "cd ${projectName}/dashboard && pnpm install" manually.`
-      );
+    let dashInstalled = false;
+    for (const pm of ['pnpm', 'npm']) {
+      try {
+        execSync(`${pm} install`, { cwd: dashDir, stdio: 'inherit' });
+        console.log(`\n  ✅ Dashboard dependencies installed (via ${pm})`);
+        dashInstalled = true;
+        break;
+      } catch {
+        // try next
+      }
+    }
+    if (!dashInstalled) {
+      console.warn(`\n  ⚠️  Could not install dashboard dependencies.`);
+      console.warn(`  Run: cd ${projectName}/dashboard && npm install`);
     }
   }
 

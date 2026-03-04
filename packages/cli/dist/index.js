@@ -77,36 +77,42 @@ async function createProject(projectName, options) {
   console.log(`
 \u{1F4E6} Installing dependencies...
 `);
-  try {
-    execSync("pnpm install", {
-      cwd: targetDir,
-      stdio: "inherit"
-    });
-    console.log(`
-  \u2705 Dependencies installed`);
-  } catch {
-    console.warn(
-      `
-  \u26A0\uFE0F  Could not install dependencies. Run "cd ${projectName} && pnpm install" manually.`
-    );
+  let rootInstalled = false;
+  for (const pm of ["pnpm", "npm"]) {
+    try {
+      execSync(`${pm} install`, { cwd: targetDir, stdio: "inherit" });
+      console.log(`
+  \u2705 Dependencies installed (via ${pm})`);
+      rootInstalled = true;
+      break;
+    } catch {
+    }
+  }
+  if (!rootInstalled) {
+    console.warn(`
+  \u26A0\uFE0F  Could not install dependencies automatically.`);
+    console.warn(`  Run: cd ${projectName} && npm install`);
   }
   const dashDir = path.join(targetDir, "dashboard");
   if (await fs.pathExists(dashDir)) {
     console.log(`
 \u{1F4E6} Installing dashboard dependencies...
 `);
-    try {
-      execSync("pnpm install", {
-        cwd: dashDir,
-        stdio: "inherit"
-      });
-      console.log(`
-  \u2705 Dashboard dependencies installed`);
-    } catch {
-      console.warn(
-        `
-  \u26A0\uFE0F  Could not install dashboard dependencies. Run "cd ${projectName}/dashboard && pnpm install" manually.`
-      );
+    let dashInstalled = false;
+    for (const pm of ["pnpm", "npm"]) {
+      try {
+        execSync(`${pm} install`, { cwd: dashDir, stdio: "inherit" });
+        console.log(`
+  \u2705 Dashboard dependencies installed (via ${pm})`);
+        dashInstalled = true;
+        break;
+      } catch {
+      }
+    }
+    if (!dashInstalled) {
+      console.warn(`
+  \u26A0\uFE0F  Could not install dashboard dependencies.`);
+      console.warn(`  Run: cd ${projectName}/dashboard && npm install`);
     }
   }
   console.log(`
