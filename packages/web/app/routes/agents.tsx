@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link, Outlet, useMatch } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, useEffect, ChangeEvent, FormEvent } from 'react';
 import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X, ChevronDown, ChevronUp, HardDrive, Container } from 'lucide-react';
@@ -39,7 +39,13 @@ interface Agent {
   failoverModels?: FailoverModel[];
 }
 
-export const Route = createFileRoute('/agents')({ component: AgentsPage });
+export const Route = createFileRoute('/agents')({ component: AgentsPageLayout });
+
+function AgentsPageLayout() {
+  const childMatch = useMatch({ from: '/agents/$agentId', shouldThrow: false });
+  if (childMatch) return <Outlet />;
+  return <AgentsPage />;
+}
 
 function useProviderModels(provider: string) {
   const fetchModels = useAction(api.modelFetcher.getModelsForProvider);
@@ -230,7 +236,13 @@ function AgentCard({ agent, onEdit, onDelete }: AgentCardProps) {
           <div className="flex items-center"><Zap className="h-3 w-3 mr-1" /> {agent.provider}</div>
         </div>
       </div>
-      <button className="w-full bg-background border border-border text-center py-2 rounded-lg hover:bg-primary/10 text-sm">View Details</button>
+      <Link
+        to="/agents/$agentId"
+        params={{ agentId: agent.id }}
+        className="w-full bg-background border border-border text-center py-2 rounded-lg hover:bg-primary/10 text-sm block"
+      >
+        View Details
+      </Link>
     </div>
   );
 }

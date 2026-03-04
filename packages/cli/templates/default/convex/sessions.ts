@@ -1,21 +1,12 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
-type SessionStatus = "active" | "paused" | "completed" | "error";
-
 // Query: Get all sessions
 export const list = query({
   args: {
     userId: v.optional(v.string()),
     agentId: v.optional(v.string()),
-    status: v.optional(
-      v.union(
-        v.literal("active"),
-        v.literal("paused"),
-        v.literal("completed"),
-        v.literal("error")
-      )
-    ),
+    status: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
   },
   handler: async (ctx, args) => {
@@ -41,7 +32,7 @@ export const list = query({
     if (args.status) {
       const sessions = await ctx.db
         .query("sessions")
-        .withIndex("byStatus", (q) => q.eq("status", args.status as SessionStatus))
+        .withIndex("byStatus", (q) => q.eq("status", args.status! as any))
         .collect();
 
       if (args.userId) {
@@ -79,6 +70,42 @@ export const get = query({
       .query("sessions")
       .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
       .first();
+  },
+});
+
+// Query: Get session by ID with message preview
+export const getWithMessages = query({
+  args: { sessionId: v.string() },
+  handler: async (ctx, args) => {
+    // Try looking up by Convex _id first, then fall back to sessionId string field
+    let session = null;
+    try { session = await ctx.db.get(args.sessionId as any); } catch {}
+    if (!session) {
+      session = await ctx.db
+        .query("sessions")
+        .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
+        .first();
+    }
+
+    if (!session) {
+      return null;
+    }
+
+    // Get the last 3 messages for this thread
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("byThread", (q) => q.eq("threadId", session.threadId))
+      .order("desc")
+      .take(3);
+
+    // Reverse to get chronological order
+    const messagePreview = messages.reverse();
+
+    return {
+      ...session,
+      messagePreview,
+      messageCount: messagePreview.length,
+    };
   },
 });
 
@@ -170,15 +197,11 @@ export const updateStatus = mutation({
       throw new Error(`Session ${args.sessionId} not found`);
     }
     
-    const updates: {
-      status: "active" | "paused" | "completed" | "error";
-      lastActivityAt: number;
-      completedAt?: number;
-    } = {
-      status: args.status as "active" | "paused" | "completed" | "error",
+    const updates: any = {
+      status: args.status,
       lastActivityAt: Date.now(),
     };
-
+    
     if (args.status === "completed" || args.status === "error") {
       updates.completedAt = Date.now();
     }
@@ -186,6 +209,17 @@ export const updateStatus = mutation({
     await ctx.db.patch(session._id, updates);
     
     return session._id;
+  },
+});
+
+// Query: List sessions by agent
+export const listByAgent = query({
+  args: { agentId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("sessions")
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
+      .collect();
   },
 });
 
@@ -197,12 +231,35 @@ export const remove = mutation({
       .query("sessions")
       .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
       .first();
-    
+
     if (!session) {
       throw new Error(`Session ${args.sessionId} not found`);
     }
-    
+
     await ctx.db.delete(session._id);
     return { success: true };
+  },
+});
+
+// Mutation: End session
+export const endSession = mutation({
+  args: { sessionId: v.string() },
+  handler: async (ctx, args) => {
+    const session = await ctx.db
+      .query("sessions")
+      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
+      .first();
+
+    if (!session) {
+      throw new Error(`Session ${args.sessionId} not found`);
+    }
+
+    await ctx.db.patch(session._id, {
+      status: "completed",
+      completedAt: Date.now(),
+      lastActivityAt: Date.now(),
+    });
+
+    return session._id;
   },
 });
