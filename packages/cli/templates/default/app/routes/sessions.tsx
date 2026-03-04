@@ -46,14 +46,9 @@ const mockSessions = [
 
 type Session = typeof mockSessions[0] & { endTime?: number };
 
-export const Route = createFileRoute('/sessions')({ component: SessionsPageLayout });
-
-function SessionsPageLayout() {
-  const childMatch = useMatch({ from: '/sessions/$sessionId', shouldThrow: false });
-  if (childMatch) return <Outlet />;
-  return <SessionsPage />;
-}
-
+export const Route = createFileRoute('/sessions')({
+  component: SessionsPage,
+});
 
 function formatDuration(startTime: number, endTime?: number) {
   const end = endTime ? endTime : new Date().getTime();

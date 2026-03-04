@@ -241,9 +241,11 @@ export const remove = mutation({
   },
 });
 
-// Mutation: End session
+// Mutation: End session (alias for updateStatus with "completed")
 export const endSession = mutation({
-  args: { sessionId: v.string() },
+  args: {
+    sessionId: v.string(),
+  },
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
