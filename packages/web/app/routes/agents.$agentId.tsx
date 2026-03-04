@@ -49,7 +49,7 @@ function AgentDetailPage() {
   // Queries
   const agent = useQuery(api.agents.get, { id: agentId });
   const sessions = useQuery(
-    api.sessions.listByAgent,
+    api.sessions.list,
     agent ? { agentId: agent.id } : "skip"
   );
 

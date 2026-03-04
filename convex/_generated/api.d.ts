@@ -148,6 +148,15 @@ export declare const api: {
       any
     >;
   };
+  analytics: {
+    getDashboardStats: FunctionReference<"query", "public", {}, any>;
+    getUsageSummary: FunctionReference<
+      "query",
+      "public",
+      { days: number },
+      any
+    >;
+  };
   apiAccessTokens: {
     generate: FunctionReference<
       "mutation",
@@ -156,6 +165,12 @@ export declare const api: {
       any
     >;
     list: FunctionReference<"query", "public", {}, any>;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"apiAccessTokens"> },
+      any
+    >;
     revoke: FunctionReference<
       "mutation",
       "public",
@@ -234,6 +249,53 @@ export declare const api: {
       "query",
       "public",
       { password: string },
+      any
+    >;
+  };
+  channelConnections: {
+    create: FunctionReference<
+      "mutation",
+      "public",
+      {
+        agentId: string;
+        botToken: string;
+        botUsername?: string;
+        channel: string;
+        projectId?: Id<"projects">;
+        teamId?: string;
+        userId?: string;
+        webhookSecret?: string;
+      },
+      any
+    >;
+    getById: FunctionReference<
+      "query",
+      "public",
+      { id: Id<"channelConnections"> },
+      any
+    >;
+    list: FunctionReference<
+      "query",
+      "public",
+      { agentId?: string; channel?: string; userId?: string },
+      any
+    >;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"channelConnections"> },
+      any
+    >;
+    updateActivity: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"channelConnections">; messageCount?: number },
+      any
+    >;
+    updateStatus: FunctionReference<
+      "mutation",
+      "public",
+      { id: Id<"channelConnections">; status: string },
       any
     >;
   };
@@ -556,11 +618,20 @@ export declare const api: {
       "mutation",
       "public",
       {
+        agentId?: string;
+        costUsd?: number;
+        inputTokens?: number;
         level: "debug" | "info" | "warn" | "error";
         message: string;
         metadata?: any;
+        model?: string;
+        outputTokens?: number;
         projectId?: Id<"projects">;
+        provider?: string;
+        sessionId?: string;
         source: string;
+        threadId?: Id<"threads">;
+        totalTokens?: number;
         userId?: string;
       },
       any
@@ -830,7 +901,7 @@ export declare const api: {
         content: string;
         projectId?: Id<"projects">;
         role: "user" | "assistant" | "system" | "tool";
-        threadId: Id<"threads">;
+        threadId: string;
         tool_calls?: any;
       },
       any
@@ -838,7 +909,7 @@ export declare const api: {
     clearThread: FunctionReference<
       "mutation",
       "public",
-      { threadId: Id<"threads"> },
+      { threadId: string },
       any
     >;
     create: FunctionReference<
@@ -848,7 +919,7 @@ export declare const api: {
         content: string;
         projectId?: Id<"projects">;
         role: "user" | "assistant" | "system" | "tool";
-        threadId: Id<"threads">;
+        threadId: string;
         tool_calls?: any;
       },
       any
@@ -856,7 +927,7 @@ export declare const api: {
     getByThread: FunctionReference<
       "query",
       "public",
-      { threadId: Id<"threads"> },
+      { threadId: string },
       any
     >;
     list: FunctionReference<
@@ -871,7 +942,7 @@ export declare const api: {
           maximumRowsRead?: number;
           numItems: number;
         };
-        threadId: Id<"threads">;
+        threadId: string;
       },
       any
     >;
@@ -1053,11 +1124,11 @@ export declare const api: {
       { sessionId: string },
       any
     >;
-    get: FunctionReference<"query", "public", { sessionId: string }, any>;
+    get: FunctionReference<"query", "public", { sessionId?: string }, any>;
     getWithMessages: FunctionReference<
       "query",
       "public",
-      { sessionId: string },
+      { sessionId?: string },
       any
     >;
     list: FunctionReference<
@@ -1072,8 +1143,12 @@ export declare const api: {
       any
     >;
     listActive: FunctionReference<"query", "public", { userId?: string }, any>;
-    listByAgent: FunctionReference<"query", "public", { agentId: string }, any>;
-    remove: FunctionReference<"mutation", "public", { sessionId: string }, any>;
+    remove: FunctionReference<
+      "mutation",
+      "public",
+      { sessionId?: string },
+      any
+    >;
     updateActivity: FunctionReference<
       "mutation",
       "public",
@@ -1209,6 +1284,20 @@ export declare const api: {
       any
     >;
   };
+  telegramWebhook: {
+    registerTelegramWebhook: FunctionReference<
+      "action",
+      "public",
+      { connectionId: Id<"channelConnections">; webhookUrl: string },
+      any
+    >;
+    verifyTelegramBot: FunctionReference<
+      "action",
+      "public",
+      { botToken: string },
+      any
+    >;
+  };
   threads: {
     create: FunctionReference<
       "mutation",
@@ -1230,6 +1319,12 @@ export declare const api: {
       any
     >;
     remove: FunctionReference<"mutation", "public", { id: Id<"threads"> }, any>;
+    rename: FunctionReference<
+      "mutation",
+      "public",
+      { id: string; name: string },
+      any
+    >;
     update: FunctionReference<
       "mutation",
       "public",
@@ -1509,6 +1604,14 @@ export declare const internal: {
       "query",
       "internal",
       { provider: string; userId?: string },
+      any
+    >;
+  };
+  channelConnections: {
+    getDecryptedBotToken: FunctionReference<
+      "query",
+      "internal",
+      { connectionId: Id<"channelConnections"> },
       any
     >;
   };

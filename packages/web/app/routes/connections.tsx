@@ -5,7 +5,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import { Id } from '../../../../convex/_generated/dataModel';
-import { Plug, Plus, RefreshCw, CheckCircle, XCircle, Trash2, MoreVertical, Edit, Search } from 'lucide-react';
+import { Plug, Plus, RefreshCw, CheckCircle, XCircle, Trash2, MoreVertical, Edit, Search, MessageCircle, Send, Hash } from 'lucide-react';
 
 // --- Types ---
 type ConnectionStatus = 'connected' | 'disconnected' | 'testing';
@@ -203,6 +203,13 @@ export const Route = createFileRoute('/connections')({ component: ConnectionsPag
 function ConnectionsPage() {
     // --- Convex Hooks ---
     const connectionsQuery = useQuery(api.mcpConnections.list, {}) as Connection[] | undefined;
+    const channelConns = useQuery(api.channelConnections.list, {}) ?? [];
+    const createChannelConn = useMutation(api.channelConnections.create);
+    const removeChannelConn = useMutation(api.channelConnections.remove);
+    const [showTelegramDialog, setShowTelegramDialog] = React.useState(false);
+    const [showSlackDialog, setShowSlackDialog] = React.useState(false);
+    const [botToken, setBotToken] = React.useState('');
+    const [savingChannel, setSavingChannel] = React.useState(false);
     const connections = connectionsQuery ?? [];
     const createConnection = useMutation(api.mcpConnections.create);
     const updateConnection = useMutation(api.mcpConnections.update);
@@ -329,6 +336,70 @@ function ConnectionsPage() {
                 onSave={handleSave}
                 connection={editingConnection}
             />
-        </DashboardLayout>
+  
+        <div className="mt-8 border-t border-gray-700 pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-white">Messaging Channels</h2>
+            <span className="text-xs text-gray-400">Connect agents to chat platforms</span>
+          </div>
+          {channelConns.length > 0 && (
+            <div className="space-y-2 mb-4">
+              {(channelConns as any[]).map((cc) => (
+                <div key={cc._id} className="bg-gray-800 border border-gray-700 rounded-lg p-3 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {cc.channel === 'telegram' ? <Send className="w-4 h-4 text-blue-400" /> : <Hash className="w-4 h-4 text-purple-400" />}
+                    <span className="text-sm text-white capitalize">{cc.channel} &mdash; {cc.config?.botUsername ?? 'bot'}</span>
+                    <span className="text-xs text-gray-400">Agent: {cc.agentId}</span>
+                  </div>
+                  <button onClick={() => removeChannelConn({ id: cc._id })} className="text-xs text-red-400 border border-red-700 rounded px-2 py-1 hover:text-red-300">Remove</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="grid grid-cols-3 gap-4">
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3"><Send className="w-5 h-5 text-blue-400" /><p className="text-sm font-medium text-white">Telegram</p></div>
+              <button onClick={() => setShowTelegramDialog(true)} className="w-full text-xs bg-blue-600 hover:bg-blue-500 text-white px-3 py-2 rounded">+ Connect Bot</button>
+            </div>
+            <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+              <div className="flex items-center gap-2 mb-3"><Hash className="w-5 h-5 text-purple-400" /><p className="text-sm font-medium text-white">Slack</p></div>
+              <button onClick={() => setShowSlackDialog(true)} className="w-full text-xs bg-purple-600 hover:bg-purple-500 text-white px-3 py-2 rounded">+ Connect App</button>
+            </div>
+            <div className="bg-gray-800 border border-gray-600 rounded-lg p-4 opacity-50">
+              <div className="flex items-center gap-2 mb-3"><MessageCircle className="w-5 h-5 text-indigo-400" /><p className="text-sm font-medium text-white">Discord</p></div>
+              <button disabled className="w-full text-xs bg-gray-700 text-gray-500 px-3 py-2 rounded cursor-not-allowed">Coming Soon</button>
+            </div>
+          </div>
+        </div>
+        {showTelegramDialog && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md">
+              <h3 className="text-white font-semibold mb-2">Connect Telegram Bot</h3>
+              <input type="password" placeholder="1234567890:ABCDEF..." value={botToken} onChange={e => setBotToken(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white mb-4 focus:outline-none focus:border-blue-500" />
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => { setShowTelegramDialog(false); setBotToken(''); }} className="text-xs text-gray-400 px-4 py-2">Cancel</button>
+                <button disabled={!botToken || savingChannel} onClick={async () => { setSavingChannel(true); try { await createChannelConn({ channel: 'telegram', botToken, agentId: 'default' }); setShowTelegramDialog(false); setBotToken(''); } finally { setSavingChannel(false); } }} className="text-xs bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-4 py-2 rounded">{savingChannel ? 'Saving...' : 'Connect'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+        {showSlackDialog && (
+          <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
+            <div className="bg-gray-900 border border-gray-700 rounded-xl p-6 w-full max-w-md">
+              <h3 className="text-white font-semibold mb-2">Connect Slack App</h3>
+              <input type="password" placeholder="xoxb-..." value={botToken} onChange={e => setBotToken(e.target.value)} className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white mb-4 focus:outline-none focus:border-purple-500" />
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => { setShowSlackDialog(false); setBotToken(''); }} className="text-xs text-gray-400 px-4 py-2">Cancel</button>
+                <button disabled={!botToken || savingChannel} onClick={async () => { setSavingChannel(true); try { await createChannelConn({ channel: 'slack', botToken, agentId: 'default' }); setShowSlackDialog(false); setBotToken(''); } finally { setSavingChannel(false); } }} className="text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-4 py-2 rounded">{savingChannel ? 'Saving...' : 'Connect'}</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </DashboardLayout>
     );
 }
+
+// ─── Messaging Channels Section (added after Team C SPEC-012) ───────────────
+// This is appended below the MCP connections component.
+// The route itself exports the full page including both sections.
