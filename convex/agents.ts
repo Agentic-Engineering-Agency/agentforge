@@ -94,6 +94,14 @@ export const create = mutation({
         secretAccessKey: v.optional(v.string()),
       })
     ),
+    failoverModels: v.optional(
+      v.array(
+        v.object({
+          provider: v.string(),
+          model: v.string(),
+        })
+      )
+    ),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -134,6 +142,14 @@ export const update = mutation({
         accessKeyId: v.optional(v.string()),
         secretAccessKey: v.optional(v.string()),
       })
+    ),
+    failoverModels: v.optional(
+      v.array(
+        v.object({
+          provider: v.string(),
+          model: v.string(),
+        })
+      )
     ),
   },
   handler: async (ctx, args) => {

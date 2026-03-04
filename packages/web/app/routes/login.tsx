@@ -6,6 +6,8 @@
 
 import { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
+import { useMutation, useQuery } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -13,44 +15,47 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const validatePassword = useQuery(api.auth.validatePassword, { password });
+  const createSession = useMutation(api.auth.createSession);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      // For now, check environment variable
-      // TODO: Call Convex auth:validatePassword mutation
-      const envPassword = (import.meta as any).env.VITE_AGENTFORGE_PASSWORD;
+      // Check if auth is disabled via environment variable
+      const authDisabled = (import.meta as any).env.VITE_AUTH_DISABLED === 'true';
 
-      if (envPassword && password === envPassword) {
+      if (authDisabled) {
+        // Dev mode: no password required
+        localStorage.setItem('agentforge_session', 'dev-mode');
+        navigate({ to: '/' });
+        return;
+      }
+
+      // Validate password against Convex
+      const result = await new Promise<{ valid: boolean }>((resolve, reject) => {
+        // Refetch the validatePassword query with the current password
+        validatePassword.refetch({ password }).then(resolve).catch(reject);
+      });
+
+      if (result.valid) {
+        // Create a session and get token
+        const sessionResult = await createSession();
+        const token = sessionResult.token;
+
         // Store session in localStorage
-        //
-        // SECURITY NOTE: localStorage is accessible to any JavaScript code.
-        // This creates an XSS vulnerability risk: malicious scripts can steal session tokens.
-        //
-        // For production, use httpOnly cookies which are:
-        // - Not accessible via JavaScript
-        // - Automatically sent with requests
-        // - More secure against XSS attacks
-        //
-        // Current limitation: This is a local-first framework without full auth implemented.
-        // TODO: Integrate Convex http actions with proper cookie-based session management.
-        const token = `sess_${crypto.randomUUID().replace(/-/g, '')}`;
         localStorage.setItem('agentforge_session', token);
-        localStorage.setItem('agentforge_session_expires', String(Date.now() + 24 * 60 * 60 * 1000));
+        localStorage.setItem('agentforge_session_expires', String(sessionResult.expiresAt));
 
         // Redirect to dashboard
-        navigate({ to: '/' });
-      } else if (!envPassword) {
-        // No password set - allow access for local dev
-        // SECURITY: Same localStorage XSS considerations apply
-        localStorage.setItem('agentforge_session', 'dev-mode');
         navigate({ to: '/' });
       } else {
         setError('Invalid password');
       }
     } catch (err) {
+      console.error('Login error:', err);
       setError('Login failed. Please try again.');
     } finally {
       setLoading(false);
