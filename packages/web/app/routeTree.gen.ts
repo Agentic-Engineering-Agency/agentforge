@@ -393,17 +393,6 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface AgentsRouteChildren {
-  AgentsAgentIdRoute: typeof AgentsAgentIdRoute
-}
-
-const AgentsRouteChildren: AgentsRouteChildren = {
-  AgentsAgentIdRoute: AgentsAgentIdRoute,
-}
-
-const AgentsRouteWithChildren =
-  AgentsRoute._addFileChildren(AgentsRouteChildren)
-
 interface SessionsRouteChildren {
   SessionsSessionIdRoute: typeof SessionsSessionIdRoute
 }
