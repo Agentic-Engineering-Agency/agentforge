@@ -68,6 +68,18 @@ export const list = query({
   },
 });
 
+
+// Query: Get all messages by thread (non-paginated, for internal use)
+export const getByThread = query({
+  args: { threadId: v.id("threads") },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("messages")
+      .withIndex("byThread", (q) => q.eq("threadId", args.threadId!))
+      .order("asc")
+      .collect();
+  },
+});
 // Mutation: Delete a message
 export const remove = mutation({
   args: { id: v.id("messages") },
