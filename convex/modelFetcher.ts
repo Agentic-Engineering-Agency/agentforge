@@ -11,6 +11,52 @@ import { internal } from "./_generated/api";
 import { LLM_MODELS, LLM_PROVIDERS } from "./llmProviders";  // LLMModel removed (unused)
 
 // ---------------------------------------------------------------------------
+// Deprecated model filtering
+// ---------------------------------------------------------------------------
+
+/**
+ * Patterns for deprecated AI models that should be filtered from live API results.
+ * These patterns match known deprecated model IDs across providers.
+ */
+const DEPRECATED_MODEL_PATTERNS = [
+  // Claude 3.x (replaced by Claude 4.x)
+  /claude-3[^.6]/,  // Matches claude-3-opus, claude-3-sonnet, claude-3-haiku (but not claude-opus-4-6)
+  /claude-3\.5/,    // Matches claude-3.5-sonnet, claude-3.5-haiku
+
+  // GPT-3.5 (replaced by GPT-4.1-mini)
+  /gpt-3\.5/,
+
+  // GPT-4 legacy (replaced by GPT-4.1)
+  /gpt-4-turbo/,
+  /gpt-4-32k/,
+
+  // Gemini 1.x (replaced by Gemini 2.x)
+  /gemini-1\./,
+  /gemini-pro$/,
+
+  // Old preview models with GA equivalents
+  /-20230/,
+  /-20240229/,
+
+  // Very old GPT models
+  /davinci/,
+  /babbage/,
+  /curie/,
+  /ada$/,
+];
+
+/**
+ * Check if a model ID matches any deprecated pattern.
+ * @param modelId - The model ID to check (e.g., "openai/gpt-3.5-turbo")
+ * @returns true if the model is deprecated and should be filtered out
+ */
+function isDeprecated(modelId: string): boolean {
+  // Extract just the model name (after provider/)
+  const modelName = modelId.includes('/') ? modelId.split('/').slice(1).join('/') : modelId;
+  return DEPRECATED_MODEL_PATTERNS.some(pattern => pattern.test(modelName));
+}
+
+// ---------------------------------------------------------------------------
 // Provider-specific fetchers
 // ---------------------------------------------------------------------------
 
@@ -40,17 +86,19 @@ async function fetchOpenAIModels(apiKey: string): Promise<FetchedModel[]> {
      m.id.startsWith("chatgpt-"))
   );
 
-  return chatModels.map(m => ({
-    id: `openai/${m.id}`,
-    displayName: m.id,
-    provider: "openai",
-    contextWindow:
-      m.id.includes("32k") ? 32768
-      : m.id.includes("128k") || m.id.includes("4o") || m.id.includes("4.1") || m.id.startsWith("o") ? 128000
-      : 8192,
-    capabilities: ["chat", "function_calling"],
-    isGA: !m.id.includes("preview") && !m.id.includes("instruct"),
-  }));
+  return chatModels
+    .map(m => ({
+      id: `openai/${m.id}`,
+      displayName: m.id,
+      provider: "openai",
+      contextWindow:
+        m.id.includes("32k") ? 32768
+        : m.id.includes("128k") || m.id.includes("4o") || m.id.includes("4.1") || m.id.startsWith("o") ? 128000
+        : 8192,
+      capabilities: ["chat", "function_calling"],
+      isGA: !m.id.includes("preview") && !m.id.includes("instruct"),
+    }))
+    .filter(m => !isDeprecated(m.id));
 }
 
 async function fetchAnthropicModels(apiKey: string): Promise<FetchedModel[]> {
@@ -63,14 +111,16 @@ async function fetchAnthropicModels(apiKey: string): Promise<FetchedModel[]> {
   if (!res.ok) throw new Error(`Anthropic models API: ${res.status}`);
   const { data } = await res.json() as { data: Array<{ id: string; display_name: string }> };
 
-  return data.map(m => ({
-    id: `anthropic/${m.id}`,
-    displayName: m.display_name || m.id,
-    provider: "anthropic",
-    contextWindow: 200000,  // All current Anthropic models support 200K
-    capabilities: ["chat", "vision"],
-    isGA: true,
-  }));
+  return data
+    .map(m => ({
+      id: `anthropic/${m.id}`,
+      displayName: m.display_name || m.id,
+      provider: "anthropic",
+      contextWindow: 200000,  // All current Anthropic models support 200K
+      capabilities: ["chat", "vision"],
+      isGA: true,
+    }))
+    .filter(m => !isDeprecated(m.id));
 }
 
 async function fetchGoogleModels(apiKey: string): Promise<FetchedModel[]> {
@@ -102,7 +152,8 @@ async function fetchGoogleModels(apiKey: string): Promise<FetchedModel[]> {
         capabilities: ["chat", "vision"],
         isGA: !modelId.includes("exp") && !modelId.includes("preview"),
       };
-    });
+    })
+    .filter(m => !isDeprecated(m.id));
 }
 
 async function fetchMistralModels(apiKey: string): Promise<FetchedModel[]> {
@@ -128,7 +179,8 @@ async function fetchMistralModels(apiKey: string): Promise<FetchedModel[]> {
       contextWindow: m.max_context_length ?? 32768,
       capabilities: ["chat"],
       isGA: !m.id.includes("dev") && !m.id.includes("test"),
-    }));
+    }))
+    .filter(m => !isDeprecated(m.id));
 }
 
 async function fetchOpenRouterModels(apiKey: string): Promise<FetchedModel[]> {
@@ -154,7 +206,8 @@ async function fetchOpenRouterModels(apiKey: string): Promise<FetchedModel[]> {
       contextWindow: m.context_length ?? 8192,
       capabilities: ["chat"],
       isGA: true,
-    }));
+    }))
+    .filter(m => !isDeprecated(m.id));
 }
 
 
@@ -174,7 +227,8 @@ async function fetchDeepSeekModels(apiKey: string): Promise<FetchedModel[]> {
       contextWindow: m.id.includes("reasoner") ? 64000 : 64000,
       capabilities: m.id.includes("reasoner") ? ["chat", "reasoning"] : ["chat", "code"],
       isGA: true,
-    }));
+    }))
+    .filter(m => !isDeprecated(m.id));
 }
 
 async function fetchXAIModels(apiKey: string): Promise<FetchedModel[]> {
@@ -193,7 +247,8 @@ async function fetchXAIModels(apiKey: string): Promise<FetchedModel[]> {
       contextWindow: m.id.includes("vision") ? 32768 : 131072,
       capabilities: m.id.includes("vision") ? ["chat", "vision"] : ["chat"],
       isGA: !m.id.includes("mini") && !m.id.includes("beta"),
-    }));
+    }))
+    .filter(m => !isDeprecated(m.id));
 }
 
 async function fetchCohereModels(apiKey: string): Promise<FetchedModel[]> {
@@ -215,7 +270,8 @@ async function fetchCohereModels(apiKey: string): Promise<FetchedModel[]> {
       contextWindow: m.context_length ?? 128000,
       capabilities: ["chat"],
       isGA: !m.name.includes("trial") && !m.name.includes("beta"),
-    }));
+    }))
+    .filter(m => !isDeprecated(m.id));
 }
 
 async function fetchModelsForProvider(provider: string, apiKey: string): Promise<FetchedModel[]> {
