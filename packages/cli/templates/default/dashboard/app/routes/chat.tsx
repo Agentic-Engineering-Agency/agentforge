@@ -83,12 +83,12 @@ export const Route = createFileRoute("/chat")({ component: ChatPageComponent });
 function ChatPageComponent() {
   // ── Convex queries ──────────────────────────────────────────
   const agents = useQuery(api.agents.listActive, {}) ?? [];
-  const threads = useQuery(api.chat.listThreads, {}) ?? [];
+  const threads = useQuery(api.threads.listThreads, {}) ?? [];
   // AGE-144: Query available files for attachment
   const availableFiles = useQuery(api.files.list, {}) ?? [];
 
   // ── Convex mutations & actions ──────────────────────────────
-  const createThread = useMutation(api.chat.createThread);
+  const createThread = useMutation(api.threads.createThread);
   const sendMessageAction = useAction(api.chat.sendMessage);
 
   // ── Local state ─────────────────────────────────────────────
@@ -111,7 +111,7 @@ function ChatPageComponent() {
   // This is the real-time subscription — messages update automatically
   // when new ones are inserted by the Convex action.
   const messages = useQuery(
-    api.chat.getThreadMessages,
+    api.threads.getThreadMessages,
     currentThreadId ? { threadId: currentThreadId as Id<"threads"> } : "skip"
   ) ?? [];
 

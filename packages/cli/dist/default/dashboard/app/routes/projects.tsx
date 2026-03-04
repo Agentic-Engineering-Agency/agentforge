@@ -211,8 +211,8 @@ function ProjectForm({ initial, onSave, onClose }: { initial: any; onSave: (data
 const PROVIDERS = ['openai', 'anthropic', 'openrouter', 'google', 'xai', 'mistral', 'deepseek', 'cohere', 'meta'];
 const MODELS_BY_PROVIDER: Record<string, string[]> = {
   openai: ['gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini'],
-  google: ['gemini-2.5-flash', 'gemini-1.5-pro'],
-  anthropic: ['claude-3.5-sonnet', 'claude-3-haiku'],
+  google: ['gemini-2.5-flash', 'gemini-2.5-pro'],
+  anthropic: ['claude-sonnet-4-6', 'claude-haiku-4-5'],
   openrouter: ['openrouter/auto'],
   xai: ['grok-4', 'grok-3'],
   mistral: ['mistral-large', 'mistral-medium'],

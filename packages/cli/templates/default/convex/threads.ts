@@ -1,60 +1,66 @@
-import { v } from "convex/values";
+/**
+ * Thread queries and mutations for the dashboard chat UI.
+ *
+ * These are plain Convex queries/mutations (NOT "use node") because
+ * chat.ts uses "use node" and can only export actions.
+ */
+
 import { mutation, query } from "./_generated/server";
+import { v } from "convex/values";
 
-// Query: Get all threads
-export const list = query({
-  args: {
-    userId: v.optional(v.string()),
-    agentId: v.optional(v.string()),
-    projectId: v.optional(v.id("projects")),
-  },
-  handler: async (ctx, args) => {
-    if (args.projectId) {
-      return await ctx.db
-        .query("threads")
-        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
-        .collect();
-    }
-    
-    if (args.agentId) {
-      return await ctx.db
-        .query("threads")
-        .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId!))
-        .collect();
-    }
-    
-    if (args.userId) {
-      return await ctx.db
-        .query("threads")
-        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
-        .collect();
-    }
-    
-    return await ctx.db.query("threads").collect();
+/**
+ * List all threads (sorted newest first) for the dashboard.
+ */
+export const listThreads = query({
+  args: {},
+  handler: async (ctx) => {
+    const threads = await ctx.db
+      .query("threads")
+      .order("desc")
+      .take(100);
+    return threads;
   },
 });
 
-// Query: Get thread by ID
-export const get = query({
-  args: { id: v.id("threads") },
-  handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+/**
+ * Get a single thread by ID.
+ */
+export const getThread = query({
+  args: { threadId: v.id("threads") },
+  handler: async (ctx, { threadId }) => {
+    return await ctx.db.get(threadId);
   },
 });
 
-// Mutation: Create a new thread
-export const create = mutation({
+/**
+ * Get all messages for a thread (sorted oldest first for display).
+ */
+export const getThreadMessages = query({
+  args: { threadId: v.id("threads") },
+  handler: async (ctx, { threadId }) => {
+    return await ctx.db
+      .query("messages")
+      .withIndex("byThread", (q) => q.eq("threadId", threadId))
+      .order("asc")
+      .take(500);
+  },
+});
+
+/**
+ * Create a new thread.
+ */
+export const createThread = mutation({
   args: {
-    name: v.optional(v.string()),
     agentId: v.string(),
-    userId: v.optional(v.string()),
+    name: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
-    metadata: v.optional(v.any()),
   },
-  handler: async (ctx, args) => {
+  handler: async (ctx, { agentId, name, projectId }) => {
     const now = Date.now();
     const threadId = await ctx.db.insert("threads", {
-      ...args,
+      agentId,
+      name: name ?? "New Chat",
+      projectId,
       createdAt: now,
       updatedAt: now,
     });
@@ -62,63 +68,19 @@ export const create = mutation({
   },
 });
 
-// Mutation: Update thread
-export const update = mutation({
-  args: {
-    id: v.id("threads"),
-    name: v.optional(v.string()),
-    metadata: v.optional(v.any()),
-  },
-  handler: async (ctx, args) => {
-    const { id, ...updates } = args;
-    await ctx.db.patch(id, {
-      ...updates,
-      updatedAt: Date.now(),
-    });
-    return id;
-  },
-});
-
-// Mutation: Rename thread (accepts string ID for short/long ID support)
-export const rename = mutation({
-  args: {
-    id: v.string(),
-    name: v.string(),
-  },
-  handler: async (ctx, args) => {
-    // Try to find the thread by string ID
-    let thread = null;
-    const allThreads = await ctx.db.query("threads").collect();
-    thread = allThreads.find(t => t._id === args.id || t._id.endsWith(args.id));
-
-    if (!thread) {
-      throw new Error(`Thread "${args.id}" not found`);
-    }
-
-    await ctx.db.patch(thread._id, {
-      name: args.name,
-      updatedAt: Date.now(),
-    });
-    return thread._id;
-  },
-});
-
-// Mutation: Delete thread
-export const remove = mutation({
-  args: { id: v.id("threads") },
-  handler: async (ctx, args) => {
-    // Delete all messages in the thread
+/**
+ * Delete a thread and all its messages.
+ */
+export const deleteThread = mutation({
+  args: { threadId: v.id("threads") },
+  handler: async (ctx, { threadId }) => {
     const messages = await ctx.db
       .query("messages")
-      .withIndex("byThread", (q) => q.eq("threadId", args.id!))
+      .withIndex("byThread", (q) => q.eq("threadId", threadId))
       .collect();
-    
-    for (const message of messages) {
-      await ctx.db.delete(message._id);
+    for (const msg of messages) {
+      await ctx.db.delete(msg._id);
     }
-    
-    // Delete the thread
-    await ctx.db.delete(args.id);
-    return { success: true };
+    await ctx.db.delete(threadId);
   },
 });
