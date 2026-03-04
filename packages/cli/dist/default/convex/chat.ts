@@ -32,10 +32,10 @@ import { Agent, getBaseModelId, getProviderBaseUrl } from "./lib/agent";
  * Global default failover chain used when an agent has no per-agent config.
  * Priority: OpenRouter → OpenAI → Anthropic → Google Gemini
  */
+// Default fallover: OpenAI → Anthropic → Google (no OpenRouter — requires separate key)
 const DEFAULT_FAILOVER_CHAIN = [
-  { provider: "openrouter", model: "openai/gpt-4o-mini" },
   { provider: "openai", model: "gpt-4o-mini" },
-  { provider: "anthropic", model: "claude-3-5-haiku-20241022" },
+  { provider: "anthropic", model: "claude-haiku-4-5" },
   { provider: "google", model: "gemini-2.0-flash" },
 ];
 
@@ -454,8 +454,8 @@ export const sendMessage = action({
           "gpt-4o": { input: 2.5, output: 10.0 },
           "gpt-4o-mini": { input: 0.15, output: 0.6 },
           "claude-sonnet-4-20250514": { input: 3.0, output: 15.0 },
-          "claude-3-5-sonnet-20241022": { input: 3.0, output: 15.0 },
-          "claude-3-5-haiku-20241022": { input: 0.8, output: 4.0 },
+          "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
+          "claude-haiku-4-5": { input: 0.8, output: 4.0 },
           "gemini-2.5-flash": { input: 0.15, output: 0.6 },
           "gemini-2.0-flash": { input: 0.1, output: 0.4 },
         };

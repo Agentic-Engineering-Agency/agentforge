@@ -32,10 +32,10 @@ import { Agent, getBaseModelId, getProviderBaseUrl } from "./lib/agent";
  * Global default failover chain used when an agent has no per-agent config.
  * Priority: OpenRouter → OpenAI → Anthropic → Google Gemini
  */
+// Default fallover: OpenAI → Anthropic → Google (no OpenRouter — requires separate key)
 const DEFAULT_FAILOVER_CHAIN = [
-  { provider: "openrouter", model: "openai/gpt-4o-mini" },
   { provider: "openai", model: "gpt-4o-mini" },
-  { provider: "anthropic", model: "claude-3-5-haiku-20241022" },
+  { provider: "anthropic", model: "claude-haiku-4-5" },
   { provider: "google", model: "gemini-2.0-flash" },
 ];
 
@@ -282,14 +282,15 @@ export const sendMessage = action({
     }
 
     // 2. Store the user message
-    await ctx.runMutation(api.chatMutations.addUserMessage, {
-      threadId: args.threadId,
+    await ctx.runMutation(api.messages.add, {
+      threadId: args.threadId as any,
+      role: "user",
       content: args.content,
     });
 
     // 3. Get conversation history for context
-    const history = await ctx.runQuery(api.chatMutations.getThreadMessages, {
-      threadId: args.threadId,
+    const history = await ctx.runQuery(api.messages.getByThread, {
+      threadId: args.threadId as any,
     });
 
     // Build messages array for the LLM (last 20 messages for context window)
@@ -318,7 +319,7 @@ export const sendMessage = action({
     // Load skills for this agent/project
     if (agent.projectId) {
       try {
-        const skills = await ctx.runQuery(api.skills.listInstalled, { projectId: agent.projectId });
+        const skills = await ctx.runQuery(api.skills.listInstalled, {});
         for (const skill of skills as any[]) {
           const md = skill.skillMdContent ?? `# ${skill.displayName ?? skill.name}\n\n${skill.description ?? ""}`;
           systemPromptParts.push(`\n<skill name="${skill.name}">\n${md}\n</skill>`);
@@ -436,10 +437,11 @@ export const sendMessage = action({
     }
     metadata.latencyMs = latencyMs;
 
-    await ctx.runMutation(api.chatMutations.addAssistantMessage, {
-      threadId: args.threadId,
+    await ctx.runMutation(api.messages.add, {
+      threadId: args.threadId as any,
+      role: "assistant",
       content: responseText,
-      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      tool_calls: Object.keys(metadata).length > 0 ? metadata : undefined,
     });
 
     // 8. Record usage metrics (non-blocking, best-effort)
@@ -452,8 +454,8 @@ export const sendMessage = action({
           "gpt-4o": { input: 2.5, output: 10.0 },
           "gpt-4o-mini": { input: 0.15, output: 0.6 },
           "claude-sonnet-4-20250514": { input: 3.0, output: 15.0 },
-          "claude-3-5-sonnet-20241022": { input: 3.0, output: 15.0 },
-          "claude-3-5-haiku-20241022": { input: 0.8, output: 4.0 },
+          "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
+          "claude-haiku-4-5": { input: 0.8, output: 4.0 },
           "gemini-2.5-flash": { input: 0.15, output: 0.6 },
           "gemini-2.0-flash": { input: 0.1, output: 0.4 },
         };
@@ -530,11 +532,14 @@ export const startNewChat = action({
   },
   handler: async (ctx, args) => {
     // Create a new thread
-    const threadId = await ctx.runMutation(api.chatMutations.createThread, {
+    const newThreadId = await ctx.runMutation(api.threads.createThread, {
       agentId: args.agentId,
       name: args.threadName || "New Chat",
-      userId: args.userId,
     });
+    if (!newThreadId) {
+      throw new Error('Failed to create thread');
+    }
+    const threadId = newThreadId;
 
     // Send the first message
     const result = await ctx.runAction(api.chat.sendMessage, {
