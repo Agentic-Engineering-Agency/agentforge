@@ -126,7 +126,7 @@ function resolveSkillsDir(): string {
 
   // Mastra Workspace pattern: workspace/skills/
   const workspaceSkillsDir = path.join(cwd, WORKSPACE_DIR_NAME, SKILLS_DIR_NAME);
-  if (fs.existsSync(path.join(cwd, WORKSPACE_DIR_NAME))) {
+  if (fs.existsSync(workspaceSkillsDir)) {
     return workspaceSkillsDir;
   }
 

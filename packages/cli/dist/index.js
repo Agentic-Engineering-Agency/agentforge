@@ -1565,7 +1565,7 @@ function prompt2(q) {
 function resolveSkillsDir() {
   const cwd = process.cwd();
   const workspaceSkillsDir = path6.join(cwd, WORKSPACE_DIR_NAME, SKILLS_DIR_NAME);
-  if (fs6.existsSync(path6.join(cwd, WORKSPACE_DIR_NAME))) {
+  if (fs6.existsSync(workspaceSkillsDir)) {
     return workspaceSkillsDir;
   }
   return path6.join(cwd, SKILLS_DIR_NAME);

@@ -36,7 +36,7 @@ const AI_PROVIDERS = [
   {
     id: 'google',
     name: 'Google AI',
-    description: 'Gemini 2.5 Flash, Gemini 2.0 Flash, Gemini 1.5 Pro',
+    description: 'Gemini 2.5 Flash, Gemini 2.5 Pro, Gemini 2.0 Flash',
     prefix: 'AIza',
     docsUrl: 'https://aistudio.google.com/apikey',
     color: 'bg-blue-500',
