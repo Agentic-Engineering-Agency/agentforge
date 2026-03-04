@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { createClient, safeCall } from '../lib/convex-client.js';
 import { header, table, details, success, error, info, formatDate } from '../lib/display.js';
+import readline from 'node:readline';
 
 export function registerSessionsCommand(program: Command) {
   const sessions = program.command('sessions').description('Manage sessions');
@@ -49,6 +50,26 @@ export function registerSessionsCommand(program: Command) {
       const client = await createClient();
       await safeCall(() => client.mutation('sessions:updateStatus' as any, { sessionId: id, status: 'completed' }), 'Failed to end session');
       success(`Session "${id}" ended.`);
+    });
+
+  sessions
+    .command('delete')
+    .argument('<id>', 'Session ID')
+    .option('-f, --force', 'Skip confirmation')
+    .description('Delete a session')
+    .action(async (id, opts) => {
+      const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+      const confirmPrompt = (question: string): Promise<string> => new Promise((resolve) => rl.question(question, (ans) => { rl.close(); resolve(ans.trim()); }));
+
+      if (!opts.force) {
+        const confirm = await confirmPrompt(`Delete session "${id}"? (y/N): `);
+        if (confirm.toLowerCase() !== 'y') { info('Cancelled.'); return; }
+      }
+      const client = await createClient();
+      const session = await safeCall(() => client.query('sessions:get' as any, { sessionId: id }), 'Failed to fetch session');
+      if (!session) { error(`Session "${id}" not found.`); process.exit(1); }
+      await safeCall(() => client.mutation('sessions:remove' as any, { sessionId: id }), 'Failed to delete session');
+      success(`Session "${id}" deleted.`);
     });
 }
 
