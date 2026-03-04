@@ -226,6 +226,56 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  channelConnections: {
+    document: {
+      agentId: string;
+      channel: string;
+      config: {
+        botToken?: string;
+        botUsername?: string;
+        iv?: string;
+        teamId?: string;
+        webhookSecret?: string;
+      };
+      createdAt: number;
+      lastActivity?: number;
+      messageCount?: number;
+      projectId?: Id<"projects">;
+      status: string;
+      updatedAt: number;
+      userId?: string;
+      _id: Id<"channelConnections">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "agentId"
+      | "channel"
+      | "config"
+      | "config.botToken"
+      | "config.botUsername"
+      | "config.iv"
+      | "config.teamId"
+      | "config.webhookSecret"
+      | "createdAt"
+      | "lastActivity"
+      | "messageCount"
+      | "projectId"
+      | "status"
+      | "updatedAt"
+      | "userId";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      byAgent: ["agentId", "_creationTime"];
+      byChannel: ["channel", "_creationTime"];
+      byProjectId: ["projectId", "_creationTime"];
+      byUserId: ["userId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   channels: {
     document: {
       configuration?: any;
@@ -484,12 +534,21 @@ export type DataModel = {
   };
   logs: {
     document: {
+      agentId?: string;
+      costUsd?: number;
+      inputTokens?: number;
       level: "debug" | "info" | "warn" | "error";
       message: string;
       metadata?: any;
+      model?: string;
+      outputTokens?: number;
       projectId?: Id<"projects">;
+      provider?: string;
+      sessionId?: string;
       source: string;
+      threadId?: Id<"threads">;
       timestamp: number;
+      totalTokens?: number;
       userId?: string;
       _id: Id<"logs">;
       _creationTime: number;
@@ -497,19 +556,30 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "agentId"
+      | "costUsd"
+      | "inputTokens"
       | "level"
       | "message"
       | "metadata"
+      | "model"
+      | "outputTokens"
       | "projectId"
+      | "provider"
+      | "sessionId"
       | "source"
+      | "threadId"
       | "timestamp"
+      | "totalTokens"
       | "userId";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
+      byAgentId: ["agentId", "_creationTime"];
       byLevel: ["level", "_creationTime"];
       byProjectAndTimestamp: ["projectId", "timestamp", "_creationTime"];
       byProjectId: ["projectId", "_creationTime"];
+      bySessionId: ["sessionId", "_creationTime"];
       bySource: ["source", "_creationTime"];
       byTimestamp: ["timestamp", "_creationTime"];
       byUserId: ["userId", "_creationTime"];
