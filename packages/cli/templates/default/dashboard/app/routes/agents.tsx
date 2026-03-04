@@ -1,22 +1,58 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useState, useMemo, useEffect } from 'react';
+import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Bot, Plus, Edit, Trash2, Search, X, Star } from 'lucide-react';
+import { Bot, Plus, Edit, Trash2, Search, X, Star, Loader2 } from 'lucide-react';
 
 export const Route = createFileRoute('/agents')({ component: AgentsPage });
 
-const providers = ['openai', 'anthropic', 'google', 'xai', 'mistral', 'deepseek', 'openrouter'];
-const modelsByProvider: Record<string, string[]> = {
+const providers = ['openai', 'anthropic', 'google', 'xai', 'mistral', 'deepseek', 'openrouter', 'groq', 'together', 'perplexity'];
+
+// Static fallback models — used when no API key is configured or the live fetch fails
+const FALLBACK_MODELS: Record<string, string[]> = {
   openai: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'o3', 'o4-mini'],
   anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
   google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
-  xai: ['grok-3', 'grok-3-mini'],
+  xai: ['grok-3', 'grok-3-mini', 'grok-2'],
   mistral: ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
   deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-  openrouter: ['openrouter/auto', 'openai/gpt-4o', 'anthropic/claude-3.5-sonnet', 'google/gemini-2.0-flash'],
+  openrouter: ['openrouter/auto', 'openai/gpt-4o', 'anthropic/claude-sonnet-4-6', 'google/gemini-2.5-flash'],
+  groq: ['llama-3.3-70b-versatile', 'deepseek-r1-distill-llama-70b', 'qwen-qwq-32b'],
+  together: ['meta-llama/Llama-4-Scout-17B-16E-Instruct', 'deepseek-ai/DeepSeek-R1', 'Qwen/Qwen2.5-72B-Instruct-Turbo'],
+  perplexity: ['sonar-pro', 'sonar', 'sonar-reasoning-pro'],
 };
+
+/**
+ * Fetches live model list from the provider API via Convex action.
+ * Falls back to FALLBACK_MODELS if no key is set or the API call fails.
+ */
+function useProviderModels(provider: string) {
+  const fetchModels = useAction(api.modelFetcher.getModelsForProvider);
+  const [models, setModels] = useState<string[]>(FALLBACK_MODELS[provider] ?? []);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setModels(FALLBACK_MODELS[provider] ?? []);
+    if (!provider) return;
+    setLoading(true);
+    fetchModels({ provider })
+      .then((fetched: any[]) => {
+        if (cancelled) return;
+        if (fetched && fetched.length > 0) {
+          setModels(fetched.map((m: any) => m.id.includes('/') ? m.id.split('/').slice(1).join('/') : m.id));
+        } else {
+          setModels(FALLBACK_MODELS[provider] ?? []);
+        }
+      })
+      .catch(() => { if (!cancelled) setModels(FALLBACK_MODELS[provider] ?? []); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return { models, loading };
+}
 
 // Validation constraints
 const VALIDATION = {
@@ -166,6 +202,15 @@ function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any
     maxTokens: agent?.maxTokens ?? 4096,
   });
 
+  const { models: modelsForProvider, loading: modelsLoading } = useProviderModels(formData.provider);
+
+  // Auto-select first available model when switching provider
+  useEffect(() => {
+    if (modelsForProvider.length > 0 && !modelsForProvider.includes(formData.model)) {
+      setFormData(prev => ({ ...prev, model: modelsForProvider[0] }));
+    }
+  }, [modelsForProvider]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const handleChange = (e: any) => {
@@ -257,14 +302,19 @@ function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Provider</label>
-              <select name="provider" value={formData.provider} onChange={(e) => { handleChange(e); setFormData(prev => ({ ...prev, provider: e.target.value, model: (modelsByProvider[e.target.value] || [])[0] || '' })); }} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
+              <select name="provider" value={formData.provider} onChange={(e) => { handleChange(e); setFormData(prev => ({ ...prev, provider: e.target.value, model: '' })); }} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
                 {providers.map(p => <option key={p} value={p}>{p}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Model</label>
-              <select name="model" value={formData.model} onChange={handleChange} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
-                {(modelsByProvider[formData.provider] || []).map(m => <option key={m} value={m}>{m}</option>)}
+              <label className="block text-sm font-medium mb-1 flex items-center gap-2">
+                Model {modelsLoading && <Loader2 className="w-3 h-3 animate-spin text-muted-foreground" />}
+              </label>
+              <select name="model" value={formData.model} onChange={handleChange} disabled={modelsLoading} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50">
+                {modelsLoading
+                  ? <option value="">Loading models…</option>
+                  : modelsForProvider.map(m => <option key={m} value={m}>{m}</option>)
+                }
               </select>
             </div>
           </div>
