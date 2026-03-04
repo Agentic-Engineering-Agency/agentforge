@@ -257,10 +257,9 @@ function ConnectionsPage() {
 
     const handleTest = async (id: Id<'mcpConnections'>) => {
         setTestingId(id);
-        // Simulate test - in real implementation, you would call a test mutation
-        await new Promise(resolve => setTimeout(resolve, 1500));
-        const success = Math.random() > 0.3;
-        await updateStatusConnection({ id, isConnected: success });
+        // TODO: Implement real connection test mutation when available
+        // For now, mark as connected (placeholder until SPEC-012 channelConnections table)
+        await updateStatusConnection({ id, isConnected: true });
         setTestingId(null);
     };
 

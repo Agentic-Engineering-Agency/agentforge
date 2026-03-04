@@ -1,6 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
+import { Id } from '../../../../convex/_generated/dataModel';
 import { GitBranch, Play, Eye, Clock, CheckCircle2, XCircle, Loader2, ChevronDown, ChevronUp } from 'lucide-react';
 
 export const Route = createFileRoute('/workflows')({ component: WorkflowsPage });
@@ -31,7 +34,7 @@ interface WorkflowStep {
 }
 
 interface WorkflowDefinition {
-  _id: string;
+  _id: Id<'workflowDefinitions'>;
   name: string;
   description?: string;
   steps: string;
@@ -40,55 +43,12 @@ interface WorkflowDefinition {
   updatedAt: number;
 }
 
-// Mock data - in production, use Convex queries
-const mockWorkflows: WorkflowDefinition[] = [
-  {
-    _id: 'wf-1',
-    name: 'Research Pipeline',
-    description: 'Multi-step research and synthesis workflow',
-    steps: JSON.stringify([
-      { agentId: 'agent-1', name: 'Gather Information' },
-      { agentId: 'agent-2', name: 'Analyze Findings' },
-      { agentId: 'agent-3', name: 'Generate Report' },
-    ]),
-    isActive: true,
-    createdAt: Date.now() - 86400000,
-    updatedAt: Date.now() - 3600000,
-  },
-];
-
-const mockRuns: WorkflowRun[] = [
-  {
-    _id: 'run-1',
-    workflowId: 'wf-1',
-    status: 'completed',
-    input: 'Research the latest AI agent frameworks',
-    output: 'Research completed successfully',
-    startedAt: Date.now() - 7200000,
-    completedAt: Date.now() - 7000000,
-    steps: [
-      { _id: 'step-1', name: 'Gather Information', status: 'completed', startedAt: Date.now() - 7200000, completedAt: Date.now() - 7150000 },
-      { _id: 'step-2', name: 'Analyze Findings', status: 'completed', startedAt: Date.now() - 7150000, completedAt: Date.now() - 7050000 },
-      { _id: 'step-3', name: 'Generate Report', status: 'completed', startedAt: Date.now() - 7050000, completedAt: Date.now() - 7000000 },
-    ],
-  },
-  {
-    _id: 'run-2',
-    workflowId: 'wf-1',
-    status: 'running',
-    input: 'Compare TypeScript vs Python for ML',
-    startedAt: Date.now() - 60000,
-    steps: [
-      { _id: 'step-1', name: 'Gather Information', status: 'completed', startedAt: Date.now() - 60000, completedAt: Date.now() - 50000 },
-      { _id: 'step-2', name: 'Analyze Findings', status: 'running', startedAt: Date.now() - 50000 },
-      { _id: 'step-3', name: 'Generate Report', status: 'pending' },
-    ],
-  },
-];
-
 function WorkflowsPage() {
-  const [workflows] = useState<WorkflowDefinition[]>(mockWorkflows);
-  const [runs, setRuns] = useState<WorkflowRun[]>(mockRuns);
+  // Real Convex queries
+  const workflows = useQuery(api.workflows.list, {});
+  const runs = useQuery(api.workflows.listRuns, {});
+  const createRun = useMutation(api.workflows.createRun);
+
   const [expandedRuns, setExpandedRuns] = useState<Set<string>>(new Set());
 
   const toggleExpand = (runId: string) => {
@@ -103,9 +63,11 @@ function WorkflowsPage() {
     });
   };
 
-  const runWorkflow = async (workflowId: string) => {
-    // TODO: Call Convex mutation api.workflows.createRun and trigger execution
-    console.log('Running workflow:', workflowId);
+  const runWorkflow = async (workflowId: Id<'workflowDefinitions'>) => {
+    await createRun({
+      workflowId,
+      input: '',
+    });
   };
 
   const getStatusBadge = (status: WorkflowStatus) => {
@@ -157,9 +119,14 @@ function WorkflowsPage() {
         {/* Workflow Definitions */}
         <div className="mb-8">
           <h2 className="text-lg font-semibold mb-4">Workflow Definitions</h2>
-          {workflows.length > 0 ? (
+          {workflows === undefined ? (
+            <div className="text-center py-8 border-2 border-dashed border-border rounded-lg">
+              <Loader2 className="mx-auto h-8 w-8 text-muted-foreground animate-spin" />
+              <p className="mt-2 text-sm text-muted-foreground">Loading workflows...</p>
+            </div>
+          ) : workflows && workflows.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {workflows.map(workflow => (
+              {workflows.map((workflow: WorkflowDefinition) => (
                 <div key={workflow._id} className="bg-card border border-border rounded-lg p-4">
                   <div className="flex items-start justify-between mb-2">
                     <h3 className="font-medium">{workflow.name}</h3>
@@ -192,10 +159,15 @@ function WorkflowsPage() {
         {/* Workflow Runs */}
         <div>
           <h2 className="text-lg font-semibold mb-4">Recent Runs</h2>
-          {runs.length > 0 ? (
+          {runs === undefined ? (
+            <div className="text-center py-8 border-2 border-dashed border-border rounded-lg">
+              <Loader2 className="mx-auto h-8 w-8 text-muted-foreground animate-spin" />
+              <p className="mt-2 text-sm text-muted-foreground">Loading runs...</p>
+            </div>
+          ) : runs && runs.length > 0 ? (
             <div className="space-y-4">
-              {runs.map(run => {
-                const workflow = workflows.find(w => w._id === run.workflowId);
+              {runs.map((run: WorkflowRun) => {
+                const workflow = workflows?.find((w: WorkflowDefinition) => w._id === run.workflowId);
                 const isExpanded = expandedRuns.has(run._id);
                 return (
                   <div key={run._id} className="bg-card border border-border rounded-lg overflow-hidden">
@@ -234,7 +206,7 @@ function WorkflowsPage() {
                       <div className="border-t border-border bg-muted/30 p-4">
                         <h4 className="text-sm font-semibold mb-3">Steps</h4>
                         <div className="space-y-2">
-                          {run.steps.map((step, index) => (
+                          {run.steps.map((step: WorkflowStep, index: number) => (
                             <div key={step._id} className="flex items-start gap-3 bg-background rounded-lg p-3">
                               <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary/20 text-primary text-xs font-bold">
                                 {index + 1}
