@@ -152,7 +152,7 @@ export const executeToolCall = action({
   },
   handler: async (ctx, args) => {
     // Get connection config for client-side execution
-    const connection = await ctx.runQuery(internal.mcpConnections.get, { id: args.id });
+    const connection = await ctx.db.get(args.id);
 
     if (!connection) {
       throw new Error(`MCP connection not found: ${args.id}`);

@@ -72,7 +72,7 @@ http.route({
     }
 
     const file = await ctx.runQuery(api.files.getDownloadUrl, {
-      id: fileId as Parameters<typeof api.files.getDownloadUrl>[0]["id"],
+      id: fileId as any,
     });
 
     return new Response(null, {
@@ -288,13 +288,12 @@ http.route({
           if (!currentThreadId) {
             currentThreadId = await ctx.runMutation(api.threads.createThread, {
               agentId,
-              userId: typeof userId === "string" ? userId : undefined,
             });
           }
 
           // Add user message to thread
           await ctx.runMutation(api.messages.add, {
-            threadId: currentThreadId,
+            threadId: currentThreadId as any,
             role: "user",
             content: message,
           });
@@ -303,7 +302,7 @@ http.route({
           const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           await ctx.runMutation(api.sessions.create, {
             sessionId,
-            threadId: currentThreadId,
+            threadId: currentThreadId as any,
             agentId,
             userId: typeof userId === "string" ? userId : undefined,
             channel: "api",
@@ -351,7 +350,7 @@ http.route({
 
           // Add assistant message to thread
           await ctx.runMutation(api.messages.add, {
-            threadId: currentThreadId,
+            threadId: currentThreadId as any,
             role: "assistant",
             content: fullResponse,
           });
@@ -588,7 +587,7 @@ http.route({
     // Try to find existing thread by agentId and userId
     const threads = await ctx.runQuery(api.threads.listThreads, {});
 
-    const filtered = threads.filter(t =>
+    const filtered = threads.filter((t: any) =>
       t.agentId === connection.agentId && t.userId === `telegram-${chatId}`
     );
 
@@ -598,7 +597,6 @@ http.route({
       // Create new thread for this Telegram chat
       const newThreadId = await ctx.runMutation(api.threads.createThread, {
         agentId: connection.agentId,
-        userId: `telegram-${chatId}`,
         name: senderName ? `Telegram: ${senderName}` : `Telegram Chat ${chatId}`,
       });
       if (!newThreadId) {

@@ -118,7 +118,7 @@ export const install = mutation({
     // Get the skill from marketplace
     const marketplaceSkill = await ctx.db
       .query("skillMarketplace")
-      .withIndex("by_name", (q) => q.eq("name", args.skillName))
+      .filter((q) => q.eq(q.field("name"), args.skillName))
       .first();
 
     if (!marketplaceSkill) {
@@ -128,7 +128,7 @@ export const install = mutation({
     // Check if already installed
     const existing = await ctx.db
       .query("skills")
-      .withIndex("by_name", (q) => q.eq("name", args.skillName))
+      .filter((q) => q.eq(q.field("name"), args.skillName))
       .first();
 
     if (existing) {
@@ -147,7 +147,6 @@ export const install = mutation({
       description: marketplaceSkill.description,
       author: marketplaceSkill.author,
       category: marketplaceSkill.category,
-      tags: marketplaceSkill.tags,
       repositoryUrl: marketplaceSkill.repositoryUrl,
       createdAt: Date.now(),
       updatedAt: Date.now(),

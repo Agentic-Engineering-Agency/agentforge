@@ -73,8 +73,8 @@ export class Agent {
         fullText += chunk;
       }
 
-      // Get usage metadata directly from result in AI SDK v5
-      const { usage } = result;
+      // Get usage metadata — in streaming mode result.usage is a Promise
+      const usage = await result.usage;
 
       return {
         text: fullText,

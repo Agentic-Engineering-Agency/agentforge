@@ -283,14 +283,14 @@ export const sendMessage = action({
 
     // 2. Store the user message
     await ctx.runMutation(api.messages.add, {
-      threadId: args.threadId as string,
+      threadId: args.threadId as any,
       role: "user",
       content: args.content,
     });
 
     // 3. Get conversation history for context
     const history = await ctx.runQuery(api.messages.getByThread, {
-      threadId: args.threadId as string,
+      threadId: args.threadId as any,
     });
 
     // Build messages array for the LLM (last 20 messages for context window)
@@ -438,7 +438,7 @@ export const sendMessage = action({
     metadata.latencyMs = latencyMs;
 
     await ctx.runMutation(api.messages.add, {
-      threadId: args.threadId as string,
+      threadId: args.threadId as any,
       role: "assistant",
       content: responseText,
       tool_calls: Object.keys(metadata).length > 0 ? metadata : undefined,
@@ -535,7 +535,6 @@ export const startNewChat = action({
     const newThreadId = await ctx.runMutation(api.threads.createThread, {
       agentId: args.agentId,
       name: args.threadName || "New Chat",
-      userId: args.userId,
     });
     if (!newThreadId) {
       throw new Error('Failed to create thread');
