@@ -32,5 +32,3 @@ export const generate = action({
     return { plaintext, name, agentId };
   },
 });
-  },
-});
