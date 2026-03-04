@@ -488,4 +488,156 @@ http.route({
   }),
 });
 
+// =====================================================
+// Telegram Webhook Endpoint
+// =====================================================
+
+// OPTIONS preflight for /telegram/:connectionId
+http.route({
+  path: "/telegram/:connectionId",
+  method: "OPTIONS",
+  handler: httpAction(async (_ctx, request) => {
+    const origin = request.headers.get("Origin");
+    return new Response(null, {
+      status: 204,
+      headers: corsHeaders(origin),
+    });
+  }),
+});
+
+// POST /telegram/:connectionId — Receive Telegram webhook events
+http.route({
+  path: "/telegram/:connectionId",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const origin = request.headers.get("Origin");
+    const { connectionId } = request.params;
+
+    // Get connection data
+    const connection = await ctx.runQuery(api.channelConnections.getById, {
+      id: connectionId as any,
+    });
+
+    if (!connection) {
+      return new Response(JSON.stringify({ error: "Connection not found" }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    if (connection.channel !== "telegram") {
+      return new Response(JSON.stringify({ error: "Invalid connection type" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Parse Telegram Update
+    const body = await request.json();
+    const update = body as {
+      update_id: number;
+      message?: {
+        message_id: number;
+        from: { id: number; first_name: string; username?: string };
+        chat: { id: number; type: string };
+        text: string;
+      };
+      callback_query?: {
+        id: string;
+        from: { id: number; first_name: string; username?: string };
+        message: {
+          message_id: number;
+          chat: { id: number };
+          text: string;
+        };
+        data: string;
+      };
+    };
+
+    // Extract message data
+    let text = "";
+    let chatId = "";
+    let userId = "";
+    let senderName = "";
+
+    if (update.message) {
+      text = update.message.text;
+      chatId = String(update.message.chat.id);
+      userId = String(update.message.from.id);
+      senderName = update.message.from.first_name;
+    } else if (update.callback_query) {
+      // Handle callback_query (button clicks)
+      text = update.callback_query.data;
+      chatId = String(update.callback_query.message.chat.id);
+      userId = String(update.callback_query.from.id);
+      senderName = update.callback_query.from.first_name;
+    } else {
+      return new Response(JSON.stringify({ error: "Unsupported update type" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // Create or get thread - use telegram chatId as userId for thread isolation
+    const threadId = `telegram-${chatId}`;
+    let actualThreadId;
+
+    // Try to find existing thread by agentId and userId
+    const threads = await ctx.runQuery(api.threads.list, {
+      agentId: connection.agentId,
+      userId: `telegram-${chatId}`,
+    });
+
+    if (threads && threads.length > 0) {
+      actualThreadId = threads[0]._id;
+    } else {
+      // Create new thread for this Telegram chat
+      actualThreadId = await ctx.runMutation(api.threads.create, {
+        agentId: connection.agentId,
+        userId: `telegram-${chatId}`,
+        name: senderName ? `Telegram: ${senderName}` : `Telegram Chat ${chatId}`,
+      });
+    }
+
+    // Execute agent
+    const result = await ctx.runAction(api.mastraIntegration.executeAgent, {
+      agentId: connection.agentId,
+      prompt: text,
+      threadId: actualThreadId,
+      userId: `telegram-${chatId}`,
+    });
+
+    // Send reply via Telegram Bot API
+    try {
+      // Get decrypted bot token
+      const botTokenData = await ctx.runQuery(api.channelConnections.getDecryptedBotToken, {
+        connectionId: connectionId as any,
+      });
+
+      // Send message to Telegram
+      const telegramApiUrl = `https://api.telegram.org/bot${botTokenData.botToken}/sendMessage`;
+      await fetch(telegramApiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: parseInt(chatId, 10),
+          text: result.response,
+        }),
+      });
+
+      // Update connection activity
+      await ctx.runMutation(api.channelConnections.updateActivity, {
+        id: connectionId as any,
+      });
+    } catch (error) {
+      console.error("Failed to send Telegram reply:", error);
+    }
+
+    return new Response(JSON.stringify({ status: "ok" }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }),
+});
+
 export default http;
