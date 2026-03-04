@@ -120,6 +120,9 @@ export function registerAgentsCommand(program: Command) {
     .argument('<id>', 'Agent ID')
     .option('--name <name>', 'New name')
     .option('--model <model>', 'New model')
+    .option('--description <text>', 'New description')
+    .option('--provider <provider>', 'New provider')
+    .option('--active <true|false>', 'Set active status')
     .option('--instructions <text>', 'New instructions')
     .description('Edit an agent')
     .action(async (id, opts) => {
@@ -132,6 +135,9 @@ export function registerAgentsCommand(program: Command) {
 
       const updates: Record<string, any> = {};
       if (opts.name) updates.name = opts.name;
+      if (opts.description) updates.description = opts.description;
+      if (opts.provider) updates.provider = opts.provider;
+      if (opts.active !== undefined) updates.isActive = opts.active === 'true' || opts.active === true;
       if (opts.model) {
         let agentProvider = 'openai';
         let agentModel = opts.model;
@@ -148,9 +154,15 @@ export function registerAgentsCommand(program: Command) {
       if (Object.keys(updates).length === 0) {
         const a = agent as any;
         const name = await prompt(`Name [${a.name}]: `);
+        const description = await prompt(`Description [${a.description || 'none'}]: `);
         const model = await prompt(`Model [${a.model}]: `);
+        const provider = await prompt(`Provider [${a.provider || 'openai'}]: `);
+        const active = await prompt(`Active [${a.isActive ? 'true' : 'false'}]: `);
         const instr = await prompt(`Instructions [keep current]: `);
         if (name) updates.name = name;
+        if (description) updates.description = description;
+        if (provider) updates.provider = provider;
+        if (active) updates.isActive = active === 'true' || active === '1';
         if (model) {
           let agentProvider = 'openai';
           let agentModel = model;
