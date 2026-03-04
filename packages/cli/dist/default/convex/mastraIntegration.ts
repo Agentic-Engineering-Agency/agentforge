@@ -434,6 +434,30 @@ export const executeAgent = action({
           userId: args.userId,
           cost,
         });
+
+        // Also log token usage to logs table for observability
+        await ctx.runMutation(api.logs.add, {
+          level: "info",
+          source: "mastraIntegration",
+          message: `Agent execution successful: ${result.text.slice(0, 100)}`,
+          metadata: {
+            agentId: args.agentId,
+            threadId,
+            sessionId,
+            latencyMs: result.latencyMs,
+            didFailover: result.didFailover,
+          },
+          userId: args.userId,
+          agentId: args.agentId,
+          sessionId,
+          threadId: threadId,
+          inputTokens: result.usage.promptTokens,
+          outputTokens: result.usage.completionTokens,
+          totalTokens: result.usage.totalTokens,
+          costUsd: cost,
+          model: result.model,
+          provider: result.provider,
+        });
       }
 
       return {
@@ -450,18 +474,12 @@ export const executeAgent = action({
     } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
+      const errorCategory = classifyError(error);
 
       // Update session status to error
       await ctx.runMutation(api.sessions.updateStatus, {
         sessionId,
         status: "error",
-      });
-
-      // Add error message to thread
-      await ctx.runMutation(api.messages.add, {
-        threadId,
-        role: "assistant",
-        content: `Error: ${errorMessage}`,
       });
 
       // Log the error
@@ -473,10 +491,35 @@ export const executeAgent = action({
           agentId: args.agentId,
           threadId,
           sessionId,
+          errorCategory,
         },
         userId: args.userId,
       });
 
+      // Return structured error response for auth errors instead of throwing
+      if (errorCategory === "auth_error") {
+        const failoverChain = buildFailoverChain(agent as {
+          provider?: string;
+          model?: string;
+          failoverModels?: Array<{ provider: string; model: string }>;
+        });
+
+        return {
+          success: false,
+          threadId: threadId as string,
+          sessionId,
+          response: `Agent execution failed: No API key configured for provider "${agent.provider || "openai"}".
+Run: agentforge agents edit ${agentId} --provider anthropic
+Or configure your key: agentforge settings set ${agent.provider?.toUpperCase() || "OPENAI"}_API_KEY sk-...`,
+          provider: agent.provider || "openai",
+          model: agent.model || "unknown",
+          didFailover: false,
+          latencyMs: 0,
+          error: "auth_error",
+        } as ExecuteAgentResult;
+      }
+
+      // For other errors, still throw to maintain existing behavior
       throw error;
     }
   },

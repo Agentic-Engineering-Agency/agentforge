@@ -42,49 +42,48 @@ function FilesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Convex queries
-  // TODO: wire folderId filter once folders table is queryable via Convex
   const filesResult = useQuery(api.files.list, currentFolderId ? { folderId: currentFolderId as any } : {});
   const files = filesResult ?? [];
+
+  // Folders query from Convex
+  const foldersResult = useQuery(api.folders.list, currentFolderId ? { parentId: currentFolderId as any } : {});
+  const allFoldersResult = useQuery(api.folders.list, {});
+  const folders = foldersResult ?? [];
+  const allFolders = allFoldersResult ?? [];
 
   // Convex mutations
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
   const confirmUpload = useMutation(api.files.confirmUpload);
   const removeFile = useMutation(api.files.remove);
   const updateFile = useMutation(api.files.update);
+  const createFolder = useMutation(api.folders.create);
+  const renameFolder = useMutation(api.folders.update);
+  const deleteFolder = useMutation(api.folders.remove);
 
-  // Folder state is local until a folders Convex table query is available
-  // TODO: replace with useQuery(api.folders.list, ...) once wired
-  const [folders, setFolders] = useState<FolderItem[]>([
-    { id: "f1", name: "Documents", parentId: null, createdAt: Date.now() - 86400000 * 5 },
-    { id: "f2", name: "Images", parentId: null, createdAt: Date.now() - 86400000 * 3 },
-    { id: "f3", name: "Agent Data", parentId: null, createdAt: Date.now() - 86400000 * 2 },
-    { id: "f4", name: "Reports", parentId: "f1", createdAt: Date.now() - 86400000 },
-    { id: "f5", name: "Exports", parentId: null, createdAt: Date.now() - 86400000 * 7 },
-  ]);
-
-  const currentFolders = folders.filter((f) => f.parentId === currentFolderId);
+  const currentFolders = folders.filter((f: any) => (f.parentId ?? null) === currentFolderId);
   const currentFiles = files.filter((f: any) => (f.folderId ?? null) === currentFolderId);
-  const filteredFolders = searchQuery ? currentFolders.filter((f) => f.name.toLowerCase().includes(searchQuery.toLowerCase())) : currentFolders;
+  const filteredFolders = searchQuery ? currentFolders.filter((f: any) => f.name.toLowerCase().includes(searchQuery.toLowerCase())) : currentFolders;
   const filteredFiles = searchQuery ? currentFiles.filter((f: any) => f.name.toLowerCase().includes(searchQuery.toLowerCase())) : currentFiles;
 
   const breadcrumbs: { id: string | null; name: string }[] = [{ id: null, name: "Root" }];
   let crumbId = currentFolderId;
   const crumbParts: { id: string; name: string }[] = [];
   while (crumbId) {
-    const folder = folders.find((f) => f.id === crumbId);
-    if (folder) { crumbParts.unshift({ id: folder.id, name: folder.name }); crumbId = folder.parentId; } else break;
+    const folder = allFolders.find((f: any) => f._id === crumbId);
+    if (folder) { crumbParts.unshift({ id: folder._id, name: folder.name }); crumbId = folder.parentId ?? null; } else break;
   }
   breadcrumbs.push(...crumbParts);
 
-  const handleCreateFolder = () => {
+  const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
-    // TODO: replace with useMutation(api.folders.create) once available
-    setFolders([...folders, { id: `f_${Date.now()}`, name: newFolderName.trim(), parentId: currentFolderId, createdAt: Date.now() }]);
+    await createFolder({
+      name: newFolderName.trim(),
+      parentId: currentFolderId ? (currentFolderId as any) : undefined,
+    });
     setNewFolderName(""); setShowNewFolderModal(false);
   };
-  const handleDeleteFolder = (id: string) => {
-    // TODO: replace with useMutation(api.folders.remove) once available
-    setFolders(folders.filter((f) => f.id !== id));
+  const handleDeleteFolder = async (id: string) => {
+    await deleteFolder({ id: id as any });
   };
   const handleDeleteFile = async (id: string) => {
     await removeFile({ id: id as any });
@@ -92,8 +91,7 @@ function FilesPage() {
   const handleRename = async () => {
     if (!renameTarget || !renameName.trim()) return;
     if (renameTarget.type === "folder") {
-      // TODO: replace with useMutation(api.folders.update) once available
-      setFolders(folders.map((f) => (f.id === renameTarget.id ? { ...f, name: renameName.trim() } : f)));
+      await renameFolder({ id: renameTarget.id as any, name: renameName.trim() });
     } else {
       await updateFile({ id: renameTarget.id as any, name: renameName.trim() });
     }
@@ -182,11 +180,11 @@ function FilesPage() {
             </div>
           ) : viewMode === "grid" ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
-              {filteredFolders.map((folder) => (
-                <div key={folder.id} className="group bg-card border rounded-lg p-4 hover:border-primary/50 cursor-pointer transition-colors relative" onDoubleClick={() => setCurrentFolderId(folder.id)}>
+              {filteredFolders.map((folder: any) => (
+                <div key={folder._id} className="group bg-card border rounded-lg p-4 hover:border-primary/50 cursor-pointer transition-colors relative" onDoubleClick={() => setCurrentFolderId(folder._id)}>
                   <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                    <button onClick={(e) => { e.stopPropagation(); openRename(folder.id, folder.name, "folder"); }} className="p-1 hover:bg-accent rounded"><Edit2 className="h-3 w-3" /></button>
-                    <button onClick={(e) => { e.stopPropagation(); handleDeleteFolder(folder.id); }} className="p-1 hover:bg-destructive/20 rounded text-destructive"><Trash2 className="h-3 w-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); openRename(folder._id, folder.name, "folder"); }} className="p-1 hover:bg-accent rounded"><Edit2 className="h-3 w-3" /></button>
+                    <button onClick={(e) => { e.stopPropagation(); void handleDeleteFolder(folder._id); }} className="p-1 hover:bg-destructive/20 rounded text-destructive"><Trash2 className="h-3 w-3" /></button>
                   </div>
                   <Folder className="h-10 w-10 text-ae-accent mb-2" /><p className="text-sm font-medium truncate">{folder.name}</p><p className="text-xs text-muted-foreground mt-1">{formatDate(folder.createdAt)}</p>
                 </div>
@@ -207,11 +205,11 @@ function FilesPage() {
               <table className="w-full text-sm">
                 <thead><tr className="border-b text-muted-foreground text-left"><th className="px-4 py-3 font-medium">Name</th><th className="px-4 py-3 font-medium">Type</th><th className="px-4 py-3 font-medium">Size</th><th className="px-4 py-3 font-medium">Modified</th><th className="px-4 py-3 font-medium w-24">Actions</th></tr></thead>
                 <tbody>
-                  {filteredFolders.map((folder) => (
-                    <tr key={folder.id} className="border-b hover:bg-accent/50 cursor-pointer" onDoubleClick={() => setCurrentFolderId(folder.id)}>
+                  {filteredFolders.map((folder: any) => (
+                    <tr key={folder._id} className="border-b hover:bg-accent/50 cursor-pointer" onDoubleClick={() => setCurrentFolderId(folder._id)}>
                       <td className="px-4 py-3 flex items-center gap-2"><Folder className="h-4 w-4 text-ae-accent" /><span className="font-medium">{folder.name}</span></td>
                       <td className="px-4 py-3 text-muted-foreground">Folder</td><td className="px-4 py-3 text-muted-foreground">—</td><td className="px-4 py-3 text-muted-foreground">{formatDate(folder.createdAt)}</td>
-                      <td className="px-4 py-3"><div className="flex items-center gap-1"><button onClick={() => openRename(folder.id, folder.name, "folder")} className="p-1 hover:bg-accent rounded"><Edit2 className="h-3 w-3" /></button><button onClick={() => handleDeleteFolder(folder.id)} className="p-1 hover:bg-destructive/20 rounded text-destructive"><Trash2 className="h-3 w-3" /></button></div></td>
+                      <td className="px-4 py-3"><div className="flex items-center gap-1"><button onClick={() => openRename(folder._id, folder.name, "folder")} className="p-1 hover:bg-accent rounded"><Edit2 className="h-3 w-3" /></button><button onClick={() => void handleDeleteFolder(folder._id)} className="p-1 hover:bg-destructive/20 rounded text-destructive"><Trash2 className="h-3 w-3" /></button></div></td>
                     </tr>
                   ))}
                   {filteredFiles.map((file: any) => { const Icon = getFileIcon(file.mimeType ?? file.type ?? ""); return (

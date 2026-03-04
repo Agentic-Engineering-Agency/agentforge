@@ -29,6 +29,19 @@ export const list = query({
   },
 });
 
+// Query: Get logs by sessionId (for run trace view)
+export const getBySessionId = query({
+  args: {
+    sessionId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("logs")
+      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId))
+      .collect();
+  },
+});
+
 // Mutation: Add a log entry
 export const add = mutation({
   args: {

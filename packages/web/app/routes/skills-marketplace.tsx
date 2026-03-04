@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
 import { useState, useMemo } from "react";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
 import {
   Search,
   Download,
@@ -109,18 +111,19 @@ function SkillsMarketplace() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [installingSkill, setInstallingSkill] = useState<string | null>(null);
 
-  // TODO: Replace with Convex queries
-  // const allSkills = useQuery(api.skillMarketplace.listSkills, {});
-  // const featuredSkills = useQuery(api.skillMarketplace.getFeaturedSkills);
-  const allSkills = MOCK_SKILLS;
+  // Convex queries
+  const allSkillsResult = useQuery(api.skillMarketplace.listSkills, {});
+  const allSkills = allSkillsResult ?? MOCK_SKILLS;
+
+  const installSkill = useMutation(api.skillMarketplace.install);
 
   const filteredSkills = useMemo(() => {
-    return allSkills.filter((skill) => {
+    return allSkills.filter((skill: MarketplaceSkill) => {
       const matchesSearch =
         !searchQuery ||
         skill.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         skill.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        skill.tags.some((t) => t.toLowerCase().includes(searchQuery.toLowerCase()));
+        skill.tags.some((t: string) => t.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesCategory =
         selectedCategory === "all" || skill.category === selectedCategory;
       return matchesSearch && matchesCategory;
@@ -128,14 +131,19 @@ function SkillsMarketplace() {
   }, [allSkills, searchQuery, selectedCategory]);
 
   const featuredSkills = useMemo(
-    () => allSkills.filter((s) => s.featured),
+    () => allSkills.filter((s: MarketplaceSkill) => s.featured),
     [allSkills],
   );
 
   const handleInstall = async (skillName: string) => {
     setInstallingSkill(skillName);
-    // TODO: Call marketplace install
-    setTimeout(() => setInstallingSkill(null), 2000);
+    try {
+      await installSkill({ skillName });
+    } catch (error) {
+      console.error("Failed to install skill:", error);
+    } finally {
+      setInstallingSkill(null);
+    }
   };
 
   return (
@@ -186,7 +194,7 @@ function SkillsMarketplace() {
               <h2 className="text-lg font-semibold">Featured</h2>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {featuredSkills.map((skill) => (
+              {featuredSkills.map((skill: MarketplaceSkill) => (
                 <SkillCard
                   key={skill._id}
                   skill={skill}
@@ -212,7 +220,7 @@ function SkillsMarketplace() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSkills.map((skill) => (
+              {filteredSkills.map((skill: MarketplaceSkill) => (
                 <SkillCard
                   key={skill._id}
                   skill={skill}

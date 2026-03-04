@@ -88,15 +88,29 @@ function statusBadgeClass(status: RunSummary["status"]): string {
 function AgentRunPage() {
   const { runId } = Route.useParams();
 
-  // Real Convex query - use api.workflows.getRun which returns workflow run data
-  // runId is a string URL param, need to use it as-is for Convex ID lookup
+  // Get all runs and filter by runId (workaround since runId is a string URL param)
   const runData = useQuery(api.workflows.listRuns, {});
-  const run = runData?.find((r: any) => r._id === runId);
+  const run = runData?.find((r: any) => r._id === runId || r._id.endsWith(runId));
+
+  // Get run steps for this run
+  const runSteps = useQuery(api.workflows.getRunSteps,
+    run ? { runId: run._id as any } : "skip"
+  );
 
   // For now, show loading state or empty state if run not found
-  // TODO: Implement proper run event tracking when TraceSpan data is available
   const isLoading = runData === undefined;
-  const events: RunEvent[] = [];
+
+  // Convert run steps to events for the timeline
+  const events: RunEvent[] = (runSteps ?? []).map((step: any) => ({
+    id: step._id,
+    type: step.error ? "error" : "llm",
+    name: step.name || step.stepId || "Unknown Step",
+    timestamp: step.startedAt || step.createdAt || Date.now(),
+    durationMs: step.startedAt && step.completedAt ? step.completedAt - step.startedAt : undefined,
+    details: { output: step.output, input: step.input },
+    error: step.error,
+  }));
+
   const summary: RunSummary = run ? {
     runId: run._id,
     status: run.status === "failed" ? "error" : run.status === "completed" ? "completed" : "running",
@@ -105,7 +119,7 @@ function AgentRunPage() {
     totalDurationMs: run.completedAt ? run.completedAt - run.startedAt : Date.now() - run.startedAt,
     totalCost: 0,
     model: "N/A",
-    eventCount: 0,
+    eventCount: events.length,
   } : {
     runId,
     status: "running",

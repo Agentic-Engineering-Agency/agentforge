@@ -261,3 +261,16 @@ export const endSession = mutation({
     return session._id;
   },
 });
+
+
+export const bulkUpdateStatus = mutation({
+  args: { status: v.string() },
+  handler: async (ctx, args) => {
+    const all = await ctx.db.query("sessions").collect();
+    const stale = all.filter(s => s.status !== "completed" && s.status !== "deleted");
+    for (const s of stale) {
+      await ctx.db.patch(s._id, { status: args.status });
+    }
+    return { updated: stale.length };
+  },
+});

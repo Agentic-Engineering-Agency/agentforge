@@ -662,4 +662,28 @@ export default defineSchema({
     .index("byUserId", ["userId"])
     .index("byProjectId", ["projectId"])
     .index("byCreatedAt", ["createdAt"]),
+
+  // Channel connections for messaging platforms (Telegram, Slack, Discord)
+  channelConnections: defineTable({
+    agentId: v.string(),
+    channel: v.string(), // 'telegram' | 'slack' | 'discord' | 'whatsapp'
+    config: v.object({
+      botToken: v.optional(v.string()), // encrypted
+      iv: v.optional(v.string()), // initialization vector for decryption
+      webhookSecret: v.optional(v.string()),
+      teamId: v.optional(v.string()), // Slack
+      botUsername: v.optional(v.string()),
+    }),
+    status: v.string(), // 'active' | 'error' | 'disabled'
+    lastActivity: v.optional(v.float64()),
+    messageCount: v.optional(v.float64()),
+    userId: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    projectId: v.optional(v.id("projects")),
+  })
+    .index("byAgent", ["agentId"])
+    .index("byChannel", ["channel"])
+    .index("byUserId", ["userId"])
+    .index("byProjectId", ["projectId"]),
 });
