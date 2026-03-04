@@ -118,6 +118,42 @@ export const getWithMessages = query({
   },
 });
 
+// Query: Get session by ID with message preview
+export const getWithMessages = query({
+  args: { sessionId: v.string() },
+  handler: async (ctx, args) => {
+    // Try looking up by Convex _id first, then fall back to sessionId string field
+    let session = null;
+    try { session = await ctx.db.get(args.sessionId as any); } catch {}
+    if (!session) {
+      session = await ctx.db
+        .query("sessions")
+        .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
+        .first();
+    }
+
+    if (!session) {
+      return null;
+    }
+
+    // Get the last 3 messages for this thread
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("byThread", (q) => q.eq("threadId", session.threadId))
+      .order("desc")
+      .take(3);
+
+    // Reverse to get chronological order
+    const messagePreview = messages.reverse();
+
+    return {
+      ...session,
+      messagePreview,
+      messageCount: messagePreview.length,
+    };
+  },
+});
+
 // Query: Get active sessions
 export const listActive = query({
   args: {
@@ -221,6 +257,17 @@ export const updateStatus = mutation({
   },
 });
 
+// Query: List sessions by agent
+export const listByAgent = query({
+  args: { agentId: v.string() },
+  handler: async (ctx, args) => {
+    return await ctx.db
+      .query("sessions")
+      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
+      .collect();
+  },
+});
+
 // Mutation: Delete session
 export const remove = mutation({
   args: { sessionId: v.string() },
@@ -239,23 +286,9 @@ export const remove = mutation({
   },
 });
 
-// Query: List sessions by agent ID (ordered by createdAt desc)
-export const listByAgent = query({
-  args: { agentId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("sessions")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-      .order("desc")
-      .collect();
-  },
-});
-
-// Mutation: End session (alias for updateStatus with "completed")
+// Mutation: End session
 export const endSession = mutation({
-  args: {
-    sessionId: v.string(),
-  },
+  args: { sessionId: v.string() },
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
