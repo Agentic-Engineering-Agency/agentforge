@@ -278,11 +278,11 @@ export const generateContext = action({
   },
   handler: async (ctx, args) => {
     // Get thread and messages
-    const thread = await ctx.runQuery(api.threads.get, { id: args.threadId });
-    const messages = await ctx.runQuery(api.messages.list, {
-      threadId: args.threadId,
+    const thread = await ctx.runQuery(api.threads.getThread, { threadId: args.threadId });
+    const messages = await ctx.runQuery(api.messages.getByThread, {
+      threadId: args.threadId as string,
     });
-    
+
     if (!thread) {
       throw new Error(`Thread ${args.threadId} not found`);
     }

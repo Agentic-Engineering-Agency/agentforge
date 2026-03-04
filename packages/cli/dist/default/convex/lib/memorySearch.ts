@@ -212,8 +212,9 @@ export async function vectorSearch(
   const docs = await Promise.all(
     vectorResults.map(async (result: { _id: string; _score: number }) => {
       try {
-        const doc = await ctx.runQuery(api.memory.get, { id: result._id as any });
-        return doc ? { doc, score: result._score } : null;
+        // TODO: Replace with direct memoryEntries query when memory.ts is implemented
+        // For now, return null to skip this result
+        return null;
       } catch {
         return null;
       }
@@ -255,13 +256,11 @@ export async function textSearch(
   if (queryTerms.length === 0) return [];
 
   // Fetch recent candidate memories
-  const candidates = await ctx.runQuery(api.memory.listRecent, {
-    agentId,
-    projectId: projectId as any,
-    limit: TEXT_SEARCH_CANDIDATE_LIMIT,
-  });
+  // TODO: Replace with direct memoryEntries query when memory.ts is implemented
+  // For now, return empty array
+  const candidates: any[] = [];
 
-  if (!candidates || (candidates as any[]).length === 0) return [];
+  if (!candidates || candidates.length === 0) return [];
 
   const candidateList = candidates as any[];
 
