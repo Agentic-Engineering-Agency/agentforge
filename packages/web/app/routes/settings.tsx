@@ -1,20 +1,31 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import React, { useState } from 'react';
-// import { useQuery, useMutation } from "convex/react";
-// import { api } from "../../convex/_generated/api";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "../../../../convex/_generated/api";
+import type { Id } from "../../../../convex/_generated/dataModel";
 
 import * as Tabs from '@radix-ui/react-tabs';
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Select from '@radix-ui/react-select';
 import * as Switch from '@radix-ui/react-switch';
-import { Settings, Key, Palette, Shield, Download, Upload, AlertTriangle, X, Plus, Trash2, ChevronDown, Lock, Eye, EyeOff, Clock, Activity, ShieldCheck } from 'lucide-react';
+import { Settings, Key, Palette, Shield, Download, Upload, AlertTriangle, X, Plus, Trash2, ChevronDown, Lock, Eye, EyeOff, Clock, Activity, ShieldCheck, Copy, CheckCircle, KeyRound } from 'lucide-react';
 
 // Mock data and types
 const AVAILABLE_PROVIDERS = ["OpenAI", "Anthropic", "OpenRouter", "Google", "xAI"];
 
 type ApiKey = { id: string; provider: string; maskedKey: string; createdAt: string };
 type ProviderSetting = { id: string; name: string; enabled: boolean };
+
+// API Access Token type (from Convex)
+type ApiAccessToken = {
+  _id: Id<"apiAccessTokens">;
+  name: string;
+  token: string;
+  createdAt: number;
+  expiresAt?: number;
+  isActive: boolean;
+};
 
 // --- Main Component --- //
 export const Route = createFileRoute('/settings')({ component: SettingsPage });
@@ -88,6 +99,7 @@ function SettingsPage() {
             <TabTrigger value="providers" icon={<Shield />}>Providers</TabTrigger>
             <TabTrigger value="appearance" icon={<Palette />}>Appearance</TabTrigger>
             <TabTrigger value="vault" icon={<Lock />}>Vault</TabTrigger>
+            <TabTrigger value="tokens" icon={<KeyRound />}>Tokens</TabTrigger>
             <TabTrigger value="advanced" icon={<AlertTriangle />}>Advanced</TabTrigger>
           </Tabs.List>
 
@@ -95,6 +107,7 @@ function SettingsPage() {
           <Tabs.Content value="apiKeys"><ApiKeysTab keys={apiKeys} onAdd={handleAddApiKey} onDelete={handleDeleteApiKey} /></Tabs.Content>
           <Tabs.Content value="providers"><ProvidersTab providers={providerSettings} defaultProvider={defaultProvider} onToggle={handleProviderToggle} onSetDefault={handleSetDefaultProvider} /></Tabs.Content>
           <Tabs.Content value="vault"><VaultTab /></Tabs.Content>
+          <Tabs.Content value="tokens"><TokensTab /></Tabs.Content>
           <Tabs.Content value="appearance"><AppearanceTab appearance={appearance} setAppearance={setAppearance} /></Tabs.Content>
           <Tabs.Content value="advanced"><AdvancedTab /></Tabs.Content>
         </Tabs.Root>
@@ -537,6 +550,227 @@ function VaultTab() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
+    </div>
+  );
+}
+
+// ============================================================
+// TOKENS TAB - API Access Token Management (SPEC-004)
+// ============================================================
+type GeneratedTokenData = { id: string; token: string } | null;
+
+function TokensTab() {
+  // Convex queries and mutations
+  const tokens = useQuery(api.apiAccessTokens.list, {}) as ApiAccessToken[] | undefined;
+  const generateToken = useMutation(api.apiAccessTokens.generate);
+  const revokeToken = useMutation(api.apiAccessTokens.revoke);
+
+  // Local state
+  const [newTokenName, setNewTokenName] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generatedToken, setGeneratedToken] = useState<GeneratedTokenData>(null);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Token masking helper
+  const maskToken = (token: string): string => {
+    if (token.length <= 12) return token;
+    return `${token.slice(0, 8)}...${token.slice(-4)}`;
+  };
+
+  // Generate token handler
+  const handleGenerate = async () => {
+    if (!newTokenName.trim()) {
+      setError('Token name is required');
+      return;
+    }
+
+    setIsGenerating(true);
+    setError(null);
+
+    try {
+      const result = await generateToken({ name: newTokenName.trim() }) as { id: string; token: string };
+      setGeneratedToken({ id: result.id, token: result.token });
+      setNewTokenName('');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to generate token');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Revoke token handler
+  const handleRevoke = async (id: Id<"apiAccessTokens">) => {
+    if (!confirm('Are you sure you want to revoke this token? This action cannot be undone.')) return;
+
+    try {
+      await revokeToken({ id });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to revoke token');
+    }
+  };
+
+  // Copy to clipboard handler
+  const handleCopy = async () => {
+    if (generatedToken?.token) {
+      await navigator.clipboard.writeText(generatedToken.token);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // Dismiss token reveal
+  const handleDismiss = () => {
+    setGeneratedToken(null);
+    setCopied(false);
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Generate Token Form */}
+      <Card>
+        <div className="mb-4">
+          <h3 className="text-xl font-semibold flex items-center gap-2">
+            <KeyRound className="w-5 h-5 text-primary" />
+            API Access Tokens
+          </h3>
+          <p className="text-muted-foreground mt-1">
+            Generate tokens for authenticating API requests to the /v1/chat/completions endpoint.
+          </p>
+        </div>
+
+        {/* Inline Generate Form */}
+        <div className="flex items-center gap-3">
+          <input
+            type="text"
+            value={newTokenName}
+            onChange={(e) => setNewTokenName(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
+            placeholder="Token name (e.g., Production App)"
+            className="flex-1 bg-background border border-border rounded-md px-3 py-2"
+            disabled={isGenerating}
+          />
+          <Button onClick={handleGenerate} disabled={isGenerating || !newTokenName.trim()}>
+            {isGenerating ? 'Generating...' : 'Generate Token'}
+          </Button>
+        </div>
+        {error && (
+          <p className="text-destructive text-sm mt-2">{error}</p>
+        )}
+      </Card>
+
+      {/* One-time Token Reveal Callout */}
+      {generatedToken && (
+        <Card className="border-primary bg-primary/5">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <CheckCircle className="w-5 h-5 text-green-500" />
+                <h4 className="font-semibold text-foreground">Token Generated Successfully!</h4>
+              </div>
+              <p className="text-sm text-muted-foreground mb-3">
+                Save this token now — it won't be shown again.
+              </p>
+              <div className="bg-background border border-border rounded-md p-3 mb-3">
+                <code className="text-sm font-mono break-all text-primary">
+                  {generatedToken.token}
+                </code>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={handleCopy}>
+                  <Copy className="w-4 h-4 mr-2" />
+                  {copied ? 'Copied!' : 'Copy Token'}
+                </Button>
+                <Button variant="primary" onClick={handleDismiss}>
+                  Done
+                </Button>
+              </div>
+            </div>
+            <button
+              onClick={handleDismiss}
+              className="text-muted-foreground hover:text-foreground ml-4"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </Card>
+      )}
+
+      {/* Tokens List */}
+      <Card>
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold">Your Tokens</h3>
+          <p className="text-sm text-muted-foreground">
+            Active tokens can be used to authenticate API requests.
+          </p>
+        </div>
+
+        {!tokens || tokens.length === 0 ? (
+          <div className="text-center py-12 text-muted-foreground">
+            <KeyRound className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p>No tokens generated yet.</p>
+            <p className="text-sm">Create a token above to get started.</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Name</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Token</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Created</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Expires</th>
+                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
+                  <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tokens.map((token) => (
+                  <tr key={token._id} className="border-b border-border hover:bg-muted/50">
+                    <td className="py-3 px-4">
+                      <span className="font-medium">{token.name}</span>
+                    </td>
+                    <td className="py-3 px-4">
+                      <code className="text-sm font-mono text-muted-foreground">
+                        {maskToken(token.token)}
+                      </code>
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">
+                      {new Date(token.createdAt).toLocaleDateString()}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-muted-foreground">
+                      {token.expiresAt
+                        ? new Date(token.expiresAt).toLocaleDateString()
+                        : 'Never'}
+                    </td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          token.isActive
+                            ? 'bg-green-500/10 text-green-500'
+                            : 'bg-red-500/10 text-red-500'
+                        }`}
+                      >
+                        {token.isActive ? 'Active' : 'Revoked'}
+                      </span>
+                    </td>
+                    <td className="py-3 px-4 text-right">
+                      {token.isActive && (
+                        <button
+                          onClick={() => handleRevoke(token._id)}
+                          className="text-destructive hover:text-destructive/80 text-sm font-medium"
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
     </div>
   );
 }
