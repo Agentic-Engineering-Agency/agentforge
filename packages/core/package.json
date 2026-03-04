@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/core",
-  "version": "0.11.18",
+  "version": "0.11.19",
   "description": "Core agent primitives, sandbox integration, and MCP server for AgentForge",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -53,6 +53,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/google": "^1.0.0",
     "@discordjs/rest": "^2.4.0",
     "@e2b/code-interpreter": "^1.0.0",
     "@mastra/core": "^1.5.0",
