@@ -7,7 +7,7 @@
  * Uses the local Agent implementation for LLM calls.
  */
 
-import { Agent } from "./agent";
+import { Agent, type AgentConfig } from "./agent";
 
 export interface ResearchConfig {
   topic: string;

@@ -282,14 +282,15 @@ export const sendMessage = action({
     }
 
     // 2. Store the user message
-    await ctx.runMutation(api.chatMutations.addUserMessage, {
-      threadId: args.threadId,
+    await ctx.runMutation(api.messages.add, {
+      threadId: args.threadId as string,
+      role: "user",
       content: args.content,
     });
 
     // 3. Get conversation history for context
-    const history = await ctx.runQuery(api.chatMutations.getThreadMessages, {
-      threadId: args.threadId,
+    const history = await ctx.runQuery(api.messages.getByThread, {
+      threadId: args.threadId as string,
     });
 
     // Build messages array for the LLM (last 20 messages for context window)
@@ -318,7 +319,7 @@ export const sendMessage = action({
     // Load skills for this agent/project
     if (agent.projectId) {
       try {
-        const skills = await ctx.runQuery(api.skills.listInstalled, { projectId: agent.projectId });
+        const skills = await ctx.runQuery(api.skills.listInstalled, {});
         for (const skill of skills as any[]) {
           const md = skill.skillMdContent ?? `# ${skill.displayName ?? skill.name}\n\n${skill.description ?? ""}`;
           systemPromptParts.push(`\n<skill name="${skill.name}">\n${md}\n</skill>`);
@@ -436,10 +437,11 @@ export const sendMessage = action({
     }
     metadata.latencyMs = latencyMs;
 
-    await ctx.runMutation(api.chatMutations.addAssistantMessage, {
-      threadId: args.threadId,
+    await ctx.runMutation(api.messages.add, {
+      threadId: args.threadId as string,
+      role: "assistant",
       content: responseText,
-      metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+      tool_calls: Object.keys(metadata).length > 0 ? metadata : undefined,
     });
 
     // 8. Record usage metrics (non-blocking, best-effort)
@@ -530,11 +532,15 @@ export const startNewChat = action({
   },
   handler: async (ctx, args) => {
     // Create a new thread
-    const threadId = await ctx.runMutation(api.chatMutations.createThread, {
+    const newThreadId = await ctx.runMutation(api.threads.createThread, {
       agentId: args.agentId,
       name: args.threadName || "New Chat",
       userId: args.userId,
     });
+    if (!newThreadId) {
+      throw new Error('Failed to create thread');
+    }
+    const threadId = newThreadId;
 
     // Send the first message
     const result = await ctx.runAction(api.chat.sendMessage, {

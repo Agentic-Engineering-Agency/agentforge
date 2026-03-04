@@ -13,6 +13,8 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
+import { Agent } from "./lib/agent";
+import type { MessageListInput } from "./lib/agent";
 
 // ─── Pure context management functions (inlined for portability) ───────────────
 
@@ -117,7 +119,7 @@ export const summarizeContext = internalAction({
   handler: async (ctx, args): Promise<{ summary: string; tokensSaved: number }> => {
     const limit = args.limit ?? DEFAULT_TOKEN_LIMIT;
 
-    const messages = await ctx.runQuery(api.messages.list, { threadId: args.threadId });
+    const messages = await ctx.runQuery(api.messages.getByThread, { threadId: args.threadId as string });
     if (!messages || messages.length === 0) return { summary: "", tokensSaved: 0 };
 
     const typedMessages = messages as Array<{ role: string; content: string }>;

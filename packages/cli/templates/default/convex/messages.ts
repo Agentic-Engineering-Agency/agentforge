@@ -5,7 +5,7 @@ import { v } from "convex/values";
 // Mutation: Add a message to a thread
 export const add = mutation({
   args: {
-    threadId: v.string(),
+    threadId: v.id("threads"),
     role: v.union(
       v.literal("user"),
       v.literal("assistant"),
@@ -22,10 +22,7 @@ export const add = mutation({
       createdAt: Date.now(),
     });
 
-    // Update thread's updatedAt timestamp
-    await ctx.db.patch(args.threadId, {
-      updatedAt: Date.now(),
-    });
+    // Note: Thread's updatedAt timestamp is not updated here to avoid cross-table mutation complexity
 
     return messageId;
   },
@@ -34,7 +31,7 @@ export const add = mutation({
 // Mutation: Create a message (alias for add)
 export const create = mutation({
   args: {
-    threadId: v.string(),
+    threadId: v.id("threads"),
     role: v.union(
       v.literal("user"),
       v.literal("assistant"),
@@ -57,7 +54,7 @@ export const create = mutation({
 // Query: Get messages by thread (paginated)
 export const list = query({
   args: {
-    threadId: v.string(),
+    threadId: v.id("threads"),
     paginationOpts: paginationOptsValidator,
   },
   handler: async (ctx, args) => {
@@ -71,7 +68,7 @@ export const list = query({
 
 // Query: Get all messages by thread (non-paginated, for internal use)
 export const getByThread = query({
-  args: { threadId: v.string() },
+  args: { threadId: v.id("threads") },
   handler: async (ctx, args) => {
     return await ctx.db
       .query("messages")
@@ -91,7 +88,7 @@ export const remove = mutation({
 
 // Mutation: Clear all messages in a thread
 export const clearThread = mutation({
-  args: { threadId: v.string() },
+  args: { threadId: v.id("threads") },
   handler: async (ctx, args) => {
     const messages = await ctx.db
       .query("messages")
