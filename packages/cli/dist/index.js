@@ -14,8 +14,22 @@ import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs-extra";
 import { execSync } from "child_process";
+import os from "os";
+import { readFileSync } from "fs";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
+function isConvexLoggedIn() {
+  try {
+    const configPath = path.join(os.homedir(), ".convex", "config.json");
+    if (!fs.existsSync(configPath)) {
+      return false;
+    }
+    const config = JSON.parse(readFileSync(configPath, "utf-8"));
+    return !!config.accessToken && config.accessToken.length > 0;
+  } catch {
+    return false;
+  }
+}
 async function createProject(projectName, options) {
   const targetDir = path.resolve(process.cwd(), projectName);
   if (await fs.pathExists(targetDir)) {
@@ -98,6 +112,40 @@ async function createProject(projectName, options) {
   console.log(`
 \u26A1 Initializing Convex...
 `);
+  if (!isConvexLoggedIn()) {
+    console.warn(`  \u26A0\uFE0F  Not logged in to Convex`);
+    console.warn(`  Run: npx convex login`);
+    console.warn(`  Then run: cd ${projectName} && npx convex dev
+`);
+    console.log(`
+\u{1F389} AgentForge project "${projectName}" created successfully!
+
+Next steps:
+  cd ${projectName}
+
+  # Login to Convex (required)
+  npx convex login
+
+  # Start the Convex backend
+  npx convex dev
+
+  # In another terminal, launch the dashboard
+  agentforge dashboard
+
+  # Or chat with your agent from the CLI
+  agentforge chat
+
+  # Install skills to extend agent capabilities
+  agentforge skills list --registry
+  agentforge skills install web-search
+
+  # Check system status
+  agentforge status
+
+Documentation: https://github.com/Agentic-Engineering-Agency/agentforge
+`);
+    return;
+  }
   let convexReady = false;
   try {
     execSync("npx convex dev --once", {
@@ -110,7 +158,7 @@ async function createProject(projectName, options) {
   } catch {
     console.warn(
       `
-  \u26A0\uFE0F  Convex initialization skipped. Run "npx convex dev" to set up your backend.`
+  \u26A0\uFE0F  Convex initialization skipped. Run "cd ${projectName} && npx convex dev" to set up your backend.`
     );
   }
   if (!convexReady) {
@@ -225,8 +273,8 @@ import ora from "ora";
 // src/lib/credentials.ts
 import fs3 from "fs-extra";
 import path3 from "path";
-import os from "os";
-var CREDENTIALS_DIR = path3.join(os.homedir(), ".agentforge");
+import os2 from "os";
+var CREDENTIALS_DIR = path3.join(os2.homedir(), ".agentforge");
 var CREDENTIALS_FILE = path3.join(CREDENTIALS_DIR, "credentials.json");
 var DEFAULT_CLOUD_URL = "https://cloud.agentforge.ai";
 async function readCredentials() {
@@ -293,8 +341,8 @@ var CloudClient = class {
    */
   getUrl(endpoint) {
     const base = this.baseUrl.replace(/\/$/, "");
-    const path17 = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-    return `${base}${path17}`;
+    const path18 = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
+    return `${base}${path18}`;
   }
   /**
    * Get request headers with authentication
@@ -782,9 +830,188 @@ async function deployProject(options) {
   }
 }
 
+// src/commands/upgrade.ts
+import path5 from "path";
+import { fileURLToPath as fileURLToPath2 } from "url";
+import { readFileSync as readFileSync2, existsSync, readdirSync, statSync, copyFileSync, mkdirSync } from "fs";
+import readline from "readline";
+var __filename2 = fileURLToPath2(import.meta.url);
+var __dirname2 = path5.dirname(__filename2);
+function resolveTemplateDir() {
+  const searchDirs = [
+    path5.resolve(__dirname2, "..", "..", "default"),
+    // dist/default (built)
+    path5.resolve(__dirname2, "..", "..", "..", "templates", "default"),
+    // packages/cli/templates/default (dev)
+    path5.resolve(__dirname2, "..", "..", "..", "..", "templates", "default")
+    // fallback
+  ];
+  for (const dir of searchDirs) {
+    if (existsSync(dir)) {
+      return dir;
+    }
+  }
+  throw new Error("Template directory not found");
+}
+function walkDir(dir, basePath = dir, skipPatterns = ["_generated"]) {
+  const files = [];
+  if (!existsSync(dir)) {
+    return files;
+  }
+  const entries = readdirSync(dir);
+  for (const entry of entries) {
+    const fullPath = path5.join(dir, entry);
+    const stat2 = statSync(fullPath);
+    if (stat2.isDirectory()) {
+      if (skipPatterns.some((pattern) => entry.includes(pattern))) {
+        continue;
+      }
+      files.push(...walkDir(fullPath, basePath, skipPatterns));
+    } else {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+function getRelativePath(fullPath, basePath) {
+  return path5.relative(basePath, fullPath);
+}
+function compareFiles(templatePath, userPath) {
+  if (!existsSync(userPath)) {
+    return "new";
+  }
+  const templateContent = readFileSync2(templatePath, "utf-8");
+  const userContent = readFileSync2(userPath, "utf-8");
+  if (templateContent === userContent) {
+    return "identical";
+  }
+  return "modified";
+}
+function printDiffTable(diffs) {
+  if (diffs.length === 0) {
+    console.log("\n  \u2705 All files are up to date!\n");
+    return;
+  }
+  console.log("\n  Files to update:\n");
+  console.log("  \u250C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u252C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2510");
+  console.log("  \u2502 File                                       \u2502 Status   \u2502");
+  console.log("  \u251C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u253C\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2524");
+  for (const diff of diffs) {
+    const filename = diff.relativePath.padEnd(43).slice(0, 43);
+    let status;
+    let statusColor;
+    if (diff.changeType === "new") {
+      status = "NEW      ";
+      statusColor = "\x1B[32m";
+    } else {
+      status = "MODIFIED ";
+      statusColor = "\x1B[33m";
+    }
+    console.log(`  \u2502 ${filename} \u2502 ${statusColor}${status}\x1B[0m \u2502`);
+  }
+  console.log("  \u2514\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2534\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2518\n");
+}
+function promptConfirmation() {
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout
+  });
+  return new Promise((resolve4) => {
+    rl.question("  Apply these updates? [y/N] ", (answer) => {
+      rl.close();
+      resolve4(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
+    });
+  });
+}
+function backupFiles(files, projectDir) {
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+  const backupDir = path5.join(projectDir, "convex", `.backup-${timestamp}`);
+  mkdirSync(backupDir, { recursive: true });
+  for (const file of files) {
+    const userPath = path5.join(projectDir, "convex", file.relativePath);
+    if (existsSync(userPath)) {
+      const backupPath = path5.join(backupDir, file.relativePath);
+      mkdirSync(path5.dirname(backupPath), { recursive: true });
+      copyFileSync(userPath, backupPath);
+    }
+  }
+  return backupDir;
+}
+function applyUpdates(files, templateDir, projectDir) {
+  for (const file of files) {
+    const templatePath = path5.join(templateDir, "convex", file.relativePath);
+    const userPath = path5.join(projectDir, "convex", file.relativePath);
+    mkdirSync(path5.dirname(userPath), { recursive: true });
+    copyFileSync(templatePath, userPath);
+  }
+}
+async function upgradeProject(options) {
+  const projectDir = process.cwd();
+  const convexDir = path5.join(projectDir, "convex");
+  if (!existsSync(convexDir)) {
+    console.error("  Error: No convex/ directory found. Are you in an AgentForge project?");
+    process.exit(1);
+  }
+  console.log("\n\u{1F504} Checking for Convex template updates...\n");
+  let templateDir;
+  try {
+    templateDir = resolveTemplateDir();
+  } catch (err) {
+    console.error("  Error: Template directory not found");
+    process.exit(1);
+  }
+  const templateConvexDir = path5.join(templateDir, "convex");
+  if (!existsSync(templateConvexDir)) {
+    console.error("  Error: Template convex/ directory not found");
+    process.exit(1);
+  }
+  const templateFiles = walkDir(templateConvexDir);
+  const diffs = [];
+  for (const templatePath of templateFiles) {
+    const relativePath = getRelativePath(templatePath, templateConvexDir);
+    if (options.only && !relativePath.includes(options.only)) {
+      continue;
+    }
+    const userPath = path5.join(convexDir, relativePath);
+    const changeType = compareFiles(templatePath, userPath);
+    if (changeType !== "identical") {
+      diffs.push({ relativePath, changeType });
+    }
+  }
+  printDiffTable(diffs);
+  if (options.dryRun) {
+    console.log("  \u{1F50D} Dry run complete \u2014 no files modified\n");
+    return;
+  }
+  if (diffs.length === 0) {
+    return;
+  }
+  let shouldApply = options.yes;
+  if (!shouldApply) {
+    shouldApply = await promptConfirmation();
+  }
+  if (!shouldApply) {
+    console.log("  \u274C Upgrade cancelled\n");
+    return;
+  }
+  console.log("  \u{1F4E6} Backing up files...");
+  const backupDir = backupFiles(diffs, projectDir);
+  console.log(`  \u2705 Backup created at ${backupDir}
+`);
+  console.log("  \u{1F504} Applying updates...");
+  applyUpdates(diffs, templateDir, projectDir);
+  console.log(`  \u2705 Updated ${diffs.length} file(s)
+`);
+  console.log(`\u{1F389} Upgrade complete!
+`);
+  console.log(`  ${diffs.length} file(s) updated`);
+  console.log(`  Backup: ${backupDir}
+`);
+}
+
 // src/lib/convex-client.ts
 import fs5 from "fs-extra";
-import path5 from "path";
+import path6 from "path";
 function safeCwd() {
   try {
     return process.cwd();
@@ -801,7 +1028,7 @@ function getConvexUrl() {
   }
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path5.join(cwd, envFile);
+    const envPath = path6.join(cwd, envFile);
     if (fs5.existsSync(envPath)) {
       const content = fs5.readFileSync(envPath, "utf-8");
       const match = content.match(/CONVEX_URL\s*=\s*(.+)/);
@@ -810,7 +1037,7 @@ function getConvexUrl() {
       }
     }
   }
-  const convexEnv = path5.join(cwd, ".convex", "deployment.json");
+  const convexEnv = path6.join(cwd, ".convex", "deployment.json");
   if (fs5.existsSync(convexEnv)) {
     try {
       const data = JSON.parse(fs5.readFileSync(convexEnv, "utf-8"));
@@ -924,9 +1151,9 @@ function truncate(str, max) {
 }
 
 // src/commands/agents.ts
-import readline from "readline";
+import readline2 from "readline";
 function prompt(question) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline2.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve4) => rl.question(question, (ans) => {
     rl.close();
     resolve4(ans.trim());
@@ -1129,7 +1356,7 @@ function registerAgentsCommand(program2) {
 }
 
 // src/commands/chat.ts
-import readline2 from "readline";
+import readline3 from "readline";
 async function withTimeout(promise, timeoutMs, errorMessage) {
   const timeout = new Promise((_, reject) => {
     setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
@@ -1162,7 +1389,7 @@ function registerChatCommand(program2) {
         console.log(`  ${colors.cyan}${i + 1}.${colors.reset} ${a2.name} ${colors.dim}(${a2.id})${colors.reset}`);
       });
       console.log();
-      const rl2 = readline2.createInterface({ input: process.stdin, output: process.stdout });
+      const rl2 = readline3.createInterface({ input: process.stdin, output: process.stdout });
       const choice = await new Promise((r) => rl2.question("Select agent (number or ID): ", (a2) => {
         rl2.close();
         r(a2.trim());
@@ -1230,7 +1457,7 @@ function registerChatCommand(program2) {
     );
     const history = [];
     const isTTY = process.stdin.isTTY ?? false;
-    const rl = readline2.createInterface({
+    const rl = readline3.createInterface({
       input: process.stdin,
       output: isTTY ? process.stdout : void 0,
       terminal: isTTY,
@@ -1374,7 +1601,7 @@ ${colors.yellow}[Error: ${data.error}]${colors.reset}`);
 }
 
 // src/commands/sessions.ts
-import readline3 from "readline";
+import readline4 from "readline";
 function registerSessionsCommand(program2) {
   const sessions = program2.command("sessions").description("Manage sessions");
   sessions.command("list").option("--status <status>", "Filter by status (active, ended)").option("--json", "Output as JSON").description("List all sessions").action(async (opts) => {
@@ -1417,7 +1644,7 @@ function registerSessionsCommand(program2) {
     success(`Session "${id}" ended.`);
   });
   sessions.command("delete").argument("<id>", "Session ID").option("-f, --force", "Skip confirmation").description("Delete a session").action(async (id, opts) => {
-    const rl = readline3.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline4.createInterface({ input: process.stdin, output: process.stdout });
     const confirmPrompt = (question) => new Promise((resolve4) => rl.question(question, (ans) => {
       rl.close();
       resolve4(ans.trim());
@@ -1491,8 +1718,8 @@ function registerThreadsCommand(program2) {
 
 // src/commands/skills.ts
 import fs6 from "fs-extra";
-import path6 from "path";
-import readline4 from "readline";
+import path7 from "path";
+import readline5 from "readline";
 import { execSync as execSync3 } from "child_process";
 var SKILLS_DIR_NAME = "skills";
 var SKILLS_LOCK_FILE = "skills.lock.json";
@@ -1556,7 +1783,7 @@ var BUILTIN_REGISTRY = [
   }
 ];
 function prompt2(q) {
-  const rl = readline4.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline5.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -1564,14 +1791,14 @@ function prompt2(q) {
 }
 function resolveSkillsDir() {
   const cwd = process.cwd();
-  const workspaceSkillsDir = path6.join(cwd, WORKSPACE_DIR_NAME, SKILLS_DIR_NAME);
+  const workspaceSkillsDir = path7.join(cwd, WORKSPACE_DIR_NAME, SKILLS_DIR_NAME);
   if (fs6.existsSync(workspaceSkillsDir)) {
     return workspaceSkillsDir;
   }
-  return path6.join(cwd, SKILLS_DIR_NAME);
+  return path7.join(cwd, SKILLS_DIR_NAME);
 }
 function readSkillsLock(skillsDir) {
-  const lockPath = path6.join(path6.dirname(skillsDir), SKILLS_LOCK_FILE);
+  const lockPath = path7.join(path7.dirname(skillsDir), SKILLS_LOCK_FILE);
   if (fs6.existsSync(lockPath)) {
     try {
       return JSON.parse(fs6.readFileSync(lockPath, "utf-8"));
@@ -1581,7 +1808,7 @@ function readSkillsLock(skillsDir) {
   return { version: 1, skills: {} };
 }
 function writeSkillsLock(skillsDir, lock) {
-  const lockPath = path6.join(path6.dirname(skillsDir), SKILLS_LOCK_FILE);
+  const lockPath = path7.join(path7.dirname(skillsDir), SKILLS_LOCK_FILE);
   fs6.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
 }
 function parseSkillMd(content) {
@@ -1614,12 +1841,12 @@ function parseSkillMd(content) {
   }
 }
 function readSkillMetadata(skillDir) {
-  const skillMdPath = path6.join(skillDir, "SKILL.md");
+  const skillMdPath = path7.join(skillDir, "SKILL.md");
   if (!fs6.existsSync(skillMdPath)) return null;
   const content = fs6.readFileSync(skillMdPath, "utf-8");
   const { data } = parseSkillMd(content);
   return {
-    name: data.name || path6.basename(skillDir),
+    name: data.name || path7.basename(skillDir),
     description: data.description || "",
     version: data.version || "1.0.0",
     tags: data.tags || [],
@@ -2620,8 +2847,8 @@ function registerSkillsCommand(program2) {
       return;
     }
     const dirs = fs6.readdirSync(skillsDir).filter((d) => {
-      const fullPath = path6.join(skillsDir, d);
-      return fs6.statSync(fullPath).isDirectory() && fs6.existsSync(path6.join(fullPath, "SKILL.md"));
+      const fullPath = path7.join(skillsDir, d);
+      return fs6.statSync(fullPath).isDirectory() && fs6.existsSync(path7.join(fullPath, "SKILL.md"));
     });
     if (dirs.length === 0) {
       info("No skills installed. Browse available skills with:");
@@ -2630,7 +2857,7 @@ function registerSkillsCommand(program2) {
     }
     const lock = readSkillsLock(skillsDir);
     const skillData = dirs.map((d) => {
-      const meta = readSkillMetadata(path6.join(skillsDir, d));
+      const meta = readSkillMetadata(path7.join(skillsDir, d));
       const lockEntry = lock.skills[d];
       return {
         Name: meta?.name || d,
@@ -2651,8 +2878,8 @@ function registerSkillsCommand(program2) {
   });
   skills.command("install").argument("<name>", "Skill name from registry, GitHub URL, or local path").option("--from <source>", "Source: registry (default), github, local", "registry").description("Install a skill into the workspace").action(async (name, opts) => {
     const skillsDir = resolveSkillsDir();
-    const targetDir = path6.join(skillsDir, name.split("/").pop().replace(/\.git$/, ""));
-    if (fs6.existsSync(targetDir) && fs6.existsSync(path6.join(targetDir, "SKILL.md"))) {
+    const targetDir = path7.join(skillsDir, name.split("/").pop().replace(/\.git$/, ""));
+    if (fs6.existsSync(targetDir) && fs6.existsSync(path7.join(targetDir, "SKILL.md"))) {
       warn(`Skill "${name}" is already installed at ${targetDir}`);
       const overwrite = await prompt2("Overwrite? (y/N): ");
       if (overwrite.toLowerCase() !== "y") {
@@ -2666,29 +2893,29 @@ function registerSkillsCommand(program2) {
     let installedName = name;
     if (opts.from === "local" || fs6.existsSync(name)) {
       source = "local";
-      const sourcePath = path6.resolve(name);
+      const sourcePath = path7.resolve(name);
       if (!fs6.existsSync(sourcePath)) {
         error(`Local path not found: ${sourcePath}`);
         process.exit(1);
       }
-      if (!fs6.existsSync(path6.join(sourcePath, "SKILL.md"))) {
+      if (!fs6.existsSync(path7.join(sourcePath, "SKILL.md"))) {
         error(`No SKILL.md found in ${sourcePath}. Not a valid skill directory.`);
         process.exit(1);
       }
-      installedName = path6.basename(sourcePath);
-      const dest = path6.join(skillsDir, installedName);
+      installedName = path7.basename(sourcePath);
+      const dest = path7.join(skillsDir, installedName);
       fs6.copySync(sourcePath, dest);
       success(`Skill "${installedName}" installed from local path.`);
     } else if (opts.from === "github" || name.includes("github.com") || name.includes("/")) {
       source = "github";
       const repoUrl = name.includes("github.com") ? name : `https://github.com/${name}`;
       installedName = name.split("/").pop().replace(/\.git$/, "");
-      const dest = path6.join(skillsDir, installedName);
+      const dest = path7.join(skillsDir, installedName);
       info(`Cloning skill from ${repoUrl}...`);
       try {
         execSync3(`git clone --depth 1 ${repoUrl} ${dest} 2>&1`, { encoding: "utf-8" });
-        fs6.removeSync(path6.join(dest, ".git"));
-        if (!fs6.existsSync(path6.join(dest, "SKILL.md"))) {
+        fs6.removeSync(path7.join(dest, ".git"));
+        if (!fs6.existsSync(path7.join(dest, "SKILL.md"))) {
           error(`Cloned repo does not contain a SKILL.md. Not a valid skill.`);
           fs6.removeSync(dest);
           process.exit(1);
@@ -2717,17 +2944,17 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
         error(`No content generator for skill "${entry.name}".`);
         process.exit(1);
       }
-      const dest = path6.join(skillsDir, installedName);
+      const dest = path7.join(skillsDir, installedName);
       fs6.mkdirSync(dest, { recursive: true });
       for (const [filePath, content] of files) {
-        const fullPath = path6.join(dest, filePath);
-        fs6.mkdirSync(path6.dirname(fullPath), { recursive: true });
+        const fullPath = path7.join(dest, filePath);
+        fs6.mkdirSync(path7.dirname(fullPath), { recursive: true });
         fs6.writeFileSync(fullPath, content);
       }
       success(`Skill "${installedName}" installed from AgentForge registry.`);
     }
     const lock = readSkillsLock(skillsDir);
-    const meta = readSkillMetadata(path6.join(skillsDir, installedName));
+    const meta = readSkillMetadata(path7.join(skillsDir, installedName));
     lock.skills[installedName] = {
       name: installedName,
       version: meta?.version || "1.0.0",
@@ -2742,7 +2969,7 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
         Description: meta.description,
         Version: meta.version,
         Tags: (meta.tags || []).join(", ") || "\u2014",
-        Path: path6.join(skillsDir, installedName)
+        Path: path7.join(skillsDir, installedName)
       });
     }
     info("The skill is now available to agents via the Mastra Workspace.");
@@ -2770,7 +2997,7 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
   });
   skills.command("remove").argument("<name>", "Skill name to remove").option("--force", "Skip confirmation prompt", false).description("Remove an installed skill").action(async (name, opts) => {
     const skillsDir = resolveSkillsDir();
-    const skillDir = path6.join(skillsDir, name);
+    const skillDir = path7.join(skillsDir, name);
     if (!fs6.existsSync(skillDir)) {
       error(`Skill "${name}" not found in ${skillsDir}`);
       info("List installed skills with: agentforge skills list");
@@ -2833,17 +3060,17 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
       process.exit(1);
     }
     const skillsDir = resolveSkillsDir();
-    const skillDir = path6.join(skillsDir, name);
+    const skillDir = path7.join(skillsDir, name);
     if (fs6.existsSync(skillDir)) {
       error(`Skill "${name}" already exists at ${skillDir}`);
       process.exit(1);
     }
-    fs6.mkdirSync(path6.join(skillDir, "references"), { recursive: true });
-    fs6.mkdirSync(path6.join(skillDir, "scripts"), { recursive: true });
-    fs6.mkdirSync(path6.join(skillDir, "assets"), { recursive: true });
+    fs6.mkdirSync(path7.join(skillDir, "references"), { recursive: true });
+    fs6.mkdirSync(path7.join(skillDir, "scripts"), { recursive: true });
+    fs6.mkdirSync(path7.join(skillDir, "assets"), { recursive: true });
     const tagsYaml = tags.length > 0 ? `tags:
 ${tags.map((t) => `  - ${t}`).join("\n")}` : "tags: []";
-    fs6.writeFileSync(path6.join(skillDir, "SKILL.md"), `---
+    fs6.writeFileSync(path7.join(skillDir, "SKILL.md"), `---
 name: ${name}
 description: ${description}
 version: 1.0.0
@@ -2876,14 +3103,14 @@ See \`scripts/\` for executable scripts the agent can run.
 - Guideline two
 `);
     fs6.writeFileSync(
-      path6.join(skillDir, "references", "README.md"),
+      path7.join(skillDir, "references", "README.md"),
       `# References for ${name}
 
 Add supporting documentation here.
 `
     );
     fs6.writeFileSync(
-      path6.join(skillDir, "scripts", "example.ts"),
+      path7.join(skillDir, "scripts", "example.ts"),
       `#!/usr/bin/env npx tsx
 /**
  * Example script for ${name}
@@ -2911,8 +3138,8 @@ console.log('Hello from ${name}!');
   });
   skills.command("show <name>").description("Show full SKILL.md content for installed skill").action(async (name) => {
     const skillsDir = resolveSkillsDir();
-    const skillDir = path6.join(skillsDir, name);
-    const skillMdPath = path6.join(skillDir, "SKILL.md");
+    const skillDir = path7.join(skillsDir, name);
+    const skillMdPath = path7.join(skillDir, "SKILL.md");
     if (!fs6.existsSync(skillMdPath)) {
       error(`Skill "${name}" not found or SKILL.md missing.`);
       info("Install a skill first: agentforge skills install <name>");
@@ -2924,8 +3151,8 @@ console.log('Hello from ${name}!');
   });
   skills.command("refs <name>").description("List reference files for a skill").action(async (name) => {
     const skillsDir = resolveSkillsDir();
-    const skillDir = path6.join(skillsDir, name);
-    const refsDir = path6.join(skillDir, "references");
+    const skillDir = path7.join(skillsDir, name);
+    const refsDir = path7.join(skillDir, "references");
     if (!fs6.existsSync(skillDir)) {
       error(`Skill "${name}" not found.`);
       process.exit(1);
@@ -2944,7 +3171,7 @@ console.log('Hello from ${name}!');
       return;
     }
     for (const file of files) {
-      const filePath = path6.join(refsDir, file);
+      const filePath = path7.join(refsDir, file);
       const stat2 = fs6.statSync(filePath);
       if (stat2.isFile()) {
         const content = fs6.readFileSync(filePath, "utf-8");
@@ -2960,8 +3187,8 @@ console.log('Hello from ${name}!');
   });
   skills.command("info").argument("<name>", "Skill name").description("Show detailed information about a skill").action(async (name) => {
     const skillsDir = resolveSkillsDir();
-    const skillDir = path6.join(skillsDir, name);
-    if (fs6.existsSync(skillDir) && fs6.existsSync(path6.join(skillDir, "SKILL.md"))) {
+    const skillDir = path7.join(skillsDir, name);
+    if (fs6.existsSync(skillDir) && fs6.existsSync(path7.join(skillDir, "SKILL.md"))) {
       const meta = readSkillMetadata(skillDir);
       const lock = readSkillsLock(skillsDir);
       const lockEntry = lock.skills[name];
@@ -2980,7 +3207,7 @@ console.log('Hello from ${name}!');
       const listFiles = (dir, prefix = "") => {
         const entries = fs6.readdirSync(dir);
         for (const entry2 of entries) {
-          const fullPath = path6.join(dir, entry2);
+          const fullPath = path7.join(dir, entry2);
           const stat2 = fs6.statSync(fullPath);
           if (stat2.isDirectory()) {
             dim(`  ${prefix}${entry2}/`);
@@ -2992,7 +3219,7 @@ console.log('Hello from ${name}!');
       };
       listFiles(skillDir, "  ");
       console.log();
-      const content = fs6.readFileSync(path6.join(skillDir, "SKILL.md"), "utf-8");
+      const content = fs6.readFileSync(path7.join(skillDir, "SKILL.md"), "utf-8");
       const { content: body } = parseSkillMd(content);
       info("Instructions preview:");
       dim(body.trim().split("\n").slice(0, 10).map((l) => `  ${l}`).join("\n"));
@@ -3084,11 +3311,11 @@ console.log('Hello from ${name}!');
 
 // src/commands/skill.ts
 import fs7 from "fs-extra";
-import path7 from "path";
-import os2 from "os";
+import path8 from "path";
+import os3 from "os";
 import { execFileSync } from "child_process";
 function getGlobalSkillsDir() {
-  return path7.join(os2.homedir(), ".agentforge", "skills");
+  return path8.join(os3.homedir(), ".agentforge", "skills");
 }
 function parseSkillMd2(content) {
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -3113,12 +3340,12 @@ async function installSkillFromPath(sourcePath, skillsDir) {
   if (!await fs7.pathExists(sourcePath)) {
     throw new Error(`Source path not found: ${sourcePath}`);
   }
-  const skillMdPath = path7.join(sourcePath, "SKILL.md");
+  const skillMdPath = path8.join(sourcePath, "SKILL.md");
   if (!await fs7.pathExists(skillMdPath)) {
     throw new Error(`No SKILL.md found in ${sourcePath}. Not a valid skill directory.`);
   }
-  const skillName = path7.basename(sourcePath);
-  const destPath = path7.join(skillsDir, skillName);
+  const skillName = path8.basename(sourcePath);
+  const destPath = path8.join(skillsDir, skillName);
   await fs7.mkdirp(skillsDir);
   await fs7.copy(sourcePath, destPath, { overwrite: true });
   return destPath;
@@ -3130,10 +3357,10 @@ async function listInstalledSkills(skillsDir) {
   const entries = await fs7.readdir(skillsDir);
   const skills = [];
   for (const entry of entries) {
-    const entryPath = path7.join(skillsDir, entry);
+    const entryPath = path8.join(skillsDir, entry);
     const stat2 = await fs7.stat(entryPath);
     if (!stat2.isDirectory()) continue;
-    const skillMdPath = path7.join(entryPath, "SKILL.md");
+    const skillMdPath = path8.join(entryPath, "SKILL.md");
     if (!await fs7.pathExists(skillMdPath)) continue;
     const content = await fs7.readFile(skillMdPath, "utf-8");
     const meta = parseSkillMd2(content);
@@ -3146,7 +3373,7 @@ async function listInstalledSkills(skillsDir) {
   return skills;
 }
 async function removeSkill(name, skillsDir) {
-  const skillDir = path7.join(skillsDir, name);
+  const skillDir = path8.join(skillsDir, name);
   if (!await fs7.pathExists(skillDir)) {
     throw new Error(`Skill "${name}" not found in ${skillsDir}`);
   }
@@ -3167,10 +3394,10 @@ function registerSkillCommand(program2) {
     const skillsDir = getGlobalSkillsDir();
     const isLocalPath = await fs7.pathExists(name);
     if (isLocalPath) {
-      const sourcePath = path7.resolve(name);
+      const sourcePath = path8.resolve(name);
       try {
         const installedPath = await installSkillFromPath(sourcePath, skillsDir);
-        const skillName = path7.basename(installedPath);
+        const skillName = path8.basename(installedPath);
         success(`Skill "${skillName}" installed from local path.`);
         info(`Location: ${installedPath}`);
       } catch (err) {
@@ -3180,7 +3407,7 @@ function registerSkillCommand(program2) {
     } else {
       const repoUrl = getGitHubUrl(name);
       const repoName = name.split("/").pop().replace(/\.git$/, "");
-      const destPath = path7.join(skillsDir, repoName);
+      const destPath = path8.join(skillsDir, repoName);
       await fs7.mkdirp(skillsDir);
       info(`Cloning skill from ${repoUrl}...`);
       try {
@@ -3188,8 +3415,8 @@ function registerSkillCommand(program2) {
           encoding: "utf-8",
           stdio: "pipe"
         });
-        await fs7.remove(path7.join(destPath, ".git"));
-        const skillMdPath = path7.join(destPath, "SKILL.md");
+        await fs7.remove(path8.join(destPath, ".git"));
+        const skillMdPath = path8.join(destPath, "SKILL.md");
         if (!await fs7.pathExists(skillMdPath)) {
           error("Cloned repo does not contain a SKILL.md. Not a valid skill.");
           await fs7.remove(destPath);
@@ -3345,9 +3572,9 @@ function registerSkillCommand(program2) {
 }
 
 // src/commands/cron.ts
-import readline5 from "readline";
+import readline6 from "readline";
 function prompt3(q) {
-  const rl = readline5.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline6.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3413,7 +3640,7 @@ function registerCronCommand(program2) {
 
 // src/commands/mcp.ts
 import { MCPExecutor } from "@agentforge-ai/core";
-import readline6 from "readline";
+import readline7 from "readline";
 function mutationRef(name) {
   return name;
 }
@@ -3421,7 +3648,7 @@ function queryRef(name) {
   return name;
 }
 function prompt4(q) {
-  const rl = readline6.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline7.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3601,7 +3828,7 @@ function registerMcpCommand(program2) {
 
 // src/commands/files.ts
 import fs8 from "fs-extra";
-import path8 from "path";
+import path9 from "path";
 function registerFilesCommand(program2) {
   const files = program2.command("files").description("Manage files");
   files.command("list").argument("[folder]", "Folder ID to list files from").option("--json", "Output as JSON").description("List files").action(async (folder, opts) => {
@@ -3628,14 +3855,14 @@ function registerFilesCommand(program2) {
     })));
   });
   files.command("upload").argument("<filepath>", "Path to file to upload").option("--folder <id>", "Folder ID to upload to").option("--project <id>", "Project ID to associate with").description("Upload a file").action(async (filepath, opts) => {
-    const absPath = path8.resolve(filepath);
+    const absPath = path9.resolve(filepath);
     if (!fs8.existsSync(absPath)) {
       error(`File not found: ${absPath}`);
       process.exit(1);
     }
     const stat2 = fs8.statSync(absPath);
-    const name = path8.basename(absPath);
-    const ext = path8.extname(absPath).toLowerCase();
+    const name = path9.basename(absPath);
+    const ext = path9.extname(absPath).toLowerCase();
     const mimeTypes = {
       ".txt": "text/plain",
       ".md": "text/markdown",
@@ -3712,7 +3939,7 @@ function registerFilesCommand(program2) {
         throw new Error(`Download failed: ${response.statusText}`);
       }
       const buffer = Buffer.from(await response.arrayBuffer());
-      const outputPath = opts.output || path8.join(process.cwd(), file.originalName || file.name);
+      const outputPath = opts.output || path9.join(process.cwd(), file.originalName || file.name);
       await fs8.writeFile(outputPath, buffer);
       success(`File downloaded to: ${outputPath} (${formatSize(buffer.length)})`);
     } catch (err) {
@@ -3767,9 +3994,9 @@ function formatSize(bytes) {
 }
 
 // src/commands/projects.ts
-import readline7 from "readline";
+import readline8 from "readline";
 function prompt5(q) {
-  const rl = readline7.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3853,10 +4080,10 @@ function registerProjectsCommand(program2) {
 
 // src/commands/config.ts
 import fs9 from "fs-extra";
-import path9 from "path";
-import readline8 from "readline";
+import path10 from "path";
+import readline9 from "readline";
 function prompt6(q) {
-  const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3869,7 +4096,7 @@ function registerConfigCommand(program2) {
     const cwd = process.cwd();
     const envFiles = [".env", ".env.local", ".env.production"];
     for (const envFile of envFiles) {
-      const envPath = path9.join(cwd, envFile);
+      const envPath = path10.join(cwd, envFile);
       if (fs9.existsSync(envPath)) {
         console.log(`  ${colors.cyan}${envFile}${colors.reset}`);
         const content = fs9.readFileSync(envPath, "utf-8");
@@ -3884,22 +4111,22 @@ function registerConfigCommand(program2) {
         console.log();
       }
     }
-    const convexDir = path9.join(cwd, ".convex");
+    const convexDir = path10.join(cwd, ".convex");
     if (fs9.existsSync(convexDir)) {
       info("Convex: Configured");
     } else {
       info("Convex: Not configured (run `npx convex dev`)");
     }
-    const skillsDir = path9.join(cwd, "skills");
+    const skillsDir = path10.join(cwd, "skills");
     if (fs9.existsSync(skillsDir)) {
-      const skills = fs9.readdirSync(skillsDir).filter((d) => fs9.statSync(path9.join(skillsDir, d)).isDirectory());
+      const skills = fs9.readdirSync(skillsDir).filter((d) => fs9.statSync(path10.join(skillsDir, d)).isDirectory());
       info(`Skills: ${skills.length} installed (${skills.join(", ")})`);
     } else {
       info("Skills: None installed");
     }
   });
   config.command("set").argument("<key>", "Configuration key").argument("<value>", "Configuration value").option("--env <file>", "Environment file to update", ".env.local").description("Set a configuration value").action(async (key, value, opts) => {
-    const envPath = path9.join(process.cwd(), opts.env);
+    const envPath = path10.join(process.cwd(), opts.env);
     let content = "";
     if (fs9.existsSync(envPath)) {
       content = fs9.readFileSync(envPath, "utf-8");
@@ -3918,7 +4145,7 @@ function registerConfigCommand(program2) {
     const cwd = process.cwd();
     const envFiles = [".env.local", ".env", ".env.production"];
     for (const envFile of envFiles) {
-      const envPath = path9.join(cwd, envFile);
+      const envPath = path10.join(cwd, envFile);
       if (fs9.existsSync(envPath)) {
         const content = fs9.readFileSync(envPath, "utf-8");
         const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
@@ -3946,7 +4173,7 @@ function registerConfigCommand(program2) {
     else if (provider === "openrouter") envContent.push(`OPENROUTER_API_KEY=${apiKey}`);
     else if (provider === "anthropic") envContent.push(`ANTHROPIC_API_KEY=${apiKey}`);
     else if (provider === "google") envContent.push(`GOOGLE_API_KEY=${apiKey}`);
-    fs9.writeFileSync(path9.join(process.cwd(), ".env.local"), envContent.join("\n") + "\n");
+    fs9.writeFileSync(path10.join(process.cwd(), ".env.local"), envContent.join("\n") + "\n");
     success("Configuration saved to .env.local");
     info("Run `npx convex dev` to start the Convex backend.");
   });
@@ -3968,7 +4195,7 @@ function registerConfigCommand(program2) {
       error("API key is required.");
       process.exit(1);
     }
-    const envPath = path9.join(process.cwd(), ".env.local");
+    const envPath = path10.join(process.cwd(), ".env.local");
     let content = "";
     if (fs9.existsSync(envPath)) content = fs9.readFileSync(envPath, "utf-8");
     const lines = content.split("\n");
@@ -3984,9 +4211,9 @@ function registerConfigCommand(program2) {
 }
 
 // src/commands/vault.ts
-import readline9 from "readline";
+import readline10 from "readline";
 function prompt7(q) {
-  const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline10.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3994,7 +4221,7 @@ function prompt7(q) {
 }
 function promptSecret(q) {
   return new Promise((resolve4) => {
-    const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline10.createInterface({ input: process.stdin, output: process.stdout });
     if (process.stdin.isTTY) {
       process.stdout.write(q);
       let input = "";
@@ -4145,7 +4372,7 @@ function maskKey(key) {
 }
 function promptSecret2(question) {
   return new Promise((resolve4) => {
-    const readline16 = __require("readline");
+    const readline17 = __require("readline");
     if (process.stdin.isTTY) {
       process.stdout.write(question);
       process.stdin.setRawMode(true);
@@ -4173,7 +4400,7 @@ function promptSecret2(question) {
       };
       process.stdin.on("data", onData);
     } else {
-      const rl = readline16.createInterface({ input: process.stdin, output: process.stdout });
+      const rl = readline17.createInterface({ input: process.stdin, output: process.stdout });
       rl.question(question, (ans) => {
         rl.close();
         resolve4(ans.trim());
@@ -4264,8 +4491,8 @@ function registerKeysCommand(program2) {
     }
     const target = items[0];
     if (!opts.force) {
-      const readline16 = __require("readline");
-      const rl = readline16.createInterface({ input: process.stdin, output: process.stdout });
+      const readline17 = __require("readline");
+      const rl = readline17.createInterface({ input: process.stdin, output: process.stdout });
       const answer = await new Promise((resolve4) => {
         rl.question(`Delete "${target.keyName}" for ${provider}? (y/N): `, (ans) => {
           rl.close();
@@ -4337,19 +4564,19 @@ function registerKeysCommand(program2) {
 
 // src/commands/status.ts
 import { spawn as spawn2 } from "child_process";
-import path10 from "path";
+import path11 from "path";
 import fs10 from "fs-extra";
-import readline10 from "readline";
+import readline11 from "readline";
 function registerStatusCommand(program2) {
   program2.command("status").description("Show system health and connection status").action(async () => {
     header("AgentForge Status");
     const cwd = process.cwd();
     const checks = {};
-    checks["Project Root"] = fs10.existsSync(path10.join(cwd, "package.json")) ? "\u2714 Found" : "\u2716 Not found";
-    checks["Convex Dir"] = fs10.existsSync(path10.join(cwd, "convex")) ? "\u2714 Found" : "\u2716 Not found";
-    checks["Skills Dir"] = fs10.existsSync(path10.join(cwd, "skills")) ? "\u2714 Found" : "\u2716 Not configured";
-    checks["Dashboard Dir"] = fs10.existsSync(path10.join(cwd, "dashboard")) ? "\u2714 Found" : "\u2716 Not found";
-    checks["Env Config"] = fs10.existsSync(path10.join(cwd, ".env.local")) || fs10.existsSync(path10.join(cwd, ".env")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Project Root"] = fs10.existsSync(path11.join(cwd, "package.json")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Convex Dir"] = fs10.existsSync(path11.join(cwd, "convex")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Skills Dir"] = fs10.existsSync(path11.join(cwd, "skills")) ? "\u2714 Found" : "\u2716 Not configured";
+    checks["Dashboard Dir"] = fs10.existsSync(path11.join(cwd, "dashboard")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Env Config"] = fs10.existsSync(path11.join(cwd, ".env.local")) || fs10.existsSync(path11.join(cwd, ".env")) ? "\u2714 Found" : "\u2716 Not found";
     try {
       const client = await createClient();
       const agents = await client.query("agents:list", {});
@@ -4361,7 +4588,7 @@ function registerStatusCommand(program2) {
     let storedKeysCount = 0;
     const envFiles = [".env.local", ".env"];
     for (const envFile of envFiles) {
-      const envPath = path10.join(cwd, envFile);
+      const envPath = path11.join(cwd, envFile);
       if (fs10.existsSync(envPath)) {
         const content = fs10.readFileSync(envPath, "utf-8");
         const match = content.match(/LLM_PROVIDER=(.+)/);
@@ -4396,7 +4623,7 @@ function registerStatusCommand(program2) {
   program2.command("dashboard").description("Launch the web dashboard").option("-p, --port <port>", "Port for the dashboard", "3000").option("-d, --dir <path>", "Project directory (defaults to current directory)").option("--install", "Install dashboard dependencies before starting").action(async (opts) => {
     let cwd;
     try {
-      cwd = opts.dir ? path10.resolve(opts.dir) : process.cwd();
+      cwd = opts.dir ? path11.resolve(opts.dir) : process.cwd();
     } catch {
       error("Cannot determine the current directory.");
       console.log();
@@ -4411,16 +4638,16 @@ function registerStatusCommand(program2) {
       process.exit(1);
     }
     const searchPaths = [
-      path10.join(cwd, "dashboard"),
+      path11.join(cwd, "dashboard"),
       // 1. Bundled in project (agentforge create)
-      path10.join(cwd, "packages", "web"),
+      path11.join(cwd, "packages", "web"),
       // 2. Monorepo structure
-      path10.join(cwd, "node_modules", "@agentforge-ai", "web")
+      path11.join(cwd, "node_modules", "@agentforge-ai", "web")
       // 3. Installed as dependency
     ];
     let dashDir = "";
     for (const p of searchPaths) {
-      if (fs10.existsSync(path10.join(p, "package.json"))) {
+      if (fs10.existsSync(path11.join(p, "package.json"))) {
         dashDir = p;
         break;
       }
@@ -4442,10 +4669,10 @@ function registerStatusCommand(program2) {
       console.log();
       return;
     }
-    const nodeModulesExists = fs10.existsSync(path10.join(dashDir, "node_modules"));
+    const nodeModulesExists = fs10.existsSync(path11.join(dashDir, "node_modules"));
     if (!nodeModulesExists || opts.install) {
       header("AgentForge Dashboard \u2014 Installing Dependencies");
-      info(`Installing in ${path10.relative(cwd, dashDir) || "."}...`);
+      info(`Installing in ${path11.relative(cwd, dashDir) || "."}...`);
       console.log();
       const installChild = spawn2("pnpm", ["install"], {
         cwd: dashDir,
@@ -4463,12 +4690,12 @@ function registerStatusCommand(program2) {
       success("Dependencies installed.");
       console.log();
     }
-    const envPath = path10.join(cwd, ".env.local");
+    const envPath = path11.join(cwd, ".env.local");
     if (fs10.existsSync(envPath)) {
       const envContent = fs10.readFileSync(envPath, "utf-8");
       const convexUrlMatch = envContent.match(/CONVEX_URL=(.+)/);
       if (convexUrlMatch) {
-        const dashEnvPath = path10.join(dashDir, ".env.local");
+        const dashEnvPath = path11.join(dashDir, ".env.local");
         const dashEnvContent = `VITE_CONVEX_URL=${convexUrlMatch[1].trim()}
 `;
         fs10.writeFileSync(dashEnvPath, dashEnvContent);
@@ -4536,7 +4763,7 @@ function registerStatusCommand(program2) {
       console.log(`     ${colors.dim}Status: ${task.status} | Pending: ${(task.pendingTasks || []).length} task(s)${colors.reset}`);
     });
     console.log();
-    const rl = readline10.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline11.createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise((r) => rl.question("Reset stalled heartbeats? (y/N): ", (a) => {
       rl.close();
       r(a.trim());
@@ -4600,7 +4827,7 @@ function registerModelsCommand(program2) {
 
 // src/commands/workspace.ts
 import { mkdir, readdir } from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync as existsSync2 } from "fs";
 import { resolve, join } from "path";
 import { createWorkspace } from "@agentforge-ai/core";
 function registerWorkspaceCommand(program2) {
@@ -4622,7 +4849,7 @@ Place SKILL.md folders in skills/ for agents to discover them.`);
     const workspaceDir = join(base, "workspace");
     const skillsDir = join(base, "skills");
     header("Workspace Status");
-    if (existsSync(workspaceDir)) {
+    if (existsSync2(workspaceDir)) {
       const files = await readdir(workspaceDir).catch(() => []);
       info(`Filesystem: ${workspaceDir}`);
       dim(`  ${files.length} item(s)`);
@@ -4630,7 +4857,7 @@ Place SKILL.md folders in skills/ for agents to discover them.`);
       info(`Filesystem: not initialized`);
       dim(`  Run: agentforge workspace init`);
     }
-    if (existsSync(skillsDir)) {
+    if (existsSync2(skillsDir)) {
       const entries = await readdir(skillsDir, { withFileTypes: true }).catch(() => []);
       const skills = entries.filter((e) => e.isDirectory());
       info(`
@@ -4641,7 +4868,7 @@ Skills: ${skillsDir}`);
       } else {
         for (const skill of skills) {
           const skillMd = join(skillsDir, skill.name, "SKILL.md");
-          dim(`  \u2713 ${skill.name}${existsSync(skillMd) ? "" : " (missing SKILL.md)"}`);
+          dim(`  \u2713 ${skill.name}${existsSync2(skillMd) ? "" : " (missing SKILL.md)"}`);
         }
       }
     } else {
@@ -4745,10 +4972,10 @@ Troubleshooting:`);
 }
 
 // src/commands/tokens.ts
-import readline11 from "readline";
+import readline12 from "readline";
 import { randomBytes } from "crypto";
 function prompt8(question) {
-  const rl = readline11.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve4) => rl.question(question, (ans) => {
     rl.close();
     resolve4(ans.trim());
@@ -4864,10 +5091,10 @@ Use it as: Authorization: Bearer ${result.token}`);
 
 // src/commands/channel-telegram.ts
 import fs11 from "fs-extra";
-import path11 from "path";
-import readline12 from "readline";
+import path12 from "path";
+import readline13 from "readline";
 function prompt9(q) {
-  const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -4877,7 +5104,7 @@ function readEnvValue(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path11.join(cwd, envFile);
+    const envPath = path12.join(cwd, envFile);
     if (fs11.existsSync(envPath)) {
       const content = fs11.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
@@ -4887,7 +5114,7 @@ function readEnvValue(key) {
   return void 0;
 }
 function writeEnvValue(key, value, envFile = ".env.local") {
-  const envPath = path11.join(process.cwd(), envFile);
+  const envPath = path12.join(process.cwd(), envFile);
   let content = "";
   if (fs11.existsSync(envPath)) {
     content = fs11.readFileSync(envPath, "utf-8");
@@ -5229,10 +5456,10 @@ Commands:
 
 // src/commands/channel-whatsapp.ts
 import fs12 from "fs-extra";
-import path12 from "path";
-import readline13 from "readline";
+import path13 from "path";
+import readline14 from "readline";
 function prompt10(q) {
-  const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline14.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -5242,7 +5469,7 @@ function readEnvValue2(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path12.join(cwd, envFile);
+    const envPath = path13.join(cwd, envFile);
     if (fs12.existsSync(envPath)) {
       const content = fs12.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
@@ -5252,7 +5479,7 @@ function readEnvValue2(key) {
   return void 0;
 }
 function writeEnvValue2(key, value, envFile = ".env.local") {
-  const envPath = path12.join(process.cwd(), envFile);
+  const envPath = path13.join(process.cwd(), envFile);
   let content = "";
   if (fs12.existsSync(envPath)) {
     content = fs12.readFileSync(envPath, "utf-8");
@@ -5702,10 +5929,10 @@ async function runMinimalWhatsAppBot(config) {
 
 // src/commands/channel-slack.ts
 import fs13 from "fs-extra";
-import path13 from "path";
-import readline14 from "readline";
+import path14 from "path";
+import readline15 from "readline";
 function prompt11(q) {
-  const rl = readline14.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline15.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -5715,7 +5942,7 @@ function readEnvValue3(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path13.join(cwd, envFile);
+    const envPath = path14.join(cwd, envFile);
     if (fs13.existsSync(envPath)) {
       const content = fs13.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
@@ -5725,7 +5952,7 @@ function readEnvValue3(key) {
   return void 0;
 }
 function writeEnvValue3(key, value, envFile = ".env.local") {
-  const envPath = path13.join(process.cwd(), envFile);
+  const envPath = path14.join(process.cwd(), envFile);
   let content = "";
   if (fs13.existsSync(envPath)) {
     content = fs13.readFileSync(envPath, "utf-8");
@@ -6242,10 +6469,10 @@ async function runMinimalSlackBot(config) {
 
 // src/commands/channel-discord.ts
 import fs14 from "fs-extra";
-import path14 from "path";
-import readline15 from "readline";
+import path15 from "path";
+import readline16 from "readline";
 function prompt12(q) {
-  const rl = readline15.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline16.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -6255,7 +6482,7 @@ function readEnvValue4(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path14.join(cwd, envFile);
+    const envPath = path15.join(cwd, envFile);
     if (fs14.existsSync(envPath)) {
       const content = fs14.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
@@ -6265,7 +6492,7 @@ function readEnvValue4(key) {
   return void 0;
 }
 function writeEnvValue4(key, value, envFile = ".env.local") {
-  const envPath = path14.join(process.cwd(), envFile);
+  const envPath = path15.join(process.cwd(), envFile);
   let content = "";
   if (fs14.existsSync(envPath)) {
     content = fs14.readFileSync(envPath, "utf-8");
@@ -6614,7 +6841,7 @@ async function runMinimalDiscordBot(config) {
 
 // src/commands/sandbox.ts
 import fs15 from "fs-extra";
-import path15 from "path";
+import path16 from "path";
 import { execSync as execSync4 } from "child_process";
 function registerSandboxCommand(program2) {
   const sandboxCmd = program2.command("sandbox").description("Run code in an isolated Docker sandbox");
@@ -6630,7 +6857,7 @@ function registerSandboxCommand(program2) {
 }
 async function runSandbox(file, options) {
   header("Sandbox");
-  const filePath = path15.resolve(file);
+  const filePath = path16.resolve(file);
   if (!await fs15.pathExists(filePath)) {
     error(`File not found: ${file}`);
     process.exit(1);
@@ -6669,7 +6896,7 @@ async function runSandbox(file, options) {
       dim(`Container ID: ${containerId}`);
     }
     const fileContent = await fs15.readFile(filePath, "utf-8");
-    const fileName = path15.basename(filePath);
+    const fileName = path16.basename(filePath);
     await sandbox.writeFile(`/workspace/${fileName}`, fileContent);
     dim(`File written to sandbox: /workspace/${fileName}`);
     info("Executing file...");
@@ -6756,7 +6983,7 @@ console.log('For now, this demonstrates the Docker container spawning.');
 
 // src/commands/research.ts
 import fs16 from "fs-extra";
-import path16 from "path";
+import path17 from "path";
 function registerResearchCommand(program2) {
   program2.command("research").description("Deep Research Mode \u2014 parallel multi-agent research").argument("<topic>", "Research topic or question").option("-d, --depth <depth>", "Research depth: shallow, standard, or deep", "standard").option("-p, --provider <provider>", "LLM provider (default: openai)", "openai").option("-m, --model <model>", "Model to use (default: gpt-4o-mini)", "gpt-4o-mini").option("-k, --key <key>", "API key (default: from environment)").action(async (topic, options) => {
     await runResearch(topic, options);
@@ -6806,7 +7033,7 @@ async function runResearch(topic, options) {
     dim(`  Synthesized comprehensive report`);
     const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, -5);
     const filename = `research-${timestamp}.md`;
-    const filepath = path16.resolve(filename);
+    const filepath = path17.resolve(filename);
     const reportContent = formatReport(report);
     await fs16.writeFile(filepath, reportContent, "utf-8");
     console.log("\n" + reportContent);
@@ -7288,12 +7515,12 @@ function registerWorkflowsCommand(program2) {
 }
 
 // src/index.ts
-import { readFileSync } from "fs";
-import { fileURLToPath as fileURLToPath2 } from "url";
+import { readFileSync as readFileSync3 } from "fs";
+import { fileURLToPath as fileURLToPath3 } from "url";
 import { dirname as dirname2, resolve as resolve3 } from "path";
-var __filename2 = fileURLToPath2(import.meta.url);
-var __dirname2 = dirname2(__filename2);
-var pkg = JSON.parse(readFileSync(resolve3(__dirname2, "..", "package.json"), "utf-8"));
+var __filename3 = fileURLToPath3(import.meta.url);
+var __dirname3 = dirname2(__filename3);
+var pkg = JSON.parse(readFileSync3(resolve3(__dirname3, "..", "package.json"), "utf-8"));
 var program = new Command2();
 program.name("agentforge").description("AgentForge \u2014 NanoClaw: A minimalist agent framework powered by Mastra + Convex").version(pkg.version);
 program.command("create").argument("<project-name>", "Name of the project to create").description("Create a new AgentForge project").option("-t, --template <template>", "Project template to use", "default").action(async (projectName, options) => {
@@ -7304,6 +7531,9 @@ program.command("run").description("Start the local development environment").op
 });
 program.command("deploy").description("Deploy the project to production").option("--env <path>", "Path to environment file", ".env.production").option("--dry-run", "Preview deployment without executing", false).option("--rollback", "Rollback to previous deployment", false).option("--force", "Skip confirmation prompts", false).option("--provider <provider>", "Deployment provider (convex or cloud)", "convex").option("--project <projectId>", "Project ID for cloud deployments").option("--version <tag>", "Version tag for the deployment").action(async (options) => {
   await deployProject(options);
+});
+program.command("upgrade").description("Sync convex/ directory with latest AgentForge template").option("-y, --yes", "Skip confirmation prompt", false).option("--dry-run", "Preview changes without applying", false).option("--only <file>", "Only upgrade specific file").action(async (options) => {
+  await upgradeProject(options);
 });
 registerModelsCommand(program);
 registerWorkspaceCommand(program);
