@@ -144,13 +144,14 @@ export async function publishSkill(
 /**
  * Install a skill from the marketplace to a local directory.
  * Writes SKILL.md (and README.md if available) into `targetDir/<name>/`.
+ * Also reads references/ directory if it exists and includes in the payload.
  * Node.js only — uses dynamic import for `node:fs`.
  */
 export async function installFromMarketplace(
   name: string,
   targetDir: string,
   convexUrl: string,
-): Promise<{ skillDir: string; skill: MarketplaceSkill }> {
+): Promise<{ skillDir: string; skill: MarketplaceSkill; references?: Array<{ name: string; content: string }> }> {
   const skill = await getSkill(name, convexUrl);
   if (!skill) {
     throw new MarketplaceError(`Skill "${name}" not found in marketplace`, 'NOT_FOUND');
@@ -171,6 +172,21 @@ export async function installFromMarketplace(
     fs.writeFileSync(path.join(skillDir, 'README.md'), skill.readmeContent, 'utf-8');
   }
 
+  // Read references/ directory if it exists
+  const referencesDir = path.join(skillDir, 'references');
+  const references: Array<{ name: string; content: string }> = [];
+  if (fs.existsSync(referencesDir)) {
+    const refFiles = fs.readdirSync(referencesDir);
+    for (const refFile of refFiles) {
+      const refPath = path.join(referencesDir, refFile);
+      const stat = fs.statSync(refPath);
+      if (stat.isFile()) {
+        const content = fs.readFileSync(refPath, 'utf-8');
+        references.push({ name: refFile, content });
+      }
+    }
+  }
+
   // Best-effort download tracking — don't fail install if this errors
   try {
     await convexQuery(convexUrl, 'skillMarketplace:incrementDownloads', { name });
@@ -178,5 +194,5 @@ export async function installFromMarketplace(
     // intentionally ignored
   }
 
-  return { skillDir, skill };
+  return { skillDir, skill, references };
 }

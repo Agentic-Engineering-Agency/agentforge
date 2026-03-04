@@ -112,6 +112,8 @@ export const create = mutation({
     documentation: v.optional(v.string()),
     code: v.string(),
     schema: v.optional(v.any()),
+    skillMdContent: v.optional(v.string()),
+    references: v.optional(v.array(v.object({ name: v.string(), content: v.string() }))),
     userId: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
   },
