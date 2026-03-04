@@ -999,15 +999,17 @@ function registerAgentsCommand(program2) {
       }))
     );
   });
-  agents.command("create").description("Create a new agent (interactive)").option("--name <name>", "Agent name").option("--model <model>", "Model identifier (e.g., openai:gpt-4o-mini)").option("--instructions <text>", "System instructions").action(async (opts) => {
+  agents.command("create").description("Create a new agent (interactive)").option("--name <name>", "Agent name").option("--model <model>", "Model identifier (e.g., openai:gpt-4o-mini)").option("--instructions <text>", "System instructions").option("--description <text>", "Agent description").option("--provider <provider>", "Provider (openai, anthropic, etc.)").action(async (opts) => {
     const name = opts.name || await prompt("Agent name: ");
     const model = opts.model || await prompt("Model (e.g., openai:gpt-4o-mini): ");
     const instructions = opts.instructions || await prompt("Instructions: ");
+    const description = opts.description || await prompt("Description (optional): ");
+    const provider = opts.provider || await prompt("Provider (openai, anthropic, etc.) [default: openai]: ") || "openai";
     if (!name || !model || !instructions) {
       error("Name, model, and instructions are required.");
       process.exit(1);
     }
-    let agentProvider = "openai";
+    let agentProvider = provider;
     let agentModel = model || "gpt-4o-mini";
     if (agentModel.includes(":")) {
       const [p, m] = agentModel.split(":");
@@ -1020,6 +1022,7 @@ function registerAgentsCommand(program2) {
       () => client.mutation("agents:create", {
         id: agentId,
         name,
+        description: description || void 0,
         instructions,
         model: agentModel,
         provider: agentProvider
@@ -1368,6 +1371,7 @@ ${colors.yellow}[Error: ${data.error}]${colors.reset}`);
 }
 
 // src/commands/sessions.ts
+import readline3 from "readline";
 function registerSessionsCommand(program2) {
   const sessions = program2.command("sessions").description("Manage sessions");
   sessions.command("list").option("--status <status>", "Filter by status (active, ended)").option("--json", "Output as JSON").description("List all sessions").action(async (opts) => {
@@ -1408,6 +1412,28 @@ function registerSessionsCommand(program2) {
     const client = await createClient();
     await safeCall(() => client.mutation("sessions:updateStatus", { sessionId: id, status: "completed" }), "Failed to end session");
     success(`Session "${id}" ended.`);
+  });
+  sessions.command("delete").argument("<id>", "Session ID").option("-f, --force", "Skip confirmation").description("Delete a session").action(async (id, opts) => {
+    const rl = readline3.createInterface({ input: process.stdin, output: process.stdout });
+    const confirmPrompt = (question) => new Promise((resolve4) => rl.question(question, (ans) => {
+      rl.close();
+      resolve4(ans.trim());
+    }));
+    if (!opts.force) {
+      const confirm = await confirmPrompt(`Delete session "${id}"? (y/N): `);
+      if (confirm.toLowerCase() !== "y") {
+        info("Cancelled.");
+        return;
+      }
+    }
+    const client = await createClient();
+    const session = await safeCall(() => client.query("sessions:get", { sessionId: id }), "Failed to fetch session");
+    if (!session) {
+      error(`Session "${id}" not found.`);
+      process.exit(1);
+    }
+    await safeCall(() => client.mutation("sessions:remove", { sessionId: id }), "Failed to delete session");
+    success(`Session "${id}" deleted.`);
   });
 }
 function registerThreadsCommand(program2) {
@@ -1463,7 +1489,7 @@ function registerThreadsCommand(program2) {
 // src/commands/skills.ts
 import fs6 from "fs-extra";
 import path6 from "path";
-import readline3 from "readline";
+import readline4 from "readline";
 import { execSync as execSync3 } from "child_process";
 var SKILLS_DIR_NAME = "skills";
 var SKILLS_LOCK_FILE = "skills.lock.json";
@@ -1527,7 +1553,7 @@ var BUILTIN_REGISTRY = [
   }
 ];
 function prompt2(q) {
-  const rl = readline3.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline4.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3267,9 +3293,9 @@ function registerSkillCommand(program2) {
 }
 
 // src/commands/cron.ts
-import readline4 from "readline";
+import readline5 from "readline";
 function prompt3(q) {
-  const rl = readline4.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline5.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3335,7 +3361,7 @@ function registerCronCommand(program2) {
 
 // src/commands/mcp.ts
 import { MCPExecutor } from "@agentforge-ai/core";
-import readline5 from "readline";
+import readline6 from "readline";
 function mutationRef(name) {
   return name;
 }
@@ -3343,7 +3369,7 @@ function queryRef(name) {
   return name;
 }
 function prompt4(q) {
-  const rl = readline5.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline6.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3689,9 +3715,9 @@ function formatSize(bytes) {
 }
 
 // src/commands/projects.ts
-import readline6 from "readline";
+import readline7 from "readline";
 function prompt5(q) {
-  const rl = readline6.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline7.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3776,9 +3802,9 @@ function registerProjectsCommand(program2) {
 // src/commands/config.ts
 import fs9 from "fs-extra";
 import path9 from "path";
-import readline7 from "readline";
+import readline8 from "readline";
 function prompt6(q) {
-  const rl = readline7.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3906,9 +3932,9 @@ function registerConfigCommand(program2) {
 }
 
 // src/commands/vault.ts
-import readline8 from "readline";
+import readline9 from "readline";
 function prompt7(q) {
-  const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -3916,7 +3942,7 @@ function prompt7(q) {
 }
 function promptSecret(q) {
   return new Promise((resolve4) => {
-    const rl = readline8.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
     if (process.stdin.isTTY) {
       process.stdout.write(q);
       let input = "";
@@ -4067,7 +4093,7 @@ function maskKey(key) {
 }
 function promptSecret2(question) {
   return new Promise((resolve4) => {
-    const readline15 = __require("readline");
+    const readline16 = __require("readline");
     if (process.stdin.isTTY) {
       process.stdout.write(question);
       process.stdin.setRawMode(true);
@@ -4095,7 +4121,7 @@ function promptSecret2(question) {
       };
       process.stdin.on("data", onData);
     } else {
-      const rl = readline15.createInterface({ input: process.stdin, output: process.stdout });
+      const rl = readline16.createInterface({ input: process.stdin, output: process.stdout });
       rl.question(question, (ans) => {
         rl.close();
         resolve4(ans.trim());
@@ -4186,8 +4212,8 @@ function registerKeysCommand(program2) {
     }
     const target = items[0];
     if (!opts.force) {
-      const readline15 = __require("readline");
-      const rl = readline15.createInterface({ input: process.stdin, output: process.stdout });
+      const readline16 = __require("readline");
+      const rl = readline16.createInterface({ input: process.stdin, output: process.stdout });
       const answer = await new Promise((resolve4) => {
         rl.question(`Delete "${target.keyName}" for ${provider}? (y/N): `, (ans) => {
           rl.close();
@@ -4261,7 +4287,7 @@ function registerKeysCommand(program2) {
 import { spawn as spawn2 } from "child_process";
 import path10 from "path";
 import fs10 from "fs-extra";
-import readline9 from "readline";
+import readline10 from "readline";
 function registerStatusCommand(program2) {
   program2.command("status").description("Show system health and connection status").action(async () => {
     header("AgentForge Status");
@@ -4458,7 +4484,7 @@ function registerStatusCommand(program2) {
       console.log(`     ${colors.dim}Status: ${task.status} | Pending: ${(task.pendingTasks || []).length} task(s)${colors.reset}`);
     });
     console.log();
-    const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
+    const rl = readline10.createInterface({ input: process.stdin, output: process.stdout });
     const answer = await new Promise((r) => rl.question("Reset stalled heartbeats? (y/N): ", (a) => {
       rl.close();
       r(a.trim());
@@ -4805,10 +4831,10 @@ Troubleshooting:`);
 }
 
 // src/commands/tokens.ts
-import readline10 from "readline";
+import readline11 from "readline";
 import { randomBytes } from "crypto";
 function prompt8(question) {
-  const rl = readline10.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline11.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve4) => rl.question(question, (ans) => {
     rl.close();
     resolve4(ans.trim());
@@ -4925,9 +4951,9 @@ Use it as: Authorization: Bearer ${result.token}`);
 // src/commands/channel-telegram.ts
 import fs11 from "fs-extra";
 import path11 from "path";
-import readline11 from "readline";
+import readline12 from "readline";
 function prompt9(q) {
-  const rl = readline11.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -5290,9 +5316,9 @@ Commands:
 // src/commands/channel-whatsapp.ts
 import fs12 from "fs-extra";
 import path12 from "path";
-import readline12 from "readline";
+import readline13 from "readline";
 function prompt10(q) {
-  const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -5763,9 +5789,9 @@ async function runMinimalWhatsAppBot(config) {
 // src/commands/channel-slack.ts
 import fs13 from "fs-extra";
 import path13 from "path";
-import readline13 from "readline";
+import readline14 from "readline";
 function prompt11(q) {
-  const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline14.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -6303,9 +6329,9 @@ async function runMinimalSlackBot(config) {
 // src/commands/channel-discord.ts
 import fs14 from "fs-extra";
 import path14 from "path";
-import readline14 from "readline";
+import readline15 from "readline";
 function prompt12(q) {
-  const rl = readline14.createInterface({ input: process.stdin, output: process.stdout });
+  const rl = readline15.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((r) => rl.question(q, (a) => {
     rl.close();
     r(a.trim());
@@ -7136,6 +7162,38 @@ function registerVoiceCommand(program2) {
 // src/commands/workflows.ts
 function registerWorkflowsCommand(program2) {
   const workflowsCmd = program2.command("workflows").description("Multi-agent workflow commands");
+  workflowsCmd.command("create").description("Create a new workflow").option("--name <name>", "Workflow name").option("--agent <id>", "Agent ID to assign").option("--trigger <type>", "Trigger type (manual, cron, webhook)", "manual").option("--schedule <cron>", "Cron schedule (for cron trigger)").action(async (opts) => {
+    const name = opts.name;
+    const agent = opts.agent;
+    const trigger = opts.trigger || "manual";
+    const schedule = opts.schedule;
+    if (!name) {
+      error("--name is required");
+      process.exit(1);
+    }
+    if (!agent) {
+      error("--agent is required");
+      process.exit(1);
+    }
+    if (trigger === "cron" && !schedule) {
+      error("--schedule is required for cron triggers");
+      process.exit(1);
+    }
+    const client = await createClient();
+    let triggersData = { type: trigger };
+    if (trigger === "cron" && schedule) {
+      triggersData.schedule = schedule;
+    }
+    await safeCall(
+      () => client.mutation("workflows:create", {
+        name,
+        triggers: JSON.stringify(triggersData),
+        steps: JSON.stringify([{ agentId: agent, name: "Step 1" }])
+      }),
+      "Failed to create workflow"
+    );
+    success(`Workflow "${name}" created`);
+  });
   workflowsCmd.command("list").option("-p, --project <projectId>", "Filter by project ID").option("--active", "Show only active workflows").option("--inactive", "Show only inactive workflows").description("List workflow definitions").action(async (opts) => {
     const client = await createClient();
     const args = {};
