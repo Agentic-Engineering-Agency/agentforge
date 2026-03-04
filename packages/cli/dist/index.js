@@ -2948,7 +2948,7 @@ console.log('Hello from ${name}!');
       const stat2 = fs6.statSync(filePath);
       if (stat2.isFile()) {
         const content = fs6.readFileSync(filePath, "utf-8");
-        console.log(colors.cyan(`\u{1F4C4} ${file}`));
+        console.log(`${colors.cyan}\u{1F4C4} ${file}${colors.reset}`);
         console.log("\u2500".repeat(60));
         dim(content.trim().split("\n").slice(0, 20).map((l) => `  ${l}`).join("\n"));
         if (content.trim().split("\n").length > 20) {

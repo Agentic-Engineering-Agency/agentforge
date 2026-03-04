@@ -1684,7 +1684,7 @@ See \`scripts/\` for executable scripts the agent can run.
         const stat = fs.statSync(filePath);
         if (stat.isFile()) {
           const content = fs.readFileSync(filePath, 'utf-8');
-          console.log(colors.cyan(`📄 ${file}`));
+          console.log(`${colors.cyan}📄 ${file}${colors.reset}`);
           console.log('─'.repeat(60));
           dim(content.trim().split('\n').slice(0, 20).map((l: string) => `  ${l}`).join('\n'));
           if (content.trim().split('\n').length > 20) {
