@@ -1,8 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState } from 'react';
-// import { useQuery } from 'convex/react';
-// import { api } from '~/../convex/_generated/api';
+import { useState, useMemo } from 'react';
+import { useQuery } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
 import { Bot, Activity, MessageSquare, FileText, Plus, Heart, Zap, ArrowRight, AlertTriangle, CheckCircle, LucideIcon } from 'lucide-react';
 
 export const Route = createFileRoute('/')({ component: OverviewPage });
@@ -81,23 +81,63 @@ function SystemHealthIndicator({ isHealthy }: SystemHealthIndicatorProps) {
 }
 
 function OverviewPage() {
-  // Local state with realistic initial values, simulating data from Convex
-  const [stats] = useState({
-    totalAgents: 12,
-    activeSessions: 3,
-    messagesToday: 1402,
-    totalFiles: 256,
+  // Fetch real data from Convex - using individual queries
+  const agents = useQuery(api.agents.listActive, {});
+  const sessions = useQuery(api.sessions.list, {});
+
+  // Calculate stats from the data
+  const stats = useMemo(() => {
+    const activeSessions = sessions?.filter((s: any) => s.status === 'active' || s.status === 'paused').length ?? 0;
+    return {
+      totalAgents: agents?.length ?? 0,
+      activeSessions,
+      messagesToday: 0, // Will be calculated when we have message history
+      totalFiles: 0, // Will be added when files query exists
+    };
+  }, [agents, sessions]);
+
+  // Use logs.list with pagination for recent activity
+  const logsResult = useQuery(api.logs.list, {
+    level: undefined,
+    source: undefined,
+    paginationOpts: { numItems: 5, cursor: null },
   });
+  const recentLogs = logsResult?.page ?? [];
 
-  const [activity] = useState([
-    { id: 1, icon: Bot, text: 'New agent "SupportBot" created.', time: '5m ago' },
-    { id: 2, icon: MessageSquare, text: 'Session #1245 ended with 52 messages.', time: '1h ago' },
-    { id: 3, icon: FileText, text: 'Uploaded "project_spec.pdf".', time: '3h ago' },
-    { id: 4, icon: Zap, text: 'Agent "DataAnalyzer" completed a task.', time: '5h ago' },
-    { id: 5, icon: Bot, text: 'Agent "CodeGenerator" was updated.', time: '1d ago' },
-  ]);
+  // Derive activity from recent logs
+  const activity = useMemo(() => {
+    if (!recentLogs || recentLogs.length === 0) return [];
 
-  const [systemHealth] = useState({ isHealthy: true });
+    const iconMap: Record<string, LucideIcon> = {
+      agent: Bot,
+      system: Zap,
+      api: Activity,
+      default: MessageSquare,
+    };
+
+    const formatTime = (timestamp: number) => {
+      const diff = Date.now() - timestamp;
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+
+      if (minutes < 60) return `${minutes}m ago`;
+      if (hours < 24) return `${hours}h ago`;
+      return `${days}d ago`;
+    };
+
+    return recentLogs.map((log: any, i: number) => ({
+      id: i,
+      icon: iconMap[log.source] || iconMap.default,
+      text: log.message,
+      time: formatTime(log.timestamp),
+    }));
+  }, [recentLogs]);
+
+  const systemHealth = { isHealthy: true };
+
+  // Show loading state
+  const isLoading = agents === undefined || sessions === undefined;
 
   return (
     <DashboardLayout>
@@ -112,10 +152,29 @@ function OverviewPage() {
 
         {/* Stat Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard icon={Bot} title="Total Agents" value={stats.totalAgents} change="+2 this week" />
-          <StatCard icon={Activity} title="Active Sessions" value={stats.activeSessions} change="-1 since yesterday" />
-          <StatCard icon={MessageSquare} title="Messages Today" value={stats.messagesToday.toLocaleString()} change="+15%" />
-          <StatCard icon={FileText} title="Total Files" value={stats.totalFiles} change="+12 files" />
+          {isLoading ? (
+            <>
+              <div className="bg-card p-6 rounded-lg shadow-md flex items-center justify-center">
+                <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+              </div>
+              <div className="bg-card p-6 rounded-lg shadow-md flex items-center justify-center">
+                <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+              </div>
+              <div className="bg-card p-6 rounded-lg shadow-md flex items-center justify-center">
+                <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+              </div>
+              <div className="bg-card p-6 rounded-lg shadow-md flex items-center justify-center">
+                <div className="animate-spin h-6 w-6 border-2 border-primary border-t-transparent rounded-full" />
+              </div>
+            </>
+          ) : (
+            <>
+              <StatCard icon={Bot} title="Total Agents" value={stats.totalAgents} change="Active agents" />
+              <StatCard icon={Activity} title="Active Sessions" value={stats.activeSessions} change="Running now" />
+              <StatCard icon={MessageSquare} title="Messages Today" value={stats.messagesToday.toLocaleString()} change="Today" />
+              <StatCard icon={FileText} title="Total Files" value={stats.totalFiles} change="Stored files" />
+            </>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -124,7 +183,7 @@ function OverviewPage() {
             <h2 className="text-xl font-semibold mb-4 flex items-center"><Activity className="w-6 h-6 mr-2 text-primary"/>Recent Activity</h2>
             {activity.length > 0 ? (
               <ul>
-                {activity.map(item => (
+                {activity.map((item: any) => (
                   <ActivityItem key={item.id} icon={item.icon} text={item.text} time={item.time} />
                 ))}
               </ul>

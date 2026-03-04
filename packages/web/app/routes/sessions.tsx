@@ -1,135 +1,124 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
-import { DashboardLayout } from "../components/DashboardLayout";
-import { useState, useMemo } from "react";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
-import { Button } from "../components/ui/button";
-import { Badge } from "../components/ui/badge";
-import { Activity, Clock, MessageSquare, XCircle, Loader2 } from "lucide-react";
+import { createFileRoute, Outlet, useMatch, Link } from '@tanstack/react-router';
+import { DashboardLayout } from '../components/DashboardLayout';
+import { useState, useMemo } from 'react';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../../convex/_generated/api';
+import { Button } from '../components/ui/button';
+import { Badge } from '../components/ui/badge';
+import { Activity, Clock, MessageSquare, XCircle, ExternalLink } from 'lucide-react';
 
-export const Route = createFileRoute("/sessions")({ component: SessionsPage });
+export const Route = createFileRoute('/sessions')({ component: SessionsPageLayout });
 
-type StatusFilter = "all" | "active" | "completed" | "error";
-
-function statusColor(status: string) {
-  if (status === "active") return "bg-green-500/20 text-green-400 border-green-700/40";
-  if (status === "completed") return "bg-blue-500/20 text-blue-400 border-blue-700/40";
-  return "bg-red-500/20 text-red-400 border-red-700/40";
+function SessionsPageLayout() {
+  const childMatch = useMatch({ from: '/sessions/$sessionId', shouldThrow: false });
+  if (childMatch) return <Outlet />;
+  return <SessionsPage />;
 }
 
-function formatDuration(startedAt: number, completedAt?: number | null): string {
-  const end = completedAt ?? Date.now();
-  const s = Math.floor((end - startedAt) / 1000);
-  if (s < 60) return `${s}s`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ${s % 60}s`;
-  return `${Math.floor(m / 60)}h ${m % 60}m`;
+function formatDuration(startTime: number, endTime?: number | null) {
+  const end = endTime ?? Date.now();
+  const seconds = Math.floor((end - startTime) / 1000);
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
+}
+
+function statusBadgeVariant(status: string) {
+  if (status === 'active') return 'default';
+  if (status === 'completed') return 'secondary';
+  if (status === 'error') return 'destructive';
+  return 'outline';
 }
 
 function SessionsPage() {
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [statusFilter, setStatusFilter] = useState('all');
+  const sessionsData = useQuery(api.sessions.list, {});
+  const endSession = useMutation(api.sessions.endSession);
 
-  const allSessions = useQuery(api.sessions.list, {}) ?? [];
-  const endSessionMutation = useMutation(api.sessions.endSession);
+  const sessions = sessionsData ?? [];
+  const isLoading = sessionsData === undefined;
 
   const filtered = useMemo(() => {
-    if (statusFilter === "all") return allSessions;
-    const map: Record<string, string> = { active: "active", completed: "completed", error: "error" };
-    return allSessions.filter((s: any) => s.status === (map[statusFilter] ?? statusFilter));
-  }, [allSessions, statusFilter]);
-
-  const loading = allSessions === undefined;
-
-  const TABS: { label: string; value: StatusFilter }[] = [
-    { label: "All", value: "all" },
-    { label: "Active", value: "active" },
-    { label: "Completed", value: "completed" },
-    { label: "Error", value: "error" },
-  ];
+    if (statusFilter === 'all') return sessions;
+    return sessions.filter((s: any) => {
+      if (statusFilter === 'active') return s.status === 'active';
+      if (statusFilter === 'idle') return s.status === 'idle';
+      if (statusFilter === 'ended') return s.status === 'completed' || s.status === 'error';
+      return true;
+    });
+  }, [sessions, statusFilter]);
 
   return (
     <DashboardLayout>
-      <div className="p-6 bg-background text-foreground">
-        <h1 className="text-2xl font-bold mb-4 flex items-center gap-2">
-          <Activity className="h-6 w-6" /> Sessions
-        </h1>
-        <p className="text-muted-foreground mb-6">Manage and monitor all agent sessions.</p>
+      <div className="p-6 space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Sessions</h1>
+          <p className="text-gray-400 text-sm mt-1">Manage and monitor all agent sessions.</p>
+        </div>
 
-        {/* Filter tabs */}
-        <div className="flex gap-2 mb-6">
-          {TABS.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => setStatusFilter(t.value)}
-              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                statusFilter === t.value
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card text-muted-foreground border border-border hover:bg-muted"
-              }`}
-            >
-              {t.label}
-            </button>
+        <div className="flex gap-2">
+          {['all', 'active', 'idle', 'ended'].map(f => (
+            <Button key={f} variant={statusFilter === f ? 'default' : 'ghost'} size="sm"
+              onClick={() => setStatusFilter(f)} className="capitalize">
+              {f}
+            </Button>
           ))}
         </div>
 
-        {loading ? (
-          <div className="flex items-center gap-2 text-muted-foreground py-8">
-            <Loader2 className="animate-spin h-5 w-5" /> Loading sessions…
-          </div>
+        {isLoading ? (
+          <div className="text-gray-400 py-8 text-center">Loading sessions…</div>
         ) : filtered.length === 0 ? (
-          <div className="text-center py-16 text-muted-foreground">
-            <Activity className="mx-auto h-12 w-12 mb-4 opacity-30" />
-            <p className="text-lg font-medium">No sessions yet</p>
-            <p className="text-sm mt-1">Sessions are created when you chat with an agent.</p>
-          </div>
+          <div className="text-gray-400 py-8 text-center">No sessions found.</div>
         ) : (
-          <div className="bg-card border border-border rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border bg-muted/40">
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Session ID</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Agent</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Status</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Started</th>
-                  <th className="text-left px-4 py-3 font-medium text-muted-foreground">Duration</th>
-                  <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+          <div className="rounded-lg border border-gray-700 overflow-hidden">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-800/50">
+                <tr>
+                  {['Session ID', 'Agent', 'Status', 'Started', 'Duration', 'Messages', 'Actions'].map(h => (
+                    <th key={h} className="px-4 py-3 text-gray-400 font-medium">{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((session: any) => (
-                  <tr key={session._id} className="border-b border-border hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-mono">
-                      <Link
-                        to="/sessions/$sessionId"
-                        params={{ sessionId: session._id }}
-                        className="text-primary hover:underline"
-                      >
-                        {session.sessionId?.slice(0, 16) ?? session._id.slice(0, 16)}…
+                {filtered.map((s: any) => (
+                  <tr key={s._id} className="border-t border-gray-700 hover:bg-gray-800/30">
+                    <td className="px-4 py-3 font-mono text-xs text-gray-300">
+                      <Link to="/sessions/$sessionId" params={{ sessionId: s._id }}
+                        className="hover:text-blue-400 flex items-center gap-1">
+                        {s.sessionId?.slice(0, 20)}… <ExternalLink size={10} />
                       </Link>
                     </td>
-                    <td className="px-4 py-3 text-foreground">{session.agentId ?? "—"}</td>
+                    <td className="px-4 py-3 text-gray-300">{s.agentId}</td>
                     <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${statusColor(session.status)}`}>
-                        {session.status}
+                      <Badge variant={statusBadgeVariant(s.status) as any}>{s.status}</Badge>
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">
+                      {new Date(s._creationTime).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-gray-400 text-xs">
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} />
+                        {formatDuration(s._creationTime, s.endTime)}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {new Date(session.startedAt).toLocaleString()}
+                    <td className="px-4 py-3 text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <MessageSquare size={12} />
+                        {s.messageCount ?? '—'}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {formatDuration(session.startedAt, session.completedAt)}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      {session.status === "active" && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="text-destructive border-destructive/40 hover:bg-destructive/10"
-                          onClick={() => endSessionMutation({ sessionId: session._id })}
-                        >
-                          <XCircle className="h-3.5 w-3.5 mr-1" /> End Session
+                    <td className="px-4 py-3">
+                      {s.status === 'active' && (
+                        <Button variant="destructive" size="sm"
+                          onClick={() => endSession({ sessionId: s._id })}>
+                          <XCircle size={12} className="mr-1" /> End
                         </Button>
                       )}
+                      <Link to="/sessions/$sessionId" params={{ sessionId: s._id }}>
+                        <Button variant="ghost" size="sm" className="ml-1">View</Button>
+                      </Link>
                     </td>
                   </tr>
                 ))}

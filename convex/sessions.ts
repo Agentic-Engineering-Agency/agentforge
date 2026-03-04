@@ -118,6 +118,44 @@ export const getWithMessages = query({
   },
 });
 
+// Query: Get session by ID with message preview
+export const getWithMessages = query({
+  args: { sessionId: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    // First, try the bySessionId index (handles the sessionId field)
+    let session = await ctx.db
+      .query("sessions")
+      .withIndex("bySessionId", (q) => q.eq("sessionId", args.sessionId!))
+      .first();
+
+    // If not found, try suffix match (short ID like "c981y6rv")
+    if (!session) {
+      const allSessions = await ctx.db.query("sessions").collect();
+      session = allSessions.find(s => s._id.endsWith(args.sessionId!)) || null;
+    } 
+
+    if (!session) {
+      return null;
+    }
+
+    // Get the last 3 messages for this thread
+    const messages = await ctx.db
+      .query("messages")
+      .withIndex("byThread", (q) => q.eq("threadId", session.threadId))
+      .order("desc")
+      .take(3);
+
+    // Reverse to get chronological order
+    const messagePreview = messages.reverse();
+
+    return {
+      ...session,
+      messagePreview,
+      messageCount: messagePreview.length,
+    };
+  },
+});
+
 // Query: Get active sessions
 export const listActive = query({
   args: {
@@ -239,23 +277,9 @@ export const remove = mutation({
   },
 });
 
-// Query: List sessions by agent ID (ordered by createdAt desc)
-export const listByAgent = query({
-  args: { agentId: v.string() },
-  handler: async (ctx, args) => {
-    return await ctx.db
-      .query("sessions")
-      .withIndex("byAgentId", (q) => q.eq("agentId", args.agentId))
-      .order("desc")
-      .collect();
-  },
-});
-
-// Mutation: End session (alias for updateStatus with "completed")
+// Mutation: End session
 export const endSession = mutation({
-  args: {
-    sessionId: v.string(),
-  },
+  args: { sessionId: v.string() },
   handler: async (ctx, args) => {
     const session = await ctx.db
       .query("sessions")
