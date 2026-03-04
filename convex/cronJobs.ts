@@ -462,3 +462,22 @@ export const executeJob = internalAction({
     };
   },
 });
+
+// Mutation: Update an existing run record status/output
+export const updateRun = mutation({
+  args: {
+    runId: v.id("cronJobRuns"),
+    status: v.union(v.literal("success"), v.literal("failed"), v.literal("running")),
+    output: v.optional(v.string()),
+    error: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    await ctx.db.patch(args.runId, {
+      status: args.status,
+      ...(args.status !== "running" && { completedAt: now }),
+      ...(args.output !== undefined && { output: args.output }),
+      ...(args.error !== undefined && { error: args.error }),
+    });
+  },
+});

@@ -66,6 +66,7 @@ export declare const api: {
       "public",
       {
         description?: string;
+        failoverModels?: Array<{ model: string; provider: string }>;
         id: string;
         instructions: string;
         maxTokens?: number;
@@ -122,6 +123,7 @@ export declare const api: {
       "public",
       {
         description?: string;
+        failoverModels?: Array<{ model: string; provider: string }>;
         id: string;
         instructions?: string;
         isActive?: boolean;
@@ -225,30 +227,6 @@ export declare const api: {
       "mutation",
       "public",
       { id: Id<"apiKeys"> },
-      any
-    >;
-  };
-  auth: {
-    cleanupExpiredSessions: FunctionReference<"mutation", "public", {}, any>;
-    createSession: FunctionReference<"mutation", "public", {}, any>;
-    generateApiKey: FunctionReference<"mutation", "public", {}, any>;
-    getSession: FunctionReference<"query", "public", { token: string }, any>;
-    setPassword: FunctionReference<
-      "mutation",
-      "public",
-      { password: string },
-      any
-    >;
-    validateApiKey: FunctionReference<
-      "query",
-      "public",
-      { apiKey: string },
-      any
-    >;
-    validatePassword: FunctionReference<
-      "query",
-      "public",
-      { password: string },
       any
     >;
   };
@@ -439,6 +417,17 @@ export declare const api: {
       "mutation",
       "public",
       { id: Id<"cronJobs">; nextRun: number },
+      any
+    >;
+    updateRun: FunctionReference<
+      "mutation",
+      "public",
+      {
+        error?: string;
+        output?: string;
+        runId: Id<"cronJobRuns">;
+        status: "success" | "failed" | "running";
+      },
       any
     >;
   };
@@ -640,6 +629,12 @@ export declare const api: {
       "mutation",
       "public",
       { olderThan: number },
+      any
+    >;
+    getBySessionId: FunctionReference<
+      "query",
+      "public",
+      { sessionId: string },
       any
     >;
     list: FunctionReference<
@@ -1201,6 +1196,12 @@ export declare const api: {
       { name: string },
       any
     >;
+    install: FunctionReference<
+      "mutation",
+      "public",
+      { skillName: string; version?: string },
+      any
+    >;
     listSkills: FunctionReference<
       "query",
       "public",
@@ -1237,8 +1238,10 @@ export declare const api: {
         documentation?: string;
         name: string;
         projectId?: Id<"projects">;
+        references?: Array<{ content: string; name: string }>;
         repository?: string;
         schema?: any;
+        skillMdContent?: string;
         userId?: string;
         version: string;
       },

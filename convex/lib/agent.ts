@@ -147,9 +147,15 @@ export class Agent {
  * Strips provider prefixes like "openai/" or "anthropic/".
  */
 export function getBaseModelId(providerId: string, modelId: string): string {
-  // If modelId already contains a slash, assume it's fully qualified
-  if (modelId.includes("/")) {
-    return modelId;
+  // Strip provider: prefix if model is stored as "openai:gpt-4o-mini" format
+  let cleanModelId = modelId;
+  if (modelId.includes(":") && !modelId.includes("/")) {
+    cleanModelId = modelId.split(":").slice(1).join(":");
+  }
+
+  // If modelId contains a slash, assume it's fully qualified (e.g. "openai/gpt-4o")
+  if (cleanModelId.includes("/")) {
+    return cleanModelId;
   }
 
   // Otherwise, prefix with provider ID if needed
@@ -163,7 +169,7 @@ export function getBaseModelId(providerId: string, modelId: string): string {
   };
 
   const prefix = providerPrefixes[providerId] ?? "";
-  return prefix + modelId;
+  return prefix + cleanModelId;
 }
 
 /**
