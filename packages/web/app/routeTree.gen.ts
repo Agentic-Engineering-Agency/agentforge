@@ -24,6 +24,7 @@ import { Route as ConnectionsRouteImport } from './routes/connections'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AgentsRouteImport } from './routes/agents'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SessionsSessionIdRouteImport } from './routes/sessions.$sessionId'
 import { Route as RunsRunIdRouteImport } from './routes/runs.$runId'
 
 const WorkflowsRoute = WorkflowsRouteImport.update({
@@ -101,6 +102,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SessionsSessionIdRoute = SessionsSessionIdRouteImport.update({
+  id: '/$sessionId',
+  path: '/$sessionId',
+  getParentRoute: () => SessionsRoute,
+} as any)
 const RunsRunIdRoute = RunsRunIdRouteImport.update({
   id: '/runs/$runId',
   path: '/runs/$runId',
@@ -117,13 +123,14 @@ export interface FileRoutesByFullPath {
   '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
   '/research': typeof ResearchRoute
-  '/sessions': typeof SessionsRoute
+  '/sessions': typeof SessionsRouteWithChildren
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
   '/workflows': typeof WorkflowsRoute
   '/runs/$runId': typeof RunsRunIdRoute
+  '/sessions/$sessionId': typeof SessionsSessionIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -135,13 +142,14 @@ export interface FileRoutesByTo {
   '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
   '/research': typeof ResearchRoute
-  '/sessions': typeof SessionsRoute
+  '/sessions': typeof SessionsRouteWithChildren
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
   '/workflows': typeof WorkflowsRoute
   '/runs/$runId': typeof RunsRunIdRoute
+  '/sessions/$sessionId': typeof SessionsSessionIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -154,13 +162,14 @@ export interface FileRoutesById {
   '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
   '/research': typeof ResearchRoute
-  '/sessions': typeof SessionsRoute
+  '/sessions': typeof SessionsRouteWithChildren
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
   '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
   '/workflows': typeof WorkflowsRoute
   '/runs/$runId': typeof RunsRunIdRoute
+  '/sessions/$sessionId': typeof SessionsSessionIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -181,6 +190,7 @@ export interface FileRouteTypes {
     | '/usage'
     | '/workflows'
     | '/runs/$runId'
+    | '/sessions/$sessionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -199,6 +209,7 @@ export interface FileRouteTypes {
     | '/usage'
     | '/workflows'
     | '/runs/$runId'
+    | '/sessions/$sessionId'
   id:
     | '__root__'
     | '/'
@@ -217,6 +228,7 @@ export interface FileRouteTypes {
     | '/usage'
     | '/workflows'
     | '/runs/$runId'
+    | '/sessions/$sessionId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -229,7 +241,7 @@ export interface RootRouteChildren {
   ObservabilityRoute: typeof ObservabilityRoute
   ProjectsRoute: typeof ProjectsRoute
   ResearchRoute: typeof ResearchRoute
-  SessionsRoute: typeof SessionsRoute
+  SessionsRoute: typeof SessionsRouteWithChildren
   SettingsRoute: typeof SettingsRoute
   SkillsRoute: typeof SkillsRoute
   SkillsMarketplaceRoute: typeof SkillsMarketplaceRoute
@@ -345,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sessions/$sessionId': {
+      id: '/sessions/$sessionId'
+      path: '/$sessionId'
+      fullPath: '/sessions/$sessionId'
+      preLoaderRoute: typeof SessionsSessionIdRouteImport
+      parentRoute: typeof SessionsRoute
+    }
     '/runs/$runId': {
       id: '/runs/$runId'
       path: '/runs/$runId'
@@ -354,6 +373,18 @@ declare module '@tanstack/react-router' {
     }
   }
 }
+
+interface SessionsRouteChildren {
+  SessionsSessionIdRoute: typeof SessionsSessionIdRoute
+}
+
+const SessionsRouteChildren: SessionsRouteChildren = {
+  SessionsSessionIdRoute: SessionsSessionIdRoute,
+}
+
+const SessionsRouteWithChildren = SessionsRoute._addFileChildren(
+  SessionsRouteChildren,
+)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -365,7 +396,7 @@ const rootRouteChildren: RootRouteChildren = {
   ObservabilityRoute: ObservabilityRoute,
   ProjectsRoute: ProjectsRoute,
   ResearchRoute: ResearchRoute,
-  SessionsRoute: SessionsRoute,
+  SessionsRoute: SessionsRouteWithChildren,
   SettingsRoute: SettingsRoute,
   SkillsRoute: SkillsRoute,
   SkillsMarketplaceRoute: SkillsMarketplaceRoute,
