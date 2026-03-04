@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 
 // Helper: generate random token without Node.js crypto
 function generateToken(): string {
@@ -52,5 +52,20 @@ export const remove = mutation({
   handler: async (ctx, args) => {
     await ctx.db.delete(args.id);
     return { success: true };
+  },
+});
+
+export const insertToken = internalMutation({
+  args: {
+    token: v.string(),
+    name: v.string(),
+  },
+  handler: async (ctx, { token, name }) => {
+    await ctx.db.insert("apiAccessTokens", {
+      token,
+      name,
+      isActive: true,
+      createdAt: Date.now(),
+    });
   },
 });
