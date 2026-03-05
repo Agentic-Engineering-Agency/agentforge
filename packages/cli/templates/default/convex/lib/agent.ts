@@ -13,7 +13,7 @@
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { streamText, LanguageModel } from "ai";
+import { streamText } from "ai";
 
 export interface AgentConfig {
   id: string;
@@ -41,15 +41,15 @@ function buildLanguageModel(
   modelId: string,
   apiKey: string,
   customUrl?: string
-): LanguageModel {
+) {
   switch (providerId) {
     case "anthropic": {
       const client = createAnthropic({ apiKey });
-      return client(modelId) as LanguageModel;
+      return client(modelId) as any;
     }
     case "google": {
       const client = createGoogleGenerativeAI({ apiKey });
-      return client(modelId) as LanguageModel;
+      return client(modelId) as any;
     }
     default: {
       // All OpenAI-compatible providers
@@ -59,7 +59,7 @@ function buildLanguageModel(
         baseURL,
         apiKey,
       });
-      return client(modelId) as LanguageModel;
+      return client(modelId) as any;
     }
   }
 }

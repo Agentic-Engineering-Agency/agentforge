@@ -4816,7 +4816,7 @@ function registerModelsCommand(program2) {
         continue;
       }
       info(`${provider} (${list.length} models):`);
-      list.slice(0, 10).forEach((m) => dim(`  ${m}`));
+      list.slice(0, 10).forEach((m) => dim(`  ${m.displayName ?? m.id ?? m} ${m.isFromAPI ? "(live)" : "(static)"}`));
       if (list.length > 10) dim(`  ... and ${list.length - 10} more`);
     }
   });

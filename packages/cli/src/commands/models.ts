@@ -35,7 +35,7 @@ export function registerModelsCommand(program: Command) {
       for (const [provider, list] of Object.entries(allModels)) {
         if (!list?.length) { dim(`  ${provider}: no models cached (add API key first)`); continue; }
         info(`${provider} (${list.length} models):`);
-        list.slice(0, 10).forEach((m: string) => dim(`  ${m}`));
+        list.slice(0, 10).forEach((m: any) => dim(`  ${m.displayName ?? m.id ?? m} ${m.isFromAPI ? "(live)" : "(static)"}`));
         if (list.length > 10) dim(`  ... and ${list.length - 10} more`);
       }
     });
