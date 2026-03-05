@@ -4,10 +4,9 @@ Get from zero to a running agent in 5 minutes.
 
 ## Prerequisites
 
-- **Node.js 18+** — [Download](https://nodejs.org)
-- **pnpm** — `npm install -g pnpm` (or use npm/yarn)
-- **Convex account** — [Sign up free](https://convex.dev)
-- An LLM provider API key (OpenRouter, OpenAI, Anthropic, etc.)
+- Node.js >= 18
+- A [Convex](https://convex.dev) account (free)
+- An OpenAI API key (or Anthropic / Google / Mistral / DeepSeek / xAI)
 
 ## 1. Install the CLI
 
@@ -15,158 +14,88 @@ Get from zero to a running agent in 5 minutes.
 npm install -g @agentforge-ai/cli
 ```
 
-Verify the installation:
+## 2. Create a New Project
 
 ```bash
-agentforge --version
+agentforge create my-agent-app
+cd my-agent-app
 ```
 
-## 2. Create a project
+This scaffolds your project and installs all dependencies automatically.
 
-```bash
-agentforge create my-agent
-cd my-agent
-```
-
-This scaffolds a new project with:
-
-```
-my-agent/
-├── agentforge.config.ts   # Agent and project configuration
-├── convex/                # Convex backend (schema, functions)
-├── .env.example           # Environment variable template
-├── package.json
-└── tsconfig.json
-```
-
-## 3. Set up your environment
-
-Copy the example environment file:
-
-```bash
-cp .env.example .env.local
-```
-
-Edit `.env.local` with your keys:
-
-```env
-# Required: LLM Provider (pick one or more)
-OPENROUTER_API_KEY=sk-or-...
-# OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-ant-...
-# GOOGLE_API_KEY=...
-
-# Required: Convex backend
-CONVEX_URL=https://your-deployment.convex.cloud
-
-# Optional: Channels
-# TELEGRAM_BOT_TOKEN=...
-# WHATSAPP_ACCESS_TOKEN=...
-# WHATSAPP_PHONE_NUMBER_ID=...
-# SLACK_BOT_TOKEN=xoxb-...
-# SLACK_APP_TOKEN=xapp-...
-# DISCORD_BOT_TOKEN=...
-
-# Optional: Voice
-# ELEVENLABS_API_KEY=...
-# OPENAI_API_KEY=sk-...  (also used for Whisper STT)
-
-# Optional: File storage
-# R2_ENDPOINT=...
-# R2_ACCESS_KEY_ID=...
-# R2_SECRET_ACCESS_KEY=...
-```
-
-### Setting up Convex
-
-If you don't have a Convex deployment yet:
+## 3. Initialize Convex Backend
 
 ```bash
 npx convex dev
 ```
 
-This creates a new Convex project and gives you a `CONVEX_URL`. Add it to your `.env.local`.
+Follow the interactive prompts to create a new Convex project. Your schema, functions, and indexes are deployed automatically.
 
-## 4. Run your agent
+## 4. Set Your LLM API Key
 
-Start the Convex backend and AgentForge dev server:
+In the Convex dashboard (https://dashboard.convex.dev), go to **Settings → Environment Variables** and add:
+
+```
+OPENAI_API_KEY=sk-...
+```
+
+Or add it via CLI after deploying:
 
 ```bash
-# Terminal 1: Convex backend
-npx convex dev
-
-# Terminal 2: AgentForge
-agentforge run
+npx convex env set OPENAI_API_KEY "sk-..."
 ```
 
-## 5. Chat with your agent
+## 5. Create Your First Agent
 
 ```bash
-agentforge chat
+agentforge agents create
 ```
 
-This opens an interactive terminal session. Type a message and your agent responds using the configured LLM provider.
-
-## Connecting Telegram
-
-To connect your agent to Telegram:
-
-1. Create a bot with [@BotFather](https://t.me/BotFather) on Telegram
-2. Copy the bot token to your `.env.local`:
-   ```env
-   TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
-   ```
-3. Configure the channel:
-   ```bash
-   agentforge channel-telegram configure
-   ```
-4. Start the agent with Telegram enabled:
-   ```bash
-   agentforge run
-   ```
-
-Your agent now responds to Telegram messages. See [docs/channels.md](channels.md) for WhatsApp, Slack, and Discord setup.
-
-## Installing skills
-
-AgentForge comes with 6 built-in skills. To install additional skills:
+Or store a key and create an agent via the dashboard:
 
 ```bash
-# List available skills
-agentforge skills
-
-# Install a skill
-agentforge skill install web-search
+agentforge keys add openai "sk-..."
+agentforge dashboard
 ```
 
-See [docs/skills.md](skills.md) for the full skills guide.
+## 6. Start Chatting
 
-## Project configuration
-
-The `agentforge.config.ts` file controls your project:
-
-```typescript
-import { defineConfig } from '@agentforge-ai/core';
-
-export default defineConfig({
-  agents: [{
-    name: 'my-agent',
-    model: 'openai/gpt-4o',          // "provider/model" format
-    instructions: 'You are a helpful assistant.',
-    skills: ['web-search', 'file-manager'],
-  }],
-  workspace: {
-    provider: 'local',                // or 'r2' for cloud storage
-    path: './workspace',
-  },
-});
+```bash
+agentforge chat <agent-id>
 ```
 
-## Next steps
+## Project Structure
 
-- [Architecture](architecture.md) — Understand the system design
-- [Channels](channels.md) — Connect Telegram, WhatsApp, Slack, Discord
-- [Skills](skills.md) — Build and publish custom skills
-- [MCP Integration](mcp.md) — Connect external tool servers
-- [A2A Protocol](a2a.md) — Agent-to-agent communication
-- [Deployment](deployment-guide.md) — Deploy to production
+```
+my-agent-app/
+├── convex/              # Backend — Convex functions
+│   ├── agents.ts        # Agent CRUD
+│   ├── chat.ts          # Chat pipeline with failover
+│   ├── lib/
+│   │   └── agent.ts     # Multi-provider LLM client
+│   └── modelFetcher.ts  # Live model lists from provider APIs
+├── dashboard/           # Web UI (React + Vite)
+├── workspace/           # Agent workspace files
+├── skills/              # Agent skills (SKILL.md files)
+└── package.json
+```
+
+## Supported Providers
+
+| Provider | Model Fetch | Chat |
+|----------|-------------|------|
+| OpenAI | ✅ Live API | ✅ |
+| Anthropic | ✅ Live API | ✅ |
+| Google | ✅ Live API | ✅ |
+| Mistral | ✅ Live API | ✅ |
+| DeepSeek | ✅ Live API | ✅ |
+| xAI / Grok | ✅ Live API | ✅ |
+| OpenRouter | ✅ Live API | ✅ |
+| Cohere | ✅ Live API | ✅ |
+
+## Next Steps
+
+- [CLI Reference](./CLI.md) — full list of commands
+- [Architecture](./architecture.md) — how it all fits together
+- [Skills](./skills.md) — extend agents with custom skills
+- [MCP Integration](./mcp.md) — connect MCP servers
