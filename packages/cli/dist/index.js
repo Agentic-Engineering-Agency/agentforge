@@ -135,6 +135,9 @@ Next steps:
   # Start the Convex backend
   npx convex dev
 
+  # Set required encryption secret (one-time per deployment)
+  npx convex env set AGENTFORGE_KEY_SALT "$(openssl rand -base64 32)"
+
   # In another terminal, launch the dashboard
   agentforge dashboard
 
@@ -188,6 +191,9 @@ Next steps:
 
   # Start the Convex backend
   npx convex dev
+
+  # Set required encryption secret (one-time per deployment)
+  npx convex env set AGENTFORGE_KEY_SALT "$(openssl rand -base64 32)"
 
   # In another terminal, launch the dashboard
   agentforge dashboard
