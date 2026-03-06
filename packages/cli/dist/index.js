@@ -6547,6 +6547,7 @@ import path16 from "path";
 import net from "net";
 import { fileURLToPath as fileURLToPath3 } from "url";
 import { dirname, resolve as resolve2 } from "path";
+import { createStandardAgent, initStorage } from "@agentforge-ai/runtime";
 var __filename3 = fileURLToPath3(import.meta.url);
 var __dirname3 = dirname(__filename3);
 function registerStartCommand(program2) {
@@ -6599,7 +6600,54 @@ function registerStartCommand(program2) {
       info("Create an agent first: agentforge agents create");
       process.exit(1);
     }
-    success(`Loaded ${agents.length} agent(s): ${agents.map((a) => a.name).join(", ")}`);
+    success(`Loaded ${agents.length} agent config(s): ${agents.map((a) => a.name).join(", ")}`);
+    const envLocalPath = path16.join(cwd, ".env.local");
+    if (fs15.existsSync(envLocalPath)) {
+      const envContent = fs15.readFileSync(envLocalPath, "utf-8");
+      for (const line of envContent.split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const eqIdx = trimmed.indexOf("=");
+        if (eqIdx > 0) {
+          const key = trimmed.slice(0, eqIdx).trim();
+          const val = trimmed.slice(eqIdx + 1).trim();
+          if (!process.env[key]) process.env[key] = val;
+        }
+      }
+    }
+    const adminKey = process.env.CONVEX_DEPLOY_KEY;
+    if (convexUrl && adminKey) {
+      try {
+        initStorage(convexUrl, adminKey);
+        if (opts.dev) info("Convex memory storage initialized.");
+      } catch (_) {
+      }
+    }
+    const mastraAgents = [];
+    for (const agentConfig of agents) {
+      try {
+        const modelStr = agentConfig.provider && agentConfig.model ? `${agentConfig.provider}:${agentConfig.model}` : agentConfig.model || "openai:gpt-4o-mini";
+        const agent = createStandardAgent({
+          id: agentConfig.id ?? agentConfig._id,
+          name: agentConfig.name ?? "Agent",
+          instructions: agentConfig.instructions ?? "You are a helpful assistant.",
+          model: modelStr,
+          disableMemory: !adminKey
+          // disable memory if no admin key
+        });
+        agent.id = agentConfig.id ?? agentConfig._id;
+        agent.model = modelStr;
+        mastraAgents.push(agent);
+        if (opts.dev) info(`  Agent "${agentConfig.name}" \u2192 ${modelStr}`);
+      } catch (err) {
+        error(`Failed to create agent "${agentConfig.name}": ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    if (mastraAgents.length === 0) {
+      error("No agents could be instantiated. Check your API keys in .env.local");
+      process.exit(1);
+    }
+    success(`${mastraAgents.length} agent(s) ready.`);
     const portInUse = await isPortInUse(port);
     if (portInUse) {
       error(`Port ${port} is already in use.`);
@@ -6612,7 +6660,7 @@ function registerStartCommand(program2) {
       const httpModulePath = resolve2(__dirname3, "./lib/http-channel.js");
       try {
         const { startHttpChannel } = await import(httpModulePath);
-        const close = await startHttpChannel(port, agents, convexUrl, opts.dev);
+        const close = await startHttpChannel(port, mastraAgents, convexUrl, opts.dev);
         shutdownFns.push(close);
       } catch (err) {
         error(`Failed to start HTTP channel: ${err instanceof Error ? err.message : String(err)}`);
