@@ -80,7 +80,7 @@ jobs:
     needs: local-tests
     # Only run cloud tests when manually triggered with run_cloud_tests=true
     # and when AGENTFORGE_CLOUD_URL is available as a secret
-    if: ${{ github.event.inputs.run_cloud_tests == 'true' && secrets.AGENTFORGE_CLOUD_URL != '' }}
+    if: ${{ github.event.inputs.run_cloud_tests == true }}
 
     steps:
       - name: Checkout
