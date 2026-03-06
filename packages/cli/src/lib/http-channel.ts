@@ -6,6 +6,7 @@
  */
 
 import { createServer } from 'node:http';
+import { ConvexHttpClient } from 'convex/browser';
 
 /** Maximum allowed request body size (1 MB) to prevent memory exhaustion. */
 const MAX_BODY_BYTES = 1 * 1024 * 1024;
@@ -13,13 +14,15 @@ const MAX_BODY_BYTES = 1 * 1024 * 1024;
 export async function startHttpChannel(
   port: number,
   agents: any[],
-  _convexUrl: string,
+  convexUrl: string,
   dev = false
 ): Promise<() => Promise<void>> {
   const agentMap = new Map<string, any>();
   for (const agent of agents) {
     agentMap.set(agent.id, agent);
   }
+  // Convex client for storing messages (used by /api/chat)
+  const convex = convexUrl ? new ConvexHttpClient(convexUrl) : null;
 
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || '', `http://${req.headers.host}`);
@@ -197,8 +200,36 @@ export async function startHttpChannel(
             res.end(JSON.stringify({ error: 'Agent not found' }));
             return;
           }
+          // Store user message in Convex (if Convex URL configured and threadId provided)
+          if (convex && threadId) {
+            try {
+              await (convex as any).mutation('messages:create', {
+                threadId: threadId,
+                role: 'user',
+                content: message,
+              });
+            } catch (_e) {
+              // Non-fatal: log but continue — response still delivered
+              if (dev) console.warn('[api/chat] Failed to store user message:', _e);
+            }
+          }
+
           const result = await agent.generate([{ role: 'user', content: message }]);
           const reply = result?.text ?? result?.content ?? String(result ?? '');
+
+          // Store assistant reply in Convex
+          if (convex && threadId) {
+            try {
+              await (convex as any).mutation('messages:create', {
+                threadId: threadId,
+                role: 'assistant',
+                content: reply,
+              });
+            } catch (_e) {
+              if (dev) console.warn('[api/chat] Failed to store assistant message:', _e);
+            }
+          }
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ reply, threadId: threadId ?? `thread-${Date.now()}`, agentId: agent.id }));
         } catch (err) {

@@ -2,12 +2,14 @@
 
 // src/lib/http-channel.ts
 import { createServer } from "http";
+import { ConvexHttpClient } from "convex/browser";
 var MAX_BODY_BYTES = 1 * 1024 * 1024;
-async function startHttpChannel(port, agents, _convexUrl, dev = false) {
+async function startHttpChannel(port, agents, convexUrl, dev = false) {
   const agentMap = /* @__PURE__ */ new Map();
   for (const agent of agents) {
     agentMap.set(agent.id, agent);
   }
+  const convex = convexUrl ? new ConvexHttpClient(convexUrl) : null;
   const server = createServer(async (req, res) => {
     const url = new URL(req.url || "", `http://${req.headers.host}`);
     res.setHeader("Access-Control-Allow-Origin", "*");
@@ -161,8 +163,30 @@ async function startHttpChannel(port, agents, _convexUrl, dev = false) {
             res.end(JSON.stringify({ error: "Agent not found" }));
             return;
           }
+          if (convex && threadId) {
+            try {
+              await convex.mutation("messages:create", {
+                threadId,
+                role: "user",
+                content: message
+              });
+            } catch (_e) {
+              if (dev) console.warn("[api/chat] Failed to store user message:", _e);
+            }
+          }
           const result = await agent.generate([{ role: "user", content: message }]);
           const reply = result?.text ?? result?.content ?? String(result ?? "");
+          if (convex && threadId) {
+            try {
+              await convex.mutation("messages:create", {
+                threadId,
+                role: "assistant",
+                content: reply
+              });
+            } catch (_e) {
+              if (dev) console.warn("[api/chat] Failed to store assistant message:", _e);
+            }
+          }
           res.writeHead(200, { "Content-Type": "application/json" });
           res.end(JSON.stringify({ reply, threadId: threadId ?? `thread-${Date.now()}`, agentId: agent.id }));
         } catch (err) {
