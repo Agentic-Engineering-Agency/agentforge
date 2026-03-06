@@ -93,7 +93,7 @@ function FilesPage() {
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
-    await createFolder({ name: newFolderName.trim(), parentId: currentFolderId as Id<'folders'> | null });
+    await createFolder({ name: newFolderName.trim(), parentId: currentFolderId ? (currentFolderId as Id<'folders'>) : undefined });
     setNewFolderName('');
     setShowNewFolder(false);
   };
@@ -154,7 +154,7 @@ function FilesPage() {
           size: file.size,
           url: uploadUrl.split('?')[0], // Base URL without query params
           storageId,
-          folderId: currentFolderId as Id<'folders'> | null,
+          folderId: currentFolderId ? (currentFolderId as Id<'folders'>) : undefined,
         });
       }
     } catch (error) {

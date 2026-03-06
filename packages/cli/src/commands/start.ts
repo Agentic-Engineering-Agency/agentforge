@@ -182,7 +182,12 @@ export function registerStartCommand(program: Command) {
 
         try {
           const { startHttpChannel } = await import(httpModulePath);
-          const close = await startHttpChannel(port, mastraAgents, convexUrl, opts.dev);
+          const agentConfigs = agents.map((a: any) => ({
+            id: a.id ?? a._id,
+            provider: a.provider ?? 'openai',
+            model: a.model ?? 'gpt-4o-mini',
+          }));
+          const close = await startHttpChannel(port, mastraAgents, convexUrl, opts.dev, agentConfigs);
           shutdownFns.push(close);
         } catch (err) {
           error(`Failed to start HTTP channel: ${err instanceof Error ? err.message : String(err)}`);

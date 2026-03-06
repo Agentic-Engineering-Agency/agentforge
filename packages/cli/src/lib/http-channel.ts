@@ -11,17 +11,130 @@ import { ConvexHttpClient } from 'convex/browser';
 /** Maximum allowed request body size (1 MB) to prevent memory exhaustion. */
 const MAX_BODY_BYTES = 1 * 1024 * 1024;
 
+// ---------------------------------------------------------------------------
+// Static curated model lists — used as fallback and for providers without a
+// public /models API.
+// ---------------------------------------------------------------------------
+const STATIC_MODELS: Record<string, string[]> = {
+  openai:     ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o4-mini'],
+  anthropic:  ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  google:     ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'],
+  xai:        ['grok-3', 'grok-3-mini', 'grok-2'],
+  mistral:    ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
+  deepseek:   ['deepseek-chat', 'deepseek-reasoner'],
+  openrouter: ['openrouter/auto', 'openai/gpt-4o', 'anthropic/claude-sonnet-4-6', 'google/gemini-2.5-flash'],
+  groq:       ['llama-3.3-70b-versatile', 'deepseek-r1-distill-llama-70b', 'qwen-qwq-32b'],
+  together:   ['meta-llama/Llama-4-Scout-17B-16E-Instruct', 'deepseek-ai/DeepSeek-R1', 'Qwen/Qwen2.5-72B-Instruct-Turbo'],
+  perplexity: ['sonar-pro', 'sonar', 'sonar-reasoning-pro'],
+};
+
+// Simple in-process cache: provider → { models, fetchedAt }
+const modelsCache = new Map<string, { models: string[]; fetchedAt: number }>();
+const MODELS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch available models for a provider.
+ * For providers with a public API (OpenAI, Google), queries the live API.
+ * For others falls back to the static curated list.
+ * Results are cached for MODELS_CACHE_TTL_MS to avoid rate limits.
+ */
+async function fetchModels(provider: string, apiKey?: string): Promise<string[]> {
+  const cached = modelsCache.get(provider);
+  if (cached && Date.now() - cached.fetchedAt < MODELS_CACHE_TTL_MS) {
+    return cached.models;
+  }
+
+  let models: string[] = STATIC_MODELS[provider] ?? [];
+
+  try {
+    if (provider === 'openai' && apiKey) {
+      // OpenAI has a public /v1/models endpoint
+      const resp = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) {
+        const data = await resp.json() as { data: { id: string; created: number }[] };
+        // Filter to GPT / o-series chat models only (exclude embeddings, audio, etc.)
+        const EXCLUDE = ['audio', 'realtime', 'transcribe', 'tts', 'embedding', 'moderation', 'vision', 'dall-e', 'whisper', 'instruct', 'search', 'codex', 'image'];
+        const chatModels = data.data
+          .filter(m =>
+            /^(gpt-|o\d|chatgpt)/i.test(m.id) &&
+            !EXCLUDE.some(ex => m.id.toLowerCase().includes(ex))
+          )
+          .sort((a, b) => b.created - a.created)
+          .map(m => m.id)
+          .slice(0, 24);
+        if (chatModels.length > 0) models = chatModels;
+      }
+    } else if (provider === 'google' && apiKey) {
+      // Google AI Studio has a list-models endpoint
+      const resp = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`,
+        { signal: AbortSignal.timeout(5000) },
+      );
+      if (resp.ok) {
+        const data = await resp.json() as { models: { name: string; supportedGenerationMethods?: string[] }[] };
+        const chatModels = (data.models ?? [])
+          .filter(m => m.supportedGenerationMethods?.includes('generateContent'))
+          .map(m => m.name.replace('models/', ''))
+          .filter(id => id.startsWith('gemini'))
+          .slice(0, 20);
+        if (chatModels.length > 0) models = chatModels;
+      }
+    }
+    // All other providers (Anthropic, xAI, Groq, Together, Mistral, DeepSeek, Perplexity,
+    // OpenRouter) don't have freely-accessible model-list endpoints — use static list.
+  } catch {
+    // Network error / timeout — fall back to static list silently
+  }
+
+  modelsCache.set(provider, { models, fetchedAt: Date.now() });
+  return models;
+}
+
+/** Simple cost estimate (USD) based on provider + token counts. */
+function estimateCost(provider: string, model: string, promptTokens: number, completionTokens: number): number {
+  // Rough pricing per 1M tokens (input / output) as of 2026-Q1
+  const pricing: Record<string, [number, number]> = {
+    'gpt-4o':          [2.50,  10.00],
+    'gpt-4o-mini':     [0.15,   0.60],
+    'gpt-4.1':         [2.00,   8.00],
+    'gpt-4.1-mini':    [0.40,   1.60],
+    'gpt-4.1-nano':    [0.10,   0.40],
+    'o3':              [10.00, 40.00],
+    'o4-mini':         [1.10,   4.40],
+    'claude-opus-4-6':   [15.00, 75.00],
+    'claude-sonnet-4-6': [3.00,  15.00],
+    'claude-haiku-4-5':  [0.80,   4.00],
+    'gemini-2.5-pro':    [1.25,   5.00],
+    'gemini-2.5-flash':  [0.075,  0.30],
+    'gemini-2.0-flash':  [0.10,   0.40],
+  };
+  const key = Object.keys(pricing).find(k => model.includes(k));
+  if (!key) return 0;
+  const [inputPer1M, outputPer1M] = pricing[key];
+  return (promptTokens / 1_000_000) * inputPer1M + (completionTokens / 1_000_000) * outputPer1M;
+}
+
 export async function startHttpChannel(
   port: number,
   agents: any[],
   convexUrl: string,
-  dev = false
+  dev = false,
+  /** Raw agent configs (with provider + model) — used for usage tracking & model API keys */
+  agentConfigs: Array<{ id: string; provider: string; model: string }> = [],
 ): Promise<() => Promise<void>> {
   const agentMap = new Map<string, any>();
   for (const agent of agents) {
     agentMap.set(agent.id, agent);
   }
-  // Convex client for storing messages (used by /api/chat)
+  // Config map: agentId → { provider, model }
+  const configMap = new Map<string, { provider: string; model: string }>();
+  for (const cfg of agentConfigs) {
+    configMap.set(cfg.id, cfg);
+  }
+  // Convex client for storing messages + usage records
   const convex = convexUrl ? new ConvexHttpClient(convexUrl) : null;
 
   const server = createServer(async (req, res) => {
@@ -179,6 +292,28 @@ export async function startHttpChannel(
       return;
     }
 
+    // GET /api/models?provider=openai — return available models for a provider
+    // Tries live provider API first (OpenAI, Google), falls back to curated static list.
+    // Results cached 5 minutes.
+    if (url.pathname === '/api/models' && req.method === 'GET') {
+      const provider = url.searchParams.get('provider')?.toLowerCase() ?? '';
+      if (!provider) {
+        // Return all providers at once
+        const all: Record<string, string[]> = {};
+        for (const p of Object.keys(STATIC_MODELS)) {
+          all[p] = STATIC_MODELS[p];
+        }
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ providers: all }));
+        return;
+      }
+      const apiKey = process.env[getProviderEnvKey(provider)];
+      const models = await fetchModels(provider, apiKey);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ provider, models, cached: modelsCache.has(provider) }));
+      return;
+    }
+
     // POST /api/chat — simple chat endpoint used by dashboard
     // Body: { agentId: string, message: string, threadId?: string }
     // Returns: { reply: string, threadId: string }
@@ -217,6 +352,14 @@ export async function startHttpChannel(
           const result = await agent.generate([{ role: 'user', content: message }]);
           const reply = result?.text ?? result?.content ?? String(result ?? '');
 
+          // Extract token usage from Mastra result (AI SDK v5 naming)
+          const usage = (result as any)?.usage ?? (result as any)?.rawResponse?.usage ?? null;
+          const promptTokens: number =
+            usage?.promptTokens ?? usage?.inputTokens ?? usage?.prompt_tokens ?? 0;
+          const completionTokens: number =
+            usage?.completionTokens ?? usage?.outputTokens ?? usage?.completion_tokens ?? 0;
+          const totalTokens = promptTokens + completionTokens;
+
           // Store assistant reply in Convex
           if (convex && threadId) {
             try {
@@ -230,8 +373,27 @@ export async function startHttpChannel(
             }
           }
 
+          // Record usage in Convex
+          if (convex && agent.id) {
+            try {
+              const cfg = configMap.get(agent.id) ?? { provider: 'openai', model: agent.model ?? 'unknown' };
+              const cost = estimateCost(cfg.provider, cfg.model, promptTokens, completionTokens);
+              await (convex as any).mutation('usage:record', {
+                agentId: agent.id,
+                provider: cfg.provider,
+                model: cfg.model,
+                promptTokens,
+                completionTokens,
+                totalTokens,
+                cost,
+              });
+            } catch (_e) {
+              if (dev) console.warn('[api/chat] Failed to record usage:', _e);
+            }
+          }
+
           res.writeHead(200, { 'Content-Type': 'application/json' });
-          res.end(JSON.stringify({ reply, threadId: threadId ?? `thread-${Date.now()}`, agentId: agent.id }));
+          res.end(JSON.stringify({ reply, threadId: threadId ?? `thread-${Date.now()}`, agentId: agent.id, usage: { promptTokens, completionTokens, totalTokens } }));
         } catch (err) {
           res.writeHead(500, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
@@ -262,6 +424,23 @@ export async function startHttpChannel(
     new Promise<void>((resolve) => {
       server.close(() => resolve());
     });
+}
+
+/** Map provider name → env var holding the API key. */
+function getProviderEnvKey(provider: string): string {
+  const map: Record<string, string> = {
+    openai:     'OPENAI_API_KEY',
+    anthropic:  'ANTHROPIC_API_KEY',
+    google:     'GOOGLE_GENERATIVE_AI_API_KEY',
+    xai:        'XAI_API_KEY',
+    mistral:    'MISTRAL_API_KEY',
+    deepseek:   'DEEPSEEK_API_KEY',
+    openrouter: 'OPENROUTER_API_KEY',
+    groq:       'GROQ_API_KEY',
+    together:   'TOGETHER_API_KEY',
+    perplexity: 'PERPLEXITY_API_KEY',
+  };
+  return map[provider] ?? `${provider.toUpperCase()}_API_KEY`;
 }
 
 interface ChatCompletionMessage {
