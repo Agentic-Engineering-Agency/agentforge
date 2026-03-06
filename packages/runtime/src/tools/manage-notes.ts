@@ -1,33 +1,34 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const NOTES_PATH = join(dirname(fileURLToPath(import.meta.url)), '../../data/notes.json');
+const NOTES_DIR = join(dirname(fileURLToPath(import.meta.url)), '../../data');
+const NOTES_PATH = join(NOTES_DIR, 'notes.json');
 
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-}
+const NoteSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
 
-function loadNotes(): Note[] {
-  if (!existsSync(NOTES_PATH)) {
-    return [];
-  }
+type Note = z.infer<typeof NoteSchema>;
+
+async function loadNotes(): Promise<Note[]> {
   try {
-    const data = readFileSync(NOTES_PATH, 'utf-8');
-    return JSON.parse(data);
+    const data = await readFile(NOTES_PATH, 'utf-8');
+    return z.array(NoteSchema).parse(JSON.parse(data));
   } catch {
     return [];
   }
 }
 
-function saveNotes(notes: Note[]): void {
-  writeFileSync(NOTES_PATH, JSON.stringify(notes, null, 2), 'utf-8');
+async function saveNotes(notes: Note[]): Promise<void> {
+  await mkdir(NOTES_DIR, { recursive: true });
+  await writeFile(NOTES_PATH, JSON.stringify(notes, null, 2), 'utf-8');
 }
 
 function generateId(): string {
@@ -45,11 +46,11 @@ export const manageNotesTool = createTool({
   }),
   outputSchema: z.object({
     success: z.boolean(),
-    notes: z.array(z.any()).optional(),
-    note: z.any().optional(),
+    notes: z.array(NoteSchema).optional(),
+    note: NoteSchema.optional(),
   }),
   execute: async ({ action, id, content, title }) => {
-    const notes = loadNotes();
+    const notes = await loadNotes();
     const now = new Date().toISOString();
 
     switch (action) {
@@ -65,7 +66,7 @@ export const manageNotesTool = createTool({
           updatedAt: now,
         };
         notes.push(newNote);
-        saveNotes(notes);
+        await saveNotes(notes);
         return { success: true, note: newNote };
       }
 
@@ -93,7 +94,7 @@ export const manageNotesTool = createTool({
         if (content !== undefined) note.content = content;
         note.updatedAt = now;
         notes[index] = note;
-        saveNotes(notes);
+        await saveNotes(notes);
         return { success: true, note };
       }
 
@@ -106,7 +107,7 @@ export const manageNotesTool = createTool({
           throw new Error(`Note not found: ${id}`);
         }
         notes.splice(index, 1);
-        saveNotes(notes);
+        await saveNotes(notes);
         return { success: true };
       }
 

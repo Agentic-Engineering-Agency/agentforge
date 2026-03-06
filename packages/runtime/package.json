@@ -28,13 +28,13 @@
     "@mastra/convex": "latest",
     "@mastra/core": "^1.8.0",
     "@mastra/memory": "^1.5.0",
+    "@mozilla/readability": "^0.6.0",
+    "jsdom": "^28.1.0",
     "zod": "^3.0.0"
   },
   "devDependencies": {
-    "@mozilla/readability": "^0.6.0",
     "@types/jsdom": "^28.0.0",
     "@types/node": "^22.0.0",
-    "jsdom": "^28.1.0",
     "tsup": "^8.0.0",
     "typescript": "^5.0.0",
     "vitest": "^3.0.0"

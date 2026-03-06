@@ -6,7 +6,7 @@ export const webSearchTool = createTool({
   description: 'Search the web for current information.',
   inputSchema: z.object({
     query: z.string(),
-    count: z.number().optional(),
+    count: z.number().int().min(1).max(20).optional(),
   }),
   outputSchema: z.object({
     results: z.array(z.object({ title: z.string(), url: z.string(), snippet: z.string() })),

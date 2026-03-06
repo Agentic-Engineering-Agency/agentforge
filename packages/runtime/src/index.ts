@@ -26,6 +26,7 @@ export { datetimeTool } from './tools/datetime.js';
 export { webSearchTool } from './tools/web-search.js';
 export { readUrlTool } from './tools/read-url.js';
 export { manageNotesTool } from './tools/manage-notes.js';
+export { BUILTIN_TOOLS, resolveTools } from './tools/registry.js';
 
 // Daemon
 export { AgentForgeDaemon } from './daemon/daemon.js';
