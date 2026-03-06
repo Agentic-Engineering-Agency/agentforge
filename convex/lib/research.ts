@@ -118,7 +118,8 @@ Be thorough but concise. Focus on the most important information.`;
     topic: string
   ): Promise<string[]> {
     const prompt = `Generate 5 research questions about: ${topic}`;
-    return await callLLM(baseConfig, baseConfig.instructions ?? "", prompt);
+    const result = await callLLM(baseConfig, "You are a research assistant.", prompt);
+    return result.split("\n").filter((q: string) => q.trim().length > 0);
   }
 
   private async answerQuestion(
@@ -145,7 +146,7 @@ Be thorough but concise. Focus on the most important information.`;
     synthesis: string
   ): Promise<string[]> {
     const prompt = `Based on synthesis about ${topic}, suggest 3 follow-up questions: ${synthesis}`;
-    return await callLLM(baseConfig, baseConfig.instructions ?? "", prompt);
-
+    const result = await callLLM(baseConfig, "You are a research assistant.", prompt);
+    return result.split("\n").filter((q: string) => q.trim().length > 0);
   }
 }

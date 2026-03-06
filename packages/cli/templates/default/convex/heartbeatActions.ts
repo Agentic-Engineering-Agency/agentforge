@@ -27,13 +27,11 @@ export const executeTask = internalAction({
     try {
       // NOTE: LLM execution moved to runtime daemon (SPEC-020).
       // Store the task as a message; daemon processes it asynchronously.
-      const result = await ctx.runMutation(internal.messages.create, {
-        threadId: args.threadId,
+      await ctx.runMutation(api.messages.create, {
+        threadId: args.threadId as any,
         content: args.task,
         role: "user" as const,
-        agentId: args.agentId,
       });
-      const _result = result; // daemon will respond via channel adapter
 
       return { success: true, response: "Message queued for daemon processing" };
     } catch (err: unknown) {

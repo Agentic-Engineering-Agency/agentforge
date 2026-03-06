@@ -77,15 +77,14 @@ export const executeWorkflow = internalAction({
           try {
             // NOTE: LLM execution moved to runtime daemon (SPEC-020).
             // Queue the workflow step as a message; daemon processes it.
-            const threadId = await ctx.runMutation(internal.threads.createInternal, {
+            const threadId = await ctx.runMutation(api.threads.createThread, {
               agentId: stepConfig.agentId,
-              title: `Workflow step: ${stepConfig.stepId}`,
+              name: `Workflow: ${stepConfig.agentId}`,
             });
-            await ctx.runMutation(internal.messages.create, {
+            await ctx.runMutation(api.messages.create, {
               threadId,
               content: input || "Execute workflow step.",
               role: "user" as const,
-              agentId: stepConfig.agentId,
             });
             const fullResponse = "Workflow step queued for daemon processing";
 
