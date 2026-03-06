@@ -85,11 +85,11 @@ export class TelegramChannel implements ChannelAdapter {
               const chunks = splitMessage(text, 4096);
               if (chunks.length === 1) {
                 try {
-                  await this.bot.api.editMessageText(chatId, thinkingMsg.message_id, chunks[0]);
+                  await this.bot.api.editMessageText(chatId, thinkingMsg.message_id, chunks[0] || '​');
                 } catch {
                   // Edit failed, delete thinking and send new
                   await this.bot.api.deleteMessage(chatId, thinkingMsg.message_id);
-                  await ctx.reply(chunks[0]);
+                  await ctx.reply(chunks[0] || '​');
                 }
               } else {
                 await this.bot.api.deleteMessage(chatId, thinkingMsg.message_id);
@@ -99,6 +99,7 @@ export class TelegramChannel implements ChannelAdapter {
               }
             }
           },
+          this.config.editIntervalMs,
         );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';

@@ -1,8 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   splitMessage,
   formatSSEChunk,
   generateThreadId,
+  progressiveStream,
 } from '../src/channels/shared.js';
 
 describe('Channel Shared Utilities', () => {
@@ -38,7 +39,8 @@ describe('Channel Shared Utilities', () => {
 
     it('handles empty string', () => {
       const chunks = splitMessage('', 2000);
-      expect(chunks).toEqual([]);
+      // Returns one empty chunk so callers always have a safe chunks[0]
+      expect(chunks).toEqual(['']);
     });
 
     it('handles text shorter than limit', () => {
@@ -163,6 +165,69 @@ describe('Channel Shared Utilities', () => {
       expect(chunk).toContain('Hello');
       // Unicode may be escaped, which is fine
       expect(chunk.length).toBeGreaterThan(0);
+    });
+  });
+
+  // Helper to build a minimal mock Mastra Agent
+  function makeMockStreamingAgent(textChunks: string[]): Parameters<typeof progressiveStream>[0] {
+    return {
+      stream: async () => ({
+        fullStream: (async function* () {
+          for (const t of textChunks) {
+            yield { type: 'text-delta', payload: { text: t } };
+          }
+        })(),
+      }),
+    } as unknown as Parameters<typeof progressiveStream>[0];
+  }
+
+  describe('progressiveStream', () => {
+    it('calls onChunk(text, true) at the end with accumulated text', async () => {
+      const agent = makeMockStreamingAgent(['Hello', ', ', 'world']);
+      const calls: Array<[string, boolean]> = [];
+      const result = await progressiveStream(agent, 'hi', {}, async (t, done) => {
+        calls.push([t, done]);
+      });
+      expect(result).toBe('Hello, world');
+      // Last call must be (fullText, true)
+      const last = calls[calls.length - 1];
+      expect(last[0]).toBe('Hello, world');
+      expect(last[1]).toBe(true);
+    });
+
+    it('respects custom editIntervalMs — does not call intermediate onChunk when under interval', async () => {
+      // With a very long interval, intermediate calls should not happen
+      const agent = makeMockStreamingAgent(['a', 'b', 'c']);
+      let intermediateCalls = 0;
+      await progressiveStream(
+        agent,
+        'hi',
+        {},
+        async (_text, done) => { if (!done) intermediateCalls++; },
+        60_000, // 60 second interval — nothing should fire in a sync test
+      );
+      expect(intermediateCalls).toBe(0);
+    });
+
+    it('calls onChunk(buffer, true) on stream error so caller gets partial content', async () => {
+      const agent = {
+        stream: async () => ({
+          fullStream: (async function* () {
+            yield { type: 'text-delta', payload: { text: 'partial' } };
+            throw new Error('network blip');
+          })(),
+        }),
+      } as unknown as Parameters<typeof progressiveStream>[0];
+
+      const calls: Array<[string, boolean]> = [];
+      await expect(
+        progressiveStream(agent, 'hi', {}, async (t, done) => { calls.push([t, done]); }),
+      ).rejects.toThrow('network blip');
+
+      // The error recovery callback must have done=true so the caller can finalise the message
+      const errorRecoveryCall = calls.find(([, done]) => done);
+      expect(errorRecoveryCall).toBeDefined();
+      expect(errorRecoveryCall![0]).toBe('partial');
     });
   });
 });
