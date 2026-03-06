@@ -7,7 +7,7 @@ var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require
 });
 
 // src/index.ts
-import { Command as Command2 } from "commander";
+import { Command } from "commander";
 
 // src/commands/create.ts
 import path from "path";
@@ -269,587 +269,20 @@ async function runProject(options) {
   process.on("SIGTERM", shutdown);
 }
 
-// src/commands/deploy.ts
-import path4 from "path";
-import { execSync as execSync2, execFile } from "child_process";
-import fs4 from "fs-extra";
-import chalk from "chalk";
-import ora from "ora";
-
-// src/lib/credentials.ts
-import fs3 from "fs-extra";
-import path3 from "path";
-import os2 from "os";
-var CREDENTIALS_DIR = path3.join(os2.homedir(), ".agentforge");
-var CREDENTIALS_FILE = path3.join(CREDENTIALS_DIR, "credentials.json");
-var DEFAULT_CLOUD_URL = "https://cloud.agentforge.ai";
-async function readCredentials() {
-  try {
-    if (!await fs3.pathExists(CREDENTIALS_FILE)) {
-      return null;
-    }
-    const content = await fs3.readFile(CREDENTIALS_FILE, "utf-8");
-    const creds = JSON.parse(content);
-    if (!creds.cloudUrl) {
-      creds.cloudUrl = DEFAULT_CLOUD_URL;
-    }
-    return creds;
-  } catch (error3) {
-    return null;
-  }
-}
-async function getCloudUrl() {
-  const creds = await readCredentials();
-  return creds?.cloudUrl || process.env.AGENTFORGE_CLOUD_URL || DEFAULT_CLOUD_URL;
-}
-async function getApiKey() {
-  const creds = await readCredentials();
-  return creds?.apiKey || null;
-}
-
-// src/lib/cloud-client.ts
-var CloudClientError = class extends Error {
-  constructor(message, code, status) {
-    super(message);
-    this.code = code;
-    this.status = status;
-    this.name = "CloudClientError";
-  }
-};
-var CloudClient = class {
-  baseUrl;
-  apiKey = null;
-  constructor(baseUrl, apiKey) {
-    this.baseUrl = baseUrl || "https://cloud.agentforge.ai";
-    this.apiKey = apiKey || null;
-  }
-  /**
-   * Initialize the client with stored credentials
-   */
-  async initialize() {
-    this.baseUrl = await getCloudUrl();
-    this.apiKey = await getApiKey();
-  }
-  /**
-   * Set the API key directly
-   */
-  setApiKey(apiKey) {
-    this.apiKey = apiKey;
-  }
-  /**
-   * Set the base URL directly
-   */
-  setBaseUrl(baseUrl) {
-    this.baseUrl = baseUrl;
-  }
-  /**
-   * Get the full API URL for an endpoint
-   */
-  getUrl(endpoint) {
-    const base = this.baseUrl.replace(/\/$/, "");
-    const path18 = endpoint.startsWith("/") ? endpoint : `/${endpoint}`;
-    return `${base}${path18}`;
-  }
-  /**
-   * Get request headers with authentication
-   */
-  getHeaders() {
-    const headers = {
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-      "X-Client-Version": "0.5.1"
-    };
-    if (this.apiKey) {
-      headers["Authorization"] = `Bearer ${this.apiKey}`;
-    }
-    return headers;
-  }
-  /**
-   * Make an HTTP request to the Cloud API
-   */
-  async request(method, endpoint, body) {
-    const url = this.getUrl(endpoint);
-    const options = {
-      method,
-      headers: this.getHeaders()
-    };
-    if (body && (method === "POST" || method === "PUT" || method === "PATCH")) {
-      options.body = JSON.stringify(body);
-    }
-    let response;
-    try {
-      response = await fetch(url, options);
-    } catch (error3) {
-      throw new CloudClientError(
-        `Network error: ${error3.message || "Failed to connect to AgentForge Cloud"}`,
-        "NETWORK_ERROR"
-      );
-    }
-    const contentType = response.headers.get("content-type");
-    const isJson = contentType?.includes("application/json");
-    if (!response.ok) {
-      const errorBody = isJson ? await response.json() : null;
-      const message = errorBody?.message || `HTTP ${response.status}: ${response.statusText}`;
-      throw new CloudClientError(
-        message,
-        errorBody?.code || `HTTP_${response.status}`,
-        response.status
-      );
-    }
-    if (response.status === 204) {
-      return {};
-    }
-    if (!isJson) {
-      const text = await response.text();
-      return { text };
-    }
-    return response.json();
-  }
-  /**
-   * Check if credentials are valid
-   */
-  async authenticate() {
-    if (!this.apiKey) {
-      throw new CloudClientError(
-        'No API key configured. Run "agentforge login" to authenticate.',
-        "NO_CREDENTIALS",
-        401
-      );
-    }
-    try {
-      const user = await this.request("GET", "/api/auth/me");
-      return user;
-    } catch (error3) {
-      if (error3.status === 401) {
-        throw new CloudClientError(
-          'Invalid API key. Run "agentforge login" to re-authenticate.',
-          "UNAUTHORIZED",
-          401
-        );
-      }
-      throw error3;
-    }
-  }
-  /**
-   * List all projects for the authenticated user
-   */
-  async listProjects() {
-    return this.request("GET", "/api/projects");
-  }
-  /**
-   * Get a specific project by ID
-   */
-  async getProject(projectId) {
-    return this.request("GET", `/api/projects/${projectId}`);
-  }
-  /**
-   * Upload agent configuration to Cloud
-   */
-  async uploadAgentConfig(projectId, agentConfig) {
-    return this.request(
-      "POST",
-      `/api/projects/${projectId}/agents`,
-      agentConfig
-    );
-  }
-  /**
-   * Create a new deployment
-   */
-  async createDeployment(request) {
-    return this.request(
-      "POST",
-      "/api/deployments/create",
-      request
-    );
-  }
-  /**
-   * Get deployment status
-   */
-  async getDeploymentStatus(deploymentId) {
-    return this.request(
-      "GET",
-      `/api/deployments/${deploymentId}/status`
-    );
-  }
-  /**
-   * Get deployment details
-   */
-  async getDeployment(deploymentId) {
-    return this.request("GET", `/api/deployments/${deploymentId}`);
-  }
-  /**
-   * Rollback a deployment
-   */
-  async rollbackDeployment(deploymentId) {
-    return this.request(
-      "POST",
-      `/api/deployments/${deploymentId}/rollback`
-    );
-  }
-  /**
-   * List deployments for a project
-   */
-  async listDeployments(projectId) {
-    return this.request("GET", `/api/projects/${projectId}/deployments`);
-  }
-};
-
-// src/commands/deploy.ts
-var ENV_VAR_NAME_PATTERN = /^[A-Z_][A-Z0-9_]*$/i;
-function setConvexEnvVar(projectDir, key, value) {
-  return new Promise((resolve4, reject) => {
-    if (!ENV_VAR_NAME_PATTERN.test(key)) {
-      reject(new Error(`Invalid environment variable name: "${key}". Must match ${ENV_VAR_NAME_PATTERN}`));
-      return;
-    }
-    execFile("npx", ["convex", "env", "set", key, value], {
-      cwd: projectDir
-    }, (error3) => {
-      if (error3) {
-        reject(error3);
-      } else {
-        resolve4();
-      }
-    });
-  });
-}
-function parseEnvFile(filePath) {
-  const content = fs4.readFileSync(filePath, "utf-8");
-  const vars = {};
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIndex = trimmed.indexOf("=");
-    if (eqIndex === -1) continue;
-    const key = trimmed.slice(0, eqIndex).trim();
-    let value = trimmed.slice(eqIndex + 1).trim();
-    if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
-      value = value.slice(1, -1);
-    }
-    if (key) {
-      vars[key] = value;
-    }
-  }
-  return vars;
-}
-async function readAgentForgeConfig(projectDir) {
-  const tsConfigPath = path4.join(projectDir, "agentforge.config.ts");
-  if (await fs4.pathExists(tsConfigPath)) {
-    try {
-      const content = await fs4.readFile(tsConfigPath, "utf-8");
-      return parseConfigFromContent(content, projectDir);
-    } catch {
-    }
-  }
-  const jsonConfigPath = path4.join(projectDir, "agentforge.json");
-  if (await fs4.pathExists(jsonConfigPath)) {
-    try {
-      const content = await fs4.readFile(jsonConfigPath, "utf-8");
-      return JSON.parse(content);
-    } catch {
-      return null;
-    }
-  }
-  return null;
-}
-function parseConfigFromContent(content, projectDir) {
-  const config = {};
-  const projectIdMatch = content.match(/projectId\s*:\s*["']([^"']+)["']/);
-  if (projectIdMatch) {
-    config.projectId = projectIdMatch[1];
-  }
-  const agentsPath = path4.join(projectDir, "convex", "agents.ts");
-  if (fs4.existsSync(agentsPath)) {
-    try {
-      const agentsContent = fs4.readFileSync(agentsPath, "utf-8");
-      config.agents = parseAgentsFromConvex(agentsContent);
-    } catch {
-    }
-  }
-  const cloudUrlMatch = content.match(/cloudUrl\s*:\s*["']([^"']+)["']/);
-  if (cloudUrlMatch) {
-    config.cloudUrl = cloudUrlMatch[1];
-  }
-  return Object.keys(config).length > 0 ? config : null;
-}
-function parseAgentsFromConvex(content) {
-  const agents = [];
-  const agentPattern = /\{\s*id:\s*["']([^"']+)["']\s*,\s*name:\s*["']([^"']+)["']([\s\S]*?)\}/g;
-  let match;
-  while ((match = agentPattern.exec(content)) !== null) {
-    const id = match[1];
-    const name = match[2];
-    const rest = match[3];
-    const agent = { id, name, instructions: "", model: "gpt-4o-mini" };
-    const instructionsMatch = rest.match(/instructions:\s*["']([^"']+)["']/);
-    if (instructionsMatch) agent.instructions = instructionsMatch[1];
-    const modelMatch = rest.match(/model:\s*["']([^"']+)["']/);
-    if (modelMatch) agent.model = modelMatch[1];
-    const providerMatch = rest.match(/provider:\s*["']([^"']+)["']/);
-    if (providerMatch) agent.provider = providerMatch[1];
-    const descriptionMatch = rest.match(/description:\s*["']([^"']+)["']/);
-    if (descriptionMatch) agent.description = descriptionMatch[1];
-    agents.push(agent);
-  }
-  return agents;
-}
-async function deployToCloud(options, projectDir) {
-  console.log("\n\u2601\uFE0F  Deploying to AgentForge Cloud...\n");
-  const credentials = await readCredentials();
-  if (!credentials?.apiKey) {
-    console.error(chalk.red("\u2716"), "Not authenticated with AgentForge Cloud.");
-    console.error('   Run "agentforge login" to authenticate.\n');
-    process.exit(1);
-  }
-  const spinner = ora("Reading agent configuration...").start();
-  const config = await readAgentForgeConfig(projectDir);
-  let projectId = options.project || config?.projectId;
-  if (!projectId) {
-    spinner.stop();
-    console.error(chalk.red("\u2716"), "No project ID specified.");
-    console.error("   Use --project flag or set projectId in agentforge.config.ts\n");
-    process.exit(1);
-  }
-  let agents = config?.agents || [];
-  if (agents.length === 0) {
-    spinner.stop();
-    console.error(chalk.red("\u2716"), "No agents found in configuration.");
-    console.error("   Define agents in agentforge.config.ts or convex/agents.ts\n");
-    process.exit(1);
-  }
-  spinner.succeed(`Found ${agents.length} agent(s) to deploy`);
-  if (options.dryRun) {
-    console.log("\n" + chalk.blue("\u2139"), "Dry run - no changes will be made\n");
-    console.log("  Project ID:", chalk.cyan(projectId));
-    console.log("  Cloud URL:", chalk.cyan(credentials.cloudUrl || "https://cloud.agentforge.ai"));
-    console.log("  Agents:");
-    for (const agent of agents) {
-      console.log(`    \u2022 ${chalk.bold(agent.name)} (${agent.model})`);
-    }
-    console.log();
-    return;
-  }
-  const cloudSpinner = ora("Connecting to AgentForge Cloud...").start();
-  const client = new CloudClient(
-    credentials.cloudUrl || process.env.AGENTFORGE_CLOUD_URL,
-    credentials.apiKey
-  );
-  try {
-    await client.authenticate();
-    cloudSpinner.succeed("Connected to AgentForge Cloud");
-  } catch (err) {
-    cloudSpinner.fail("Failed to connect to AgentForge Cloud");
-    if (err instanceof CloudClientError) {
-      console.error(chalk.red("\u2716"), err.message);
-    } else {
-      console.error(chalk.red("\u2716"), err.message || err);
-    }
-    process.exit(1);
-  }
-  const projectSpinner = ora("Verifying project...").start();
-  try {
-    await client.getProject(projectId);
-    projectSpinner.succeed(`Project verified: ${chalk.cyan(projectId)}`);
-  } catch (err) {
-    projectSpinner.fail("Project verification failed");
-    if (err.status === 404) {
-      console.error(chalk.red("\u2716"), `Project "${projectId}" not found.`);
-      console.error("   Check the project ID or create the project in the dashboard.\n");
-    } else {
-      console.error(chalk.red("\u2716"), err.message || err);
-    }
-    process.exit(1);
-  }
-  const version = options.version || `v${Date.now()}`;
-  const deploySpinner = ora("Creating deployment...").start();
-  let deploymentId;
-  try {
-    const response = await client.createDeployment({
-      projectId,
-      agents,
-      version
-    });
-    deploymentId = response.deploymentId;
-    deploySpinner.succeed(`Deployment created: ${chalk.cyan(deploymentId)}`);
-  } catch (err) {
-    deploySpinner.fail("Failed to create deployment");
-    if (err instanceof CloudClientError) {
-      console.error(chalk.red("\u2716"), err.message);
-    } else {
-      console.error(chalk.red("\u2716"), err.message || err);
-    }
-    process.exit(1);
-  }
-  console.log("\n\u{1F4E6} Deploying agents...\n");
-  const pollSpinner = ora("Waiting for deployment to complete...").start();
-  const maxAttempts = 60;
-  let attempts = 0;
-  while (attempts < maxAttempts) {
-    let status;
-    try {
-      status = await client.getDeploymentStatus(deploymentId);
-      attempts++;
-    } catch (err) {
-      attempts++;
-      if (attempts >= maxAttempts) {
-        pollSpinner.fail("Deployment status check timed out");
-        console.error();
-        console.error(chalk.yellow("\u26A0"), "The deployment may still be in progress.");
-        console.error(`   Check status at: https://cloud.agentforge.ai/projects/${projectId}/deployments/${deploymentId}`);
-        console.error();
-        process.exit(1);
-      }
-      await new Promise((resolve4) => setTimeout(resolve4, 3e3));
-      continue;
-    }
-    if (status.status === "completed") {
-      pollSpinner.succeed("Deployment completed successfully!");
-      console.log();
-      console.log(chalk.green("\u2714"), `Deployed to ${chalk.bold(`https://cloud.agentforge.ai/projects/${projectId}`)}`);
-      if (status.url) {
-        console.log(chalk.green("\u2714"), `Deployment URL: ${chalk.cyan(status.url)}`);
-      }
-      console.log();
-      return;
-    } else if (status.status === "failed") {
-      pollSpinner.fail("Deployment failed");
-      console.error();
-      console.error(chalk.red("\u2716"), "Error:", status.errorMessage || "Unknown error");
-      console.error();
-      process.exit(1);
-    } else if (status.progress !== void 0) {
-      pollSpinner.text = `Deploying... ${status.progress}%`;
-    } else {
-      const statuses = {
-        pending: "Waiting to start...",
-        building: "Building...",
-        deploying: "Deploying..."
-      };
-      pollSpinner.text = statuses[status.status] || `Status: ${status.status}`;
-    }
-    await new Promise((resolve4) => setTimeout(resolve4, 3e3));
-  }
-  pollSpinner.fail("Deployment timed out");
-  process.exit(1);
-}
-async function deployToConvex(options) {
-  const projectDir = process.cwd();
-  const pkgPath = path4.join(projectDir, "package.json");
-  if (!await fs4.pathExists(pkgPath)) {
-    console.error(
-      "Error: No package.json found. Are you in an AgentForge project directory?"
-    );
-    process.exit(1);
-  }
-  const convexDir = path4.join(projectDir, "convex");
-  if (!await fs4.pathExists(convexDir)) {
-    console.error(
-      "Error: No convex/ directory found. Are you in an AgentForge project directory?"
-    );
-    process.exit(1);
-  }
-  if (options.rollback) {
-    console.log("\n\u{1F504} Rolling back to previous Convex deployment...\n");
-    try {
-      execSync2("npx convex deploy --rollback", {
-        cwd: projectDir,
-        stdio: "inherit"
-      });
-      console.log("\n  \u2705 Rollback completed successfully.");
-    } catch {
-      console.error("\n  \u274C Rollback failed.");
-      process.exit(1);
-    }
-    return;
-  }
-  const envPath = path4.resolve(projectDir, options.env);
-  const envExists = await fs4.pathExists(envPath);
-  let envVars = {};
-  if (envExists) {
-    envVars = parseEnvFile(envPath);
-  }
-  if (options.dryRun) {
-    console.log("\n\u{1F50D} Dry run \u2014 previewing deployment plan:\n");
-    console.log(`  Project directory: ${projectDir}`);
-    console.log(`  Convex directory:  ${convexDir}`);
-    console.log(`  Environment file:  ${envExists ? envPath : "(not found, skipping env vars)"}`);
-    if (Object.keys(envVars).length > 0) {
-      console.log(`
-  Environment variables to set (${Object.keys(envVars).length}):`);
-      for (const key of Object.keys(envVars)) {
-        console.log(`    \u2022 ${key}=${envVars[key].slice(0, 4)}${"*".repeat(Math.max(0, envVars[key].length - 4))}`);
-      }
-    } else {
-      console.log("\n  No environment variables to set.");
-    }
-    console.log("\n  \u2139\uFE0F  No changes were made (dry run).\n");
-    return;
-  }
-  if (!envExists) {
-    console.error(
-      `Error: Environment file "${options.env}" not found. Create it or use --env to specify a different path.`
-    );
-    process.exit(1);
-  }
-  if (!options.force) {
-    console.log("\n\u{1F680} Deployment plan:\n");
-    console.log(`  Project:    ${projectDir}`);
-    console.log(`  Env file:   ${envPath}`);
-    console.log(`  Env vars:   ${Object.keys(envVars).length} variable(s)`);
-    console.log("\n  Use --force to skip this confirmation.\n");
-  }
-  console.log("\n\u{1F4E6} Deploying AgentForge project to production...\n");
-  if (Object.keys(envVars).length > 0) {
-    console.log("  Setting environment variables...");
-    for (const [key, value] of Object.entries(envVars)) {
-      try {
-        await setConvexEnvVar(projectDir, key, value);
-        console.log(`    \u2705 ${key}`);
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        console.error(`    \u274C Failed to set ${key}: ${errorMessage}`);
-        throw new Error(`Failed to set environment variable ${key}: ${errorMessage}`);
-      }
-    }
-    console.log("");
-  }
-  console.log("  Deploying Convex backend...");
-  try {
-    execSync2("npx convex deploy", {
-      cwd: projectDir,
-      stdio: "inherit"
-    });
-    console.log("\n  \u2705 Deployment completed successfully!");
-    console.log('  Use "agentforge deploy --rollback" to revert if needed.\n');
-  } catch {
-    console.error("\n  \u274C Deployment failed.");
-    console.error("  Check the Convex dashboard for details.");
-    process.exit(1);
-  }
-}
-async function deployProject(options) {
-  const projectDir = process.cwd();
-  if (options.provider === "cloud") {
-    await deployToCloud(options, projectDir);
-  } else {
-    await deployToConvex(options);
-  }
-}
-
 // src/commands/upgrade.ts
-import path5 from "path";
+import path3 from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
 import { readFileSync as readFileSync2, existsSync, readdirSync, statSync, copyFileSync, mkdirSync } from "fs";
 import readline from "readline";
 var __filename2 = fileURLToPath2(import.meta.url);
-var __dirname2 = path5.dirname(__filename2);
+var __dirname2 = path3.dirname(__filename2);
 function resolveTemplateDir() {
   const searchDirs = [
-    path5.resolve(__dirname2, "..", "..", "default"),
+    path3.resolve(__dirname2, "..", "..", "default"),
     // dist/default (built)
-    path5.resolve(__dirname2, "..", "..", "..", "templates", "default"),
+    path3.resolve(__dirname2, "..", "..", "..", "templates", "default"),
     // packages/cli/templates/default (dev)
-    path5.resolve(__dirname2, "..", "..", "..", "..", "templates", "default")
+    path3.resolve(__dirname2, "..", "..", "..", "..", "templates", "default")
     // fallback
   ];
   for (const dir of searchDirs) {
@@ -866,7 +299,7 @@ function walkDir(dir, basePath = dir, skipPatterns = ["_generated"]) {
   }
   const entries = readdirSync(dir);
   for (const entry of entries) {
-    const fullPath = path5.join(dir, entry);
+    const fullPath = path3.join(dir, entry);
     const stat2 = statSync(fullPath);
     if (stat2.isDirectory()) {
       if (skipPatterns.some((pattern) => entry.includes(pattern))) {
@@ -880,7 +313,7 @@ function walkDir(dir, basePath = dir, skipPatterns = ["_generated"]) {
   return files;
 }
 function getRelativePath(fullPath, basePath) {
-  return path5.relative(basePath, fullPath);
+  return path3.relative(basePath, fullPath);
 }
 function compareFiles(templatePath, userPath) {
   if (!existsSync(userPath)) {
@@ -931,13 +364,13 @@ function promptConfirmation() {
 }
 function backupFiles(files, projectDir) {
   const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, 19);
-  const backupDir = path5.join(projectDir, "convex", `.backup-${timestamp}`);
+  const backupDir = path3.join(projectDir, "convex", `.backup-${timestamp}`);
   mkdirSync(backupDir, { recursive: true });
   for (const file of files) {
-    const userPath = path5.join(projectDir, "convex", file.relativePath);
+    const userPath = path3.join(projectDir, "convex", file.relativePath);
     if (existsSync(userPath)) {
-      const backupPath = path5.join(backupDir, file.relativePath);
-      mkdirSync(path5.dirname(backupPath), { recursive: true });
+      const backupPath = path3.join(backupDir, file.relativePath);
+      mkdirSync(path3.dirname(backupPath), { recursive: true });
       copyFileSync(userPath, backupPath);
     }
   }
@@ -945,15 +378,15 @@ function backupFiles(files, projectDir) {
 }
 function applyUpdates(files, templateDir, projectDir) {
   for (const file of files) {
-    const templatePath = path5.join(templateDir, "convex", file.relativePath);
-    const userPath = path5.join(projectDir, "convex", file.relativePath);
-    mkdirSync(path5.dirname(userPath), { recursive: true });
+    const templatePath = path3.join(templateDir, "convex", file.relativePath);
+    const userPath = path3.join(projectDir, "convex", file.relativePath);
+    mkdirSync(path3.dirname(userPath), { recursive: true });
     copyFileSync(templatePath, userPath);
   }
 }
 async function upgradeProject(options) {
   const projectDir = process.cwd();
-  const convexDir = path5.join(projectDir, "convex");
+  const convexDir = path3.join(projectDir, "convex");
   if (!existsSync(convexDir)) {
     console.error("  Error: No convex/ directory found. Are you in an AgentForge project?");
     process.exit(1);
@@ -966,7 +399,7 @@ async function upgradeProject(options) {
     console.error("  Error: Template directory not found");
     process.exit(1);
   }
-  const templateConvexDir = path5.join(templateDir, "convex");
+  const templateConvexDir = path3.join(templateDir, "convex");
   if (!existsSync(templateConvexDir)) {
     console.error("  Error: Template convex/ directory not found");
     process.exit(1);
@@ -978,7 +411,7 @@ async function upgradeProject(options) {
     if (options.only && !relativePath.includes(options.only)) {
       continue;
     }
-    const userPath = path5.join(convexDir, relativePath);
+    const userPath = path3.join(convexDir, relativePath);
     const changeType = compareFiles(templatePath, userPath);
     if (changeType !== "identical") {
       diffs.push({ relativePath, changeType });
@@ -1016,8 +449,8 @@ async function upgradeProject(options) {
 }
 
 // src/lib/convex-client.ts
-import fs5 from "fs-extra";
-import path6 from "path";
+import fs3 from "fs-extra";
+import path4 from "path";
 function safeCwd() {
   try {
     return process.cwd();
@@ -1034,19 +467,19 @@ function getConvexUrl() {
   }
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path6.join(cwd, envFile);
-    if (fs5.existsSync(envPath)) {
-      const content = fs5.readFileSync(envPath, "utf-8");
+    const envPath = path4.join(cwd, envFile);
+    if (fs3.existsSync(envPath)) {
+      const content = fs3.readFileSync(envPath, "utf-8");
       const match = content.match(/CONVEX_URL\s*=\s*(.+)/);
       if (match) {
         return match[1].trim().replace(/["']/g, "");
       }
     }
   }
-  const convexEnv = path6.join(cwd, ".convex", "deployment.json");
-  if (fs5.existsSync(convexEnv)) {
+  const convexEnv = path4.join(cwd, ".convex", "deployment.json");
+  if (fs3.existsSync(convexEnv)) {
     try {
-      const data = JSON.parse(fs5.readFileSync(convexEnv, "utf-8"));
+      const data = JSON.parse(fs3.readFileSync(convexEnv, "utf-8"));
       if (data.url) return data.url;
     } catch {
     }
@@ -1063,21 +496,21 @@ async function createClient() {
 async function safeCall(fn, errorMessage) {
   try {
     return await fn();
-  } catch (error3) {
-    if (error3.message?.includes("CONVEX_URL not found")) {
+  } catch (error4) {
+    if (error4.message?.includes("CONVEX_URL not found")) {
       console.error("\n\u274C Not connected to Convex.");
       console.error("   Run `npx convex dev` in your project directory first.\n");
-    } else if (error3.message?.includes("Current directory does not exist")) {
+    } else if (error4.message?.includes("Current directory does not exist")) {
       console.error(`
-\u274C ${error3.message}
+\u274C ${error4.message}
 `);
-    } else if (error3.message?.includes("fetch failed") || error3.message?.includes("ECONNREFUSED")) {
+    } else if (error4.message?.includes("fetch failed") || error4.message?.includes("ECONNREFUSED")) {
       console.error("\n\u274C Cannot reach Convex deployment.");
       console.error("   Make sure `npx convex dev` is running.\n");
     } else {
       console.error(`
 \u274C ${errorMessage}`);
-      console.error(`   ${error3.message}
+      console.error(`   ${error4.message}
 `);
     }
     process.exit(1);
@@ -1363,13 +796,8 @@ function registerAgentsCommand(program2) {
 
 // src/commands/chat.ts
 import readline3 from "readline";
-async function withTimeout(promise, timeoutMs, errorMessage) {
-  const timeout = new Promise((_, reject) => {
-    setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
-  });
-  return Promise.race([promise, timeout]);
-}
 var MAX_MESSAGE_LENGTH = 1e4;
+var DEFAULT_PORT = 3001;
 function validateMessage(msg) {
   if (!msg) return { valid: false, error: "Message is required" };
   const trimmed = msg.trim();
@@ -1379,12 +807,77 @@ function validateMessage(msg) {
   }
   return { valid: true };
 }
+async function chatViaHttp(agentId, message, port, onChunk, onError, stream = true) {
+  const response = await fetch(`http://localhost:${port}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      model: agentId,
+      messages: [{ role: "user", content: message }],
+      stream: true
+    })
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `HTTP ${response.status}`);
+  }
+  if (!response.body) {
+    throw new Error("No response body");
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffered = "";
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split("\n");
+    for (const line of lines) {
+      if (line.startsWith("data: ")) {
+        const data = line.slice(6);
+        if (data === "[DONE]") continue;
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            if (stream) {
+              onChunk(content);
+            } else {
+              buffered += content;
+            }
+          }
+          const errorMsg = parsed.error;
+          if (errorMsg && onError) {
+            onError(String(errorMsg));
+          }
+        } catch {
+        }
+      }
+    }
+  }
+  if (!stream && buffered) {
+    onChunk(buffered);
+  }
+}
 function registerChatCommand(program2) {
-  program2.command("chat").argument("[agent-id]", "Agent ID to chat with").option("-s, --session <id>", "Resume an existing session").option("--message <text>", "Send a single message and exit (non-interactive)").option("--no-stream", "Disable streaming (wait for full response)").description("Start an interactive chat session with an agent").action(async (agentId, opts) => {
+  program2.command("chat").argument("[agent-id]", "Agent ID to chat with").option("-s, --session <id>", "Resume an existing session (deprecated, use --thread)").option("-m, --message <text>", "Send a single message and exit (non-interactive)").option("--thread <id>", "Continue existing thread (stored in Convex)").option("-p, --port <n>", "Runtime HTTP port", String(DEFAULT_PORT)).option("--no-stream", "Disable streaming (wait for full response)").description("Start an interactive chat session with an agent").action(async (agentId, opts) => {
+    const port = parseInt(opts.port, 10);
     const client = await createClient();
-    const siteUrl = process.env.CONVEX_SITE_URL || process.env.CONVEX_URL?.replace(".cloud", ".site");
-    const enableStreaming = !!siteUrl && opts.stream !== false;
-    if (!agentId && !opts.session) {
+    let runtimeRunning = false;
+    try {
+      const healthResponse = await fetch(`http://localhost:${port}/health`);
+      runtimeRunning = healthResponse.ok;
+    } catch {
+      runtimeRunning = false;
+    }
+    if (!runtimeRunning) {
+      error("AgentForge daemon is not running.");
+      info("Start it first: agentforge start");
+      process.exit(1);
+    }
+    if (!agentId) {
       const agents = await safeCall(() => client.query("agents:list", {}), "Failed to list agents");
       if (!agents || agents.length === 0) {
         error("No agents found. Create one first: agentforge agents create");
@@ -1400,7 +893,7 @@ function registerChatCommand(program2) {
         rl2.close();
         r(a2.trim());
       }));
-      const idx = parseInt(choice) - 1;
+      const idx = parseInt(choice, 10) - 1;
       agentId = idx >= 0 && idx < agents.length ? agents[idx].id : choice;
     }
     const agent = await safeCall(() => client.query("agents:get", { id: agentId }), "Failed to fetch agent");
@@ -1409,13 +902,6 @@ function registerChatCommand(program2) {
       process.exit(1);
     }
     const a = agent;
-    if (a.sandboxEnabled && a.sandboxImage) {
-      console.log();
-      console.log(`${colors.yellow}\u26A0  Agent has Docker Sandbox enabled (image: ${a.sandboxImage})${colors.reset}`);
-      console.log(`${colors.dim}   To execute with full sandbox isolation, run:${colors.reset}`);
-      console.log(`${colors.cyan}   agentforge sandbox run ${a.id} --message "your message"${colors.reset}`);
-      console.log();
-    }
     if (opts.message) {
       const validation = validateMessage(opts.message);
       if (!validation.valid) {
@@ -1423,44 +909,53 @@ function registerChatCommand(program2) {
         process.exit(1);
       }
       const input = opts.message.trim();
-      let threadId2 = await safeCall(
-        () => client.mutation("threads:createThread", { agentId: a.id }),
-        "Failed to create thread"
-      );
-      await safeCall(() => client.mutation("messages:add", { threadId: threadId2, role: "user", content: input }), "Failed to send");
       try {
-        const response = await withTimeout(
-          safeCall(() => client.action("mastraIntegration:executeAgent", { agentId: a.id, prompt: input, threadId: threadId2 }), "Failed to get response"),
-          1e4,
-          "Agent execution timed out after 10 seconds. This may indicate a missing or invalid API key."
-        );
-        const text = response?.response || response?.text || response?.content || String(response);
-        console.log(text);
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("auth") || msg.includes("API key")) {
-          error(`Agent execution failed: No API key configured for provider "${a.provider || "openai"}".
-  Run: agentforge agents edit ${a.id} --provider anthropic
-  Or configure your key: agentforge settings set ${a.provider?.toUpperCase() || "OPENAI"}_API_KEY sk-...`);
-        } else {
-          console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
+        let threadId2 = opts.thread || opts.session;
+        if (!threadId2) {
+          threadId2 = await safeCall(
+            () => client.mutation("threads:createThread", { agentId: a.id }),
+            "Failed to create thread"
+          );
         }
+        await safeCall(() => client.mutation("messages:add", { threadId: threadId2, role: "user", content: input }), "Failed to save message");
+      } catch {
       }
-      process.exit(0);
+      try {
+        let fullResponse = "";
+        await chatViaHttp(
+          a.id,
+          input,
+          port,
+          (chunk) => {
+            process.stdout.write(chunk);
+            fullResponse += chunk;
+          },
+          (errorMsg) => {
+            console.log(`
+${colors.yellow}[Error: ${errorMsg}]${colors.reset}`);
+          },
+          opts.stream !== false
+        );
+        console.log();
+        process.exit(0);
+      } catch (err) {
+        error(`Chat failed: ${err instanceof Error ? err.message : String(err)}`);
+        info("Make sure the daemon is running: agentforge start");
+        process.exit(1);
+      }
     }
     header(`Chat with ${a.name}`);
     dim(`  Model: ${a.model} | Provider: ${a.provider || "openai"}`);
-    if (enableStreaming) {
-      dim(`  Streaming: ${colors.green}enabled${colors.reset}`);
-    } else {
-      dim(`  Streaming: ${colors.yellow}disabled${colors.reset}`);
-    }
-    dim(`  Type "exit" or "quit" to end. "/new" for new thread. "/history" for messages.`);
+    dim(`  Runtime: http://localhost:${port}`);
+    dim(`  Type "exit" or "quit" to end. "/new" for new thread.`);
     console.log();
-    let threadId = await safeCall(
-      () => client.mutation("threads:createThread", { agentId: a.id }),
-      "Failed to create thread"
-    );
+    let threadId = opts.thread || opts.session;
+    if (!threadId) {
+      threadId = await safeCall(
+        () => client.mutation("threads:createThread", { agentId: a.id }),
+        "Failed to create thread"
+      );
+    }
     const history = [];
     const isTTY = process.stdin.isTTY ?? false;
     const rl = readline3.createInterface({
@@ -1503,95 +998,38 @@ function registerChatCommand(program2) {
         return;
       }
       history.push({ role: "user", content: input });
-      await safeCall(() => client.mutation("messages:add", { threadId, role: "user", content: input }), "Failed to send");
+      try {
+        await safeCall(() => client.mutation("messages:add", { threadId, role: "user", content: input }), "Failed to save");
+      } catch {
+      }
       if (isTTY) {
         process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
       }
-      if (enableStreaming && siteUrl) {
+      try {
+        let fullResponse = "";
+        await chatViaHttp(
+          a.id,
+          input,
+          port,
+          (chunk) => {
+            process.stdout.write(chunk);
+            fullResponse += chunk;
+          },
+          (errorMsg) => {
+            console.log(`
+${colors.yellow}[Error: ${errorMsg}]${colors.reset}`);
+          },
+          opts.stream !== false
+        );
+        console.log();
+        history.push({ role: "assistant", content: fullResponse });
         try {
-          const response = await fetch(`${siteUrl}/stream-agent`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              agentId: a.id,
-              message: input,
-              threadId
-            })
-          });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(errorText || `HTTP ${response.status}`);
-          }
-          const reader = response.body.getReader();
-          const decoder = new TextDecoder();
-          let fullContent = "";
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            const chunk = decoder.decode(value, { stream: true });
-            const lines = chunk.split("\n");
-            for (const line2 of lines) {
-              if (line2.startsWith("data: ")) {
-                try {
-                  const data = JSON.parse(line2.slice(6));
-                  if (data.token) {
-                    process.stdout.write(data.token);
-                    fullContent += data.token;
-                  }
-                  if (data.error) {
-                    console.log(`
-${colors.yellow}[Error: ${data.error}]${colors.reset}`);
-                  }
-                } catch {
-                }
-              }
-            }
-          }
-          console.log();
-          history.push({ role: "assistant", content: fullContent });
-        } catch (err) {
-          console.log(`${colors.yellow}[Streaming failed: ${err instanceof Error ? err.message : String(err)}]${colors.reset}`);
-          console.log(`${colors.yellow}[Falling back to non-streaming...]${colors.reset}`);
-          try {
-            const response = await withTimeout(
-              safeCall(() => client.action("mastraIntegration:executeAgent", { agentId: a.id, prompt: input, threadId }), "Failed to get response"),
-              1e4,
-              "Agent execution timed out after 10 seconds. This may indicate a missing or invalid API key."
-            );
-            const text = response?.response || response?.text || response?.content || String(response);
-            console.log(text);
-            history.push({ role: "assistant", content: text });
-          } catch (execErr) {
-            const msg = execErr instanceof Error ? execErr.message : String(execErr);
-            if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("auth") || msg.includes("API key")) {
-              error(`Agent execution failed: No API key configured for provider "${a.provider || "openai"}".
-  Run: agentforge agents edit ${a.id} --provider anthropic
-  Or configure your key: agentforge settings set ${a.provider?.toUpperCase() || "OPENAI"}_API_KEY sk-...`);
-            } else {
-              console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
-            }
-          }
+          await safeCall(() => client.mutation("messages:add", { threadId, role: "assistant", content: fullResponse }), "Failed to save");
+        } catch {
         }
-      } else {
-        try {
-          const response = await withTimeout(
-            safeCall(() => client.action("mastraIntegration:executeAgent", { agentId: a.id, prompt: input, threadId }), "Failed to get response"),
-            1e4,
-            "Agent execution timed out after 10 seconds. This may indicate a missing or invalid API key."
-          );
-          const text = response?.response || response?.text || response?.content || String(response);
-          console.log(text);
-          history.push({ role: "assistant", content: text });
-        } catch (execErr) {
-          const msg = execErr instanceof Error ? execErr.message : String(execErr);
-          if (msg.includes("timeout") || msg.includes("timed out") || msg.includes("auth") || msg.includes("API key")) {
-            error(`Agent execution failed: No API key configured for provider "${a.provider || "openai"}".
-  Run: agentforge agents edit ${a.id} --provider anthropic
-  Or configure your key: agentforge settings set ${a.provider?.toUpperCase() || "OPENAI"}_API_KEY sk-...`);
-          } else {
-            console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
-          }
-        }
+      } catch (err) {
+        console.log(`${colors.yellow}[Chat failed: ${err instanceof Error ? err.message : String(err)}]${colors.reset}`);
+        console.log(`${colors.yellow}[Check that the daemon is running: agentforge start]${colors.reset}`);
       }
       console.log();
       if (isTTY) rl.prompt();
@@ -1723,10 +1161,10 @@ function registerThreadsCommand(program2) {
 }
 
 // src/commands/skills.ts
-import fs6 from "fs-extra";
-import path7 from "path";
+import fs4 from "fs-extra";
+import path5 from "path";
 import readline5 from "readline";
-import { execSync as execSync3 } from "child_process";
+import { execSync as execSync2 } from "child_process";
 var SKILLS_DIR_NAME = "skills";
 var SKILLS_LOCK_FILE = "skills.lock.json";
 var WORKSPACE_DIR_NAME = "workspace";
@@ -1797,25 +1235,25 @@ function prompt2(q) {
 }
 function resolveSkillsDir() {
   const cwd = process.cwd();
-  const workspaceSkillsDir = path7.join(cwd, WORKSPACE_DIR_NAME, SKILLS_DIR_NAME);
-  if (fs6.existsSync(workspaceSkillsDir)) {
+  const workspaceSkillsDir = path5.join(cwd, WORKSPACE_DIR_NAME, SKILLS_DIR_NAME);
+  if (fs4.existsSync(workspaceSkillsDir)) {
     return workspaceSkillsDir;
   }
-  return path7.join(cwd, SKILLS_DIR_NAME);
+  return path5.join(cwd, SKILLS_DIR_NAME);
 }
 function readSkillsLock(skillsDir) {
-  const lockPath = path7.join(path7.dirname(skillsDir), SKILLS_LOCK_FILE);
-  if (fs6.existsSync(lockPath)) {
+  const lockPath = path5.join(path5.dirname(skillsDir), SKILLS_LOCK_FILE);
+  if (fs4.existsSync(lockPath)) {
     try {
-      return JSON.parse(fs6.readFileSync(lockPath, "utf-8"));
+      return JSON.parse(fs4.readFileSync(lockPath, "utf-8"));
     } catch {
     }
   }
   return { version: 1, skills: {} };
 }
 function writeSkillsLock(skillsDir, lock) {
-  const lockPath = path7.join(path7.dirname(skillsDir), SKILLS_LOCK_FILE);
-  fs6.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
+  const lockPath = path5.join(path5.dirname(skillsDir), SKILLS_LOCK_FILE);
+  fs4.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + "\n");
 }
 function parseSkillMd(content) {
   try {
@@ -1847,12 +1285,12 @@ function parseSkillMd(content) {
   }
 }
 function readSkillMetadata(skillDir) {
-  const skillMdPath = path7.join(skillDir, "SKILL.md");
-  if (!fs6.existsSync(skillMdPath)) return null;
-  const content = fs6.readFileSync(skillMdPath, "utf-8");
+  const skillMdPath = path5.join(skillDir, "SKILL.md");
+  if (!fs4.existsSync(skillMdPath)) return null;
+  const content = fs4.readFileSync(skillMdPath, "utf-8");
   const { data } = parseSkillMd(content);
   return {
-    name: data.name || path7.basename(skillDir),
+    name: data.name || path5.basename(skillDir),
     description: data.description || "",
     version: data.version || "1.0.0",
     tags: data.tags || [],
@@ -2846,15 +2284,15 @@ function registerSkillsCommand(program2) {
     }
     const skillsDir = resolveSkillsDir();
     header("Installed Skills");
-    if (!fs6.existsSync(skillsDir)) {
+    if (!fs4.existsSync(skillsDir)) {
       info("No skills directory found. Install a skill with:");
       dim(`  agentforge skills install <name>`);
       dim(`  agentforge skills list --registry   # browse available skills`);
       return;
     }
-    const dirs = fs6.readdirSync(skillsDir).filter((d) => {
-      const fullPath = path7.join(skillsDir, d);
-      return fs6.statSync(fullPath).isDirectory() && fs6.existsSync(path7.join(fullPath, "SKILL.md"));
+    const dirs = fs4.readdirSync(skillsDir).filter((d) => {
+      const fullPath = path5.join(skillsDir, d);
+      return fs4.statSync(fullPath).isDirectory() && fs4.existsSync(path5.join(fullPath, "SKILL.md"));
     });
     if (dirs.length === 0) {
       info("No skills installed. Browse available skills with:");
@@ -2863,7 +2301,7 @@ function registerSkillsCommand(program2) {
     }
     const lock = readSkillsLock(skillsDir);
     const skillData = dirs.map((d) => {
-      const meta = readSkillMetadata(path7.join(skillsDir, d));
+      const meta = readSkillMetadata(path5.join(skillsDir, d));
       const lockEntry = lock.skills[d];
       return {
         Name: meta?.name || d,
@@ -2884,46 +2322,46 @@ function registerSkillsCommand(program2) {
   });
   skills.command("install").argument("<name>", "Skill name from registry, GitHub URL, or local path").option("--from <source>", "Source: registry (default), github, local", "registry").description("Install a skill into the workspace").action(async (name, opts) => {
     const skillsDir = resolveSkillsDir();
-    const targetDir = path7.join(skillsDir, name.split("/").pop().replace(/\.git$/, ""));
-    if (fs6.existsSync(targetDir) && fs6.existsSync(path7.join(targetDir, "SKILL.md"))) {
+    const targetDir = path5.join(skillsDir, name.split("/").pop().replace(/\.git$/, ""));
+    if (fs4.existsSync(targetDir) && fs4.existsSync(path5.join(targetDir, "SKILL.md"))) {
       warn(`Skill "${name}" is already installed at ${targetDir}`);
       const overwrite = await prompt2("Overwrite? (y/N): ");
       if (overwrite.toLowerCase() !== "y") {
         info("Installation cancelled.");
         return;
       }
-      fs6.removeSync(targetDir);
+      fs4.removeSync(targetDir);
     }
-    fs6.mkdirSync(skillsDir, { recursive: true });
+    fs4.mkdirSync(skillsDir, { recursive: true });
     let source = opts.from;
     let installedName = name;
-    if (opts.from === "local" || fs6.existsSync(name)) {
+    if (opts.from === "local" || fs4.existsSync(name)) {
       source = "local";
-      const sourcePath = path7.resolve(name);
-      if (!fs6.existsSync(sourcePath)) {
+      const sourcePath = path5.resolve(name);
+      if (!fs4.existsSync(sourcePath)) {
         error(`Local path not found: ${sourcePath}`);
         process.exit(1);
       }
-      if (!fs6.existsSync(path7.join(sourcePath, "SKILL.md"))) {
+      if (!fs4.existsSync(path5.join(sourcePath, "SKILL.md"))) {
         error(`No SKILL.md found in ${sourcePath}. Not a valid skill directory.`);
         process.exit(1);
       }
-      installedName = path7.basename(sourcePath);
-      const dest = path7.join(skillsDir, installedName);
-      fs6.copySync(sourcePath, dest);
+      installedName = path5.basename(sourcePath);
+      const dest = path5.join(skillsDir, installedName);
+      fs4.copySync(sourcePath, dest);
       success(`Skill "${installedName}" installed from local path.`);
     } else if (opts.from === "github" || name.includes("github.com") || name.includes("/")) {
       source = "github";
       const repoUrl = name.includes("github.com") ? name : `https://github.com/${name}`;
       installedName = name.split("/").pop().replace(/\.git$/, "");
-      const dest = path7.join(skillsDir, installedName);
+      const dest = path5.join(skillsDir, installedName);
       info(`Cloning skill from ${repoUrl}...`);
       try {
-        execSync3(`git clone --depth 1 ${repoUrl} ${dest} 2>&1`, { encoding: "utf-8" });
-        fs6.removeSync(path7.join(dest, ".git"));
-        if (!fs6.existsSync(path7.join(dest, "SKILL.md"))) {
+        execSync2(`git clone --depth 1 ${repoUrl} ${dest} 2>&1`, { encoding: "utf-8" });
+        fs4.removeSync(path5.join(dest, ".git"));
+        if (!fs4.existsSync(path5.join(dest, "SKILL.md"))) {
           error(`Cloned repo does not contain a SKILL.md. Not a valid skill.`);
-          fs6.removeSync(dest);
+          fs4.removeSync(dest);
           process.exit(1);
         }
         success(`Skill "${installedName}" installed from GitHub.`);
@@ -2950,17 +2388,17 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
         error(`No content generator for skill "${entry.name}".`);
         process.exit(1);
       }
-      const dest = path7.join(skillsDir, installedName);
-      fs6.mkdirSync(dest, { recursive: true });
+      const dest = path5.join(skillsDir, installedName);
+      fs4.mkdirSync(dest, { recursive: true });
       for (const [filePath, content] of files) {
-        const fullPath = path7.join(dest, filePath);
-        fs6.mkdirSync(path7.dirname(fullPath), { recursive: true });
-        fs6.writeFileSync(fullPath, content);
+        const fullPath = path5.join(dest, filePath);
+        fs4.mkdirSync(path5.dirname(fullPath), { recursive: true });
+        fs4.writeFileSync(fullPath, content);
       }
       success(`Skill "${installedName}" installed from AgentForge registry.`);
     }
     const lock = readSkillsLock(skillsDir);
-    const meta = readSkillMetadata(path7.join(skillsDir, installedName));
+    const meta = readSkillMetadata(path5.join(skillsDir, installedName));
     lock.skills[installedName] = {
       name: installedName,
       version: meta?.version || "1.0.0",
@@ -2975,7 +2413,7 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
         Description: meta.description,
         Version: meta.version,
         Tags: (meta.tags || []).join(", ") || "\u2014",
-        Path: path7.join(skillsDir, installedName)
+        Path: path5.join(skillsDir, installedName)
       });
     }
     info("The skill is now available to agents via the Mastra Workspace.");
@@ -3003,8 +2441,8 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
   });
   skills.command("remove").argument("<name>", "Skill name to remove").option("--force", "Skip confirmation prompt", false).description("Remove an installed skill").action(async (name, opts) => {
     const skillsDir = resolveSkillsDir();
-    const skillDir = path7.join(skillsDir, name);
-    if (!fs6.existsSync(skillDir)) {
+    const skillDir = path5.join(skillsDir, name);
+    if (!fs4.existsSync(skillDir)) {
       error(`Skill "${name}" not found in ${skillsDir}`);
       info("List installed skills with: agentforge skills list");
       process.exit(1);
@@ -3016,7 +2454,7 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
         return;
       }
     }
-    fs6.removeSync(skillDir);
+    fs4.removeSync(skillDir);
     success(`Skill "${name}" removed from disk.`);
     const lock = readSkillsLock(skillsDir);
     delete lock.skills[name];
@@ -3066,17 +2504,17 @@ Or install from GitHub: ${colors.cyan}agentforge skills install owner/repo --fro
       process.exit(1);
     }
     const skillsDir = resolveSkillsDir();
-    const skillDir = path7.join(skillsDir, name);
-    if (fs6.existsSync(skillDir)) {
+    const skillDir = path5.join(skillsDir, name);
+    if (fs4.existsSync(skillDir)) {
       error(`Skill "${name}" already exists at ${skillDir}`);
       process.exit(1);
     }
-    fs6.mkdirSync(path7.join(skillDir, "references"), { recursive: true });
-    fs6.mkdirSync(path7.join(skillDir, "scripts"), { recursive: true });
-    fs6.mkdirSync(path7.join(skillDir, "assets"), { recursive: true });
+    fs4.mkdirSync(path5.join(skillDir, "references"), { recursive: true });
+    fs4.mkdirSync(path5.join(skillDir, "scripts"), { recursive: true });
+    fs4.mkdirSync(path5.join(skillDir, "assets"), { recursive: true });
     const tagsYaml = tags.length > 0 ? `tags:
 ${tags.map((t) => `  - ${t}`).join("\n")}` : "tags: []";
-    fs6.writeFileSync(path7.join(skillDir, "SKILL.md"), `---
+    fs4.writeFileSync(path5.join(skillDir, "SKILL.md"), `---
 name: ${name}
 description: ${description}
 version: 1.0.0
@@ -3108,15 +2546,15 @@ See \`scripts/\` for executable scripts the agent can run.
 - Guideline one
 - Guideline two
 `);
-    fs6.writeFileSync(
-      path7.join(skillDir, "references", "README.md"),
+    fs4.writeFileSync(
+      path5.join(skillDir, "references", "README.md"),
       `# References for ${name}
 
 Add supporting documentation here.
 `
     );
-    fs6.writeFileSync(
-      path7.join(skillDir, "scripts", "example.ts"),
+    fs4.writeFileSync(
+      path5.join(skillDir, "scripts", "example.ts"),
       `#!/usr/bin/env npx tsx
 /**
  * Example script for ${name}
@@ -3144,26 +2582,26 @@ console.log('Hello from ${name}!');
   });
   skills.command("show <name>").description("Show full SKILL.md content for installed skill").action(async (name) => {
     const skillsDir = resolveSkillsDir();
-    const skillDir = path7.join(skillsDir, name);
-    const skillMdPath = path7.join(skillDir, "SKILL.md");
-    if (!fs6.existsSync(skillMdPath)) {
+    const skillDir = path5.join(skillsDir, name);
+    const skillMdPath = path5.join(skillDir, "SKILL.md");
+    if (!fs4.existsSync(skillMdPath)) {
       error(`Skill "${name}" not found or SKILL.md missing.`);
       info("Install a skill first: agentforge skills install <name>");
       process.exit(1);
     }
-    const content = fs6.readFileSync(skillMdPath, "utf-8");
+    const content = fs4.readFileSync(skillMdPath, "utf-8");
     header(`SKILL.md: ${name}`);
     console.log(content);
   });
   skills.command("refs <name>").description("List reference files for a skill").action(async (name) => {
     const skillsDir = resolveSkillsDir();
-    const skillDir = path7.join(skillsDir, name);
-    const refsDir = path7.join(skillDir, "references");
-    if (!fs6.existsSync(skillDir)) {
+    const skillDir = path5.join(skillsDir, name);
+    const refsDir = path5.join(skillDir, "references");
+    if (!fs4.existsSync(skillDir)) {
       error(`Skill "${name}" not found.`);
       process.exit(1);
     }
-    if (!fs6.existsSync(refsDir)) {
+    if (!fs4.existsSync(refsDir)) {
       warn(`No references/ directory for skill "${name}".`);
       dim(`Path: ${refsDir}`);
       return;
@@ -3171,16 +2609,16 @@ console.log('Hello from ${name}!');
     header(`References: ${name}`);
     dim(`Path: ${refsDir}`);
     console.log();
-    const files = fs6.readdirSync(refsDir);
+    const files = fs4.readdirSync(refsDir);
     if (files.length === 0) {
       info("References directory is empty.");
       return;
     }
     for (const file of files) {
-      const filePath = path7.join(refsDir, file);
-      const stat2 = fs6.statSync(filePath);
+      const filePath = path5.join(refsDir, file);
+      const stat2 = fs4.statSync(filePath);
       if (stat2.isFile()) {
-        const content = fs6.readFileSync(filePath, "utf-8");
+        const content = fs4.readFileSync(filePath, "utf-8");
         console.log(`${colors.cyan}\u{1F4C4} ${file}${colors.reset}`);
         console.log("\u2500".repeat(60));
         dim(content.trim().split("\n").slice(0, 20).map((l) => `  ${l}`).join("\n"));
@@ -3193,8 +2631,8 @@ console.log('Hello from ${name}!');
   });
   skills.command("info").argument("<name>", "Skill name").description("Show detailed information about a skill").action(async (name) => {
     const skillsDir = resolveSkillsDir();
-    const skillDir = path7.join(skillsDir, name);
-    if (fs6.existsSync(skillDir) && fs6.existsSync(path7.join(skillDir, "SKILL.md"))) {
+    const skillDir = path5.join(skillsDir, name);
+    if (fs4.existsSync(skillDir) && fs4.existsSync(path5.join(skillDir, "SKILL.md"))) {
       const meta = readSkillMetadata(skillDir);
       const lock = readSkillsLock(skillsDir);
       const lockEntry = lock.skills[name];
@@ -3211,10 +2649,10 @@ console.log('Hello from ${name}!');
       });
       dim("  Files:");
       const listFiles = (dir, prefix = "") => {
-        const entries = fs6.readdirSync(dir);
+        const entries = fs4.readdirSync(dir);
         for (const entry2 of entries) {
-          const fullPath = path7.join(dir, entry2);
-          const stat2 = fs6.statSync(fullPath);
+          const fullPath = path5.join(dir, entry2);
+          const stat2 = fs4.statSync(fullPath);
           if (stat2.isDirectory()) {
             dim(`  ${prefix}${entry2}/`);
             listFiles(fullPath, prefix + "  ");
@@ -3225,7 +2663,7 @@ console.log('Hello from ${name}!');
       };
       listFiles(skillDir, "  ");
       console.log();
-      const content = fs6.readFileSync(path7.join(skillDir, "SKILL.md"), "utf-8");
+      const content = fs4.readFileSync(path5.join(skillDir, "SKILL.md"), "utf-8");
       const { content: body } = parseSkillMd(content);
       info("Instructions preview:");
       dim(body.trim().split("\n").slice(0, 10).map((l) => `  ${l}`).join("\n"));
@@ -3316,12 +2754,12 @@ console.log('Hello from ${name}!');
 }
 
 // src/commands/skill.ts
-import fs7 from "fs-extra";
-import path8 from "path";
-import os3 from "os";
+import fs5 from "fs-extra";
+import path6 from "path";
+import os2 from "os";
 import { execFileSync } from "child_process";
 function getGlobalSkillsDir() {
-  return path8.join(os3.homedir(), ".agentforge", "skills");
+  return path6.join(os2.homedir(), ".agentforge", "skills");
 }
 function parseSkillMd2(content) {
   const fmMatch = content.match(/^---\n([\s\S]*?)\n---/);
@@ -3343,32 +2781,32 @@ function parseSkillMd2(content) {
   };
 }
 async function installSkillFromPath(sourcePath, skillsDir) {
-  if (!await fs7.pathExists(sourcePath)) {
+  if (!await fs5.pathExists(sourcePath)) {
     throw new Error(`Source path not found: ${sourcePath}`);
   }
-  const skillMdPath = path8.join(sourcePath, "SKILL.md");
-  if (!await fs7.pathExists(skillMdPath)) {
+  const skillMdPath = path6.join(sourcePath, "SKILL.md");
+  if (!await fs5.pathExists(skillMdPath)) {
     throw new Error(`No SKILL.md found in ${sourcePath}. Not a valid skill directory.`);
   }
-  const skillName = path8.basename(sourcePath);
-  const destPath = path8.join(skillsDir, skillName);
-  await fs7.mkdirp(skillsDir);
-  await fs7.copy(sourcePath, destPath, { overwrite: true });
+  const skillName = path6.basename(sourcePath);
+  const destPath = path6.join(skillsDir, skillName);
+  await fs5.mkdirp(skillsDir);
+  await fs5.copy(sourcePath, destPath, { overwrite: true });
   return destPath;
 }
 async function listInstalledSkills(skillsDir) {
-  if (!await fs7.pathExists(skillsDir)) {
+  if (!await fs5.pathExists(skillsDir)) {
     return [];
   }
-  const entries = await fs7.readdir(skillsDir);
+  const entries = await fs5.readdir(skillsDir);
   const skills = [];
   for (const entry of entries) {
-    const entryPath = path8.join(skillsDir, entry);
-    const stat2 = await fs7.stat(entryPath);
+    const entryPath = path6.join(skillsDir, entry);
+    const stat2 = await fs5.stat(entryPath);
     if (!stat2.isDirectory()) continue;
-    const skillMdPath = path8.join(entryPath, "SKILL.md");
-    if (!await fs7.pathExists(skillMdPath)) continue;
-    const content = await fs7.readFile(skillMdPath, "utf-8");
+    const skillMdPath = path6.join(entryPath, "SKILL.md");
+    if (!await fs5.pathExists(skillMdPath)) continue;
+    const content = await fs5.readFile(skillMdPath, "utf-8");
     const meta = parseSkillMd2(content);
     skills.push({
       name: meta.name || entry,
@@ -3379,11 +2817,11 @@ async function listInstalledSkills(skillsDir) {
   return skills;
 }
 async function removeSkill(name, skillsDir) {
-  const skillDir = path8.join(skillsDir, name);
-  if (!await fs7.pathExists(skillDir)) {
+  const skillDir = path6.join(skillsDir, name);
+  if (!await fs5.pathExists(skillDir)) {
     throw new Error(`Skill "${name}" not found in ${skillsDir}`);
   }
-  await fs7.remove(skillDir);
+  await fs5.remove(skillDir);
 }
 function getGitHubUrl(nameOrUrl) {
   if (nameOrUrl.startsWith("https://") || nameOrUrl.startsWith("http://")) {
@@ -3398,12 +2836,12 @@ function registerSkillCommand(program2) {
   const skillCmd = program2.command("skill").description("Manage global skills installed in ~/.agentforge/skills/");
   skillCmd.command("install").argument("<name>", "Local path or GitHub owner/repo to install from").description("Install a skill to ~/.agentforge/skills/").action(async (name) => {
     const skillsDir = getGlobalSkillsDir();
-    const isLocalPath = await fs7.pathExists(name);
+    const isLocalPath = await fs5.pathExists(name);
     if (isLocalPath) {
-      const sourcePath = path8.resolve(name);
+      const sourcePath = path6.resolve(name);
       try {
         const installedPath = await installSkillFromPath(sourcePath, skillsDir);
-        const skillName = path8.basename(installedPath);
+        const skillName = path6.basename(installedPath);
         success(`Skill "${skillName}" installed from local path.`);
         info(`Location: ${installedPath}`);
       } catch (err) {
@@ -3413,19 +2851,19 @@ function registerSkillCommand(program2) {
     } else {
       const repoUrl = getGitHubUrl(name);
       const repoName = name.split("/").pop().replace(/\.git$/, "");
-      const destPath = path8.join(skillsDir, repoName);
-      await fs7.mkdirp(skillsDir);
+      const destPath = path6.join(skillsDir, repoName);
+      await fs5.mkdirp(skillsDir);
       info(`Cloning skill from ${repoUrl}...`);
       try {
         execFileSync("git", ["clone", "--depth", "1", repoUrl, destPath], {
           encoding: "utf-8",
           stdio: "pipe"
         });
-        await fs7.remove(path8.join(destPath, ".git"));
-        const skillMdPath = path8.join(destPath, "SKILL.md");
-        if (!await fs7.pathExists(skillMdPath)) {
+        await fs5.remove(path6.join(destPath, ".git"));
+        const skillMdPath = path6.join(destPath, "SKILL.md");
+        if (!await fs5.pathExists(skillMdPath)) {
           error("Cloned repo does not contain a SKILL.md. Not a valid skill.");
-          await fs7.remove(destPath);
+          await fs5.remove(destPath);
           process.exit(1);
         }
         success(`Skill "${repoName}" installed from GitHub.`);
@@ -3833,8 +3271,8 @@ function registerMcpCommand(program2) {
 }
 
 // src/commands/files.ts
-import fs8 from "fs-extra";
-import path9 from "path";
+import fs6 from "fs-extra";
+import path7 from "path";
 function registerFilesCommand(program2) {
   const files = program2.command("files").description("Manage files");
   files.command("list").argument("[folder]", "Folder ID to list files from").option("--json", "Output as JSON").description("List files").action(async (folder, opts) => {
@@ -3861,14 +3299,14 @@ function registerFilesCommand(program2) {
     })));
   });
   files.command("upload").argument("<filepath>", "Path to file to upload").option("--folder <id>", "Folder ID to upload to").option("--project <id>", "Project ID to associate with").description("Upload a file").action(async (filepath, opts) => {
-    const absPath = path9.resolve(filepath);
-    if (!fs8.existsSync(absPath)) {
+    const absPath = path7.resolve(filepath);
+    if (!fs6.existsSync(absPath)) {
       error(`File not found: ${absPath}`);
       process.exit(1);
     }
-    const stat2 = fs8.statSync(absPath);
-    const name = path9.basename(absPath);
-    const ext = path9.extname(absPath).toLowerCase();
+    const stat2 = fs6.statSync(absPath);
+    const name = path7.basename(absPath);
+    const ext = path7.extname(absPath).toLowerCase();
     const mimeTypes = {
       ".txt": "text/plain",
       ".md": "text/markdown",
@@ -3892,7 +3330,7 @@ function registerFilesCommand(program2) {
         "Failed to generate upload URL"
       );
       info("Uploading file content...");
-      const fileBuffer = fs8.readFileSync(absPath);
+      const fileBuffer = fs6.readFileSync(absPath);
       const uploadResponse = await fetch(uploadUrl, {
         method: "POST",
         headers: { "Content-Type": mimeType },
@@ -3945,8 +3383,8 @@ function registerFilesCommand(program2) {
         throw new Error(`Download failed: ${response.statusText}`);
       }
       const buffer = Buffer.from(await response.arrayBuffer());
-      const outputPath = opts.output || path9.join(process.cwd(), file.originalName || file.name);
-      await fs8.writeFile(outputPath, buffer);
+      const outputPath = opts.output || path7.join(process.cwd(), file.originalName || file.name);
+      await fs6.writeFile(outputPath, buffer);
       success(`File downloaded to: ${outputPath} (${formatSize(buffer.length)})`);
     } catch (err) {
       error(`Download failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -4085,8 +3523,8 @@ function registerProjectsCommand(program2) {
 }
 
 // src/commands/config.ts
-import fs9 from "fs-extra";
-import path10 from "path";
+import fs7 from "fs-extra";
+import path8 from "path";
 import readline9 from "readline";
 function prompt6(q) {
   const rl = readline9.createInterface({ input: process.stdin, output: process.stdout });
@@ -4102,10 +3540,10 @@ function registerConfigCommand(program2) {
     const cwd = process.cwd();
     const envFiles = [".env", ".env.local", ".env.production"];
     for (const envFile of envFiles) {
-      const envPath = path10.join(cwd, envFile);
-      if (fs9.existsSync(envPath)) {
+      const envPath = path8.join(cwd, envFile);
+      if (fs7.existsSync(envPath)) {
         console.log(`  ${colors.cyan}${envFile}${colors.reset}`);
-        const content = fs9.readFileSync(envPath, "utf-8");
+        const content = fs7.readFileSync(envPath, "utf-8");
         content.split("\n").forEach((line) => {
           if (line.trim() && !line.startsWith("#")) {
             const [key, ...rest] = line.split("=");
@@ -4117,25 +3555,25 @@ function registerConfigCommand(program2) {
         console.log();
       }
     }
-    const convexDir = path10.join(cwd, ".convex");
-    if (fs9.existsSync(convexDir)) {
+    const convexDir = path8.join(cwd, ".convex");
+    if (fs7.existsSync(convexDir)) {
       info("Convex: Configured");
     } else {
       info("Convex: Not configured (run `npx convex dev`)");
     }
-    const skillsDir = path10.join(cwd, "skills");
-    if (fs9.existsSync(skillsDir)) {
-      const skills = fs9.readdirSync(skillsDir).filter((d) => fs9.statSync(path10.join(skillsDir, d)).isDirectory());
+    const skillsDir = path8.join(cwd, "skills");
+    if (fs7.existsSync(skillsDir)) {
+      const skills = fs7.readdirSync(skillsDir).filter((d) => fs7.statSync(path8.join(skillsDir, d)).isDirectory());
       info(`Skills: ${skills.length} installed (${skills.join(", ")})`);
     } else {
       info("Skills: None installed");
     }
   });
   config.command("set").argument("<key>", "Configuration key").argument("<value>", "Configuration value").option("--env <file>", "Environment file to update", ".env.local").description("Set a configuration value").action(async (key, value, opts) => {
-    const envPath = path10.join(process.cwd(), opts.env);
+    const envPath = path8.join(process.cwd(), opts.env);
     let content = "";
-    if (fs9.existsSync(envPath)) {
-      content = fs9.readFileSync(envPath, "utf-8");
+    if (fs7.existsSync(envPath)) {
+      content = fs7.readFileSync(envPath, "utf-8");
     }
     const lines = content.split("\n");
     const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
@@ -4144,16 +3582,16 @@ function registerConfigCommand(program2) {
     } else {
       lines.push(`${key}=${value}`);
     }
-    fs9.writeFileSync(envPath, lines.join("\n"));
+    fs7.writeFileSync(envPath, lines.join("\n"));
     success(`Set ${key} in ${opts.env}`);
   });
   config.command("get").argument("<key>", "Configuration key").description("Get a configuration value").action(async (key) => {
     const cwd = process.cwd();
     const envFiles = [".env.local", ".env", ".env.production"];
     for (const envFile of envFiles) {
-      const envPath = path10.join(cwd, envFile);
-      if (fs9.existsSync(envPath)) {
-        const content = fs9.readFileSync(envPath, "utf-8");
+      const envPath = path8.join(cwd, envFile);
+      if (fs7.existsSync(envPath)) {
+        const content = fs7.readFileSync(envPath, "utf-8");
         const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
         if (match) {
           console.log(match[1].trim());
@@ -4179,7 +3617,7 @@ function registerConfigCommand(program2) {
     else if (provider === "openrouter") envContent.push(`OPENROUTER_API_KEY=${apiKey}`);
     else if (provider === "anthropic") envContent.push(`ANTHROPIC_API_KEY=${apiKey}`);
     else if (provider === "google") envContent.push(`GOOGLE_API_KEY=${apiKey}`);
-    fs9.writeFileSync(path10.join(process.cwd(), ".env.local"), envContent.join("\n") + "\n");
+    fs7.writeFileSync(path8.join(process.cwd(), ".env.local"), envContent.join("\n") + "\n");
     success("Configuration saved to .env.local");
     info("Run `npx convex dev` to start the Convex backend.");
   });
@@ -4201,9 +3639,9 @@ function registerConfigCommand(program2) {
       error("API key is required.");
       process.exit(1);
     }
-    const envPath = path10.join(process.cwd(), ".env.local");
+    const envPath = path8.join(process.cwd(), ".env.local");
     let content = "";
-    if (fs9.existsSync(envPath)) content = fs9.readFileSync(envPath, "utf-8");
+    if (fs7.existsSync(envPath)) content = fs7.readFileSync(envPath, "utf-8");
     const lines = content.split("\n");
     const idx = lines.findIndex((l) => l.startsWith(`${keyName}=`));
     if (idx >= 0) lines[idx] = `${keyName}=${apiKey}`;
@@ -4211,7 +3649,7 @@ function registerConfigCommand(program2) {
     const provIdx = lines.findIndex((l) => l.startsWith("LLM_PROVIDER="));
     if (provIdx >= 0) lines[provIdx] = `LLM_PROVIDER=${provider}`;
     else lines.push(`LLM_PROVIDER=${provider}`);
-    fs9.writeFileSync(envPath, lines.join("\n"));
+    fs7.writeFileSync(envPath, lines.join("\n"));
     success(`Provider "${provider}" configured.`);
   });
 }
@@ -4570,19 +4008,19 @@ function registerKeysCommand(program2) {
 
 // src/commands/status.ts
 import { spawn as spawn2 } from "child_process";
-import path11 from "path";
-import fs10 from "fs-extra";
+import path9 from "path";
+import fs8 from "fs-extra";
 import readline11 from "readline";
 function registerStatusCommand(program2) {
   program2.command("status").description("Show system health and connection status").action(async () => {
     header("AgentForge Status");
     const cwd = process.cwd();
     const checks = {};
-    checks["Project Root"] = fs10.existsSync(path11.join(cwd, "package.json")) ? "\u2714 Found" : "\u2716 Not found";
-    checks["Convex Dir"] = fs10.existsSync(path11.join(cwd, "convex")) ? "\u2714 Found" : "\u2716 Not found";
-    checks["Skills Dir"] = fs10.existsSync(path11.join(cwd, "skills")) ? "\u2714 Found" : "\u2716 Not configured";
-    checks["Dashboard Dir"] = fs10.existsSync(path11.join(cwd, "dashboard")) ? "\u2714 Found" : "\u2716 Not found";
-    checks["Env Config"] = fs10.existsSync(path11.join(cwd, ".env.local")) || fs10.existsSync(path11.join(cwd, ".env")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Project Root"] = fs8.existsSync(path9.join(cwd, "package.json")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Convex Dir"] = fs8.existsSync(path9.join(cwd, "convex")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Skills Dir"] = fs8.existsSync(path9.join(cwd, "skills")) ? "\u2714 Found" : "\u2716 Not configured";
+    checks["Dashboard Dir"] = fs8.existsSync(path9.join(cwd, "dashboard")) ? "\u2714 Found" : "\u2716 Not found";
+    checks["Env Config"] = fs8.existsSync(path9.join(cwd, ".env.local")) || fs8.existsSync(path9.join(cwd, ".env")) ? "\u2714 Found" : "\u2716 Not found";
     try {
       const client = await createClient();
       const agents = await client.query("agents:list", {});
@@ -4590,13 +4028,26 @@ function registerStatusCommand(program2) {
     } catch {
       checks["Convex Connection"] = "\u2716 Not connected (run `npx convex dev`)";
     }
+    try {
+      const healthResponse = await fetch("http://localhost:3001/health", {
+        signal: AbortSignal.timeout(1e3)
+      });
+      if (healthResponse.ok) {
+        const health = await healthResponse.json();
+        checks["Runtime Daemon"] = `\u2714 Running on :3001 (${health.agents} agent${health.agents !== 1 ? "s" : ""})`;
+      } else {
+        checks["Runtime Daemon"] = "\u2717 Not responding";
+      }
+    } catch {
+      checks["Runtime Daemon"] = "\u2717 Not running (run `agentforge start`)";
+    }
     let providerStatus = "Not configured";
     let storedKeysCount = 0;
     const envFiles = [".env.local", ".env"];
     for (const envFile of envFiles) {
-      const envPath = path11.join(cwd, envFile);
-      if (fs10.existsSync(envPath)) {
-        const content = fs10.readFileSync(envPath, "utf-8");
+      const envPath = path9.join(cwd, envFile);
+      if (fs8.existsSync(envPath)) {
+        const content = fs8.readFileSync(envPath, "utf-8");
         const match = content.match(/LLM_PROVIDER=(.+)/);
         if (match) {
           providerStatus = match[1].trim();
@@ -4629,7 +4080,7 @@ function registerStatusCommand(program2) {
   program2.command("dashboard").description("Launch the web dashboard").option("-p, --port <port>", "Port for the dashboard", "3000").option("-d, --dir <path>", "Project directory (defaults to current directory)").option("--install", "Install dashboard dependencies before starting").action(async (opts) => {
     let cwd;
     try {
-      cwd = opts.dir ? path11.resolve(opts.dir) : process.cwd();
+      cwd = opts.dir ? path9.resolve(opts.dir) : process.cwd();
     } catch {
       error("Cannot determine the current directory.");
       console.log();
@@ -4644,16 +4095,16 @@ function registerStatusCommand(program2) {
       process.exit(1);
     }
     const searchPaths = [
-      path11.join(cwd, "dashboard"),
+      path9.join(cwd, "dashboard"),
       // 1. Bundled in project (agentforge create)
-      path11.join(cwd, "packages", "web"),
+      path9.join(cwd, "packages", "web"),
       // 2. Monorepo structure
-      path11.join(cwd, "node_modules", "@agentforge-ai", "web")
+      path9.join(cwd, "node_modules", "@agentforge-ai", "web")
       // 3. Installed as dependency
     ];
     let dashDir = "";
     for (const p of searchPaths) {
-      if (fs10.existsSync(path11.join(p, "package.json"))) {
+      if (fs8.existsSync(path9.join(p, "package.json"))) {
         dashDir = p;
         break;
       }
@@ -4675,10 +4126,10 @@ function registerStatusCommand(program2) {
       console.log();
       return;
     }
-    const nodeModulesExists = fs10.existsSync(path11.join(dashDir, "node_modules"));
+    const nodeModulesExists = fs8.existsSync(path9.join(dashDir, "node_modules"));
     if (!nodeModulesExists || opts.install) {
       header("AgentForge Dashboard \u2014 Installing Dependencies");
-      info(`Installing in ${path11.relative(cwd, dashDir) || "."}...`);
+      info(`Installing in ${path9.relative(cwd, dashDir) || "."}...`);
       console.log();
       const installChild = spawn2("pnpm", ["install"], {
         cwd: dashDir,
@@ -4696,15 +4147,15 @@ function registerStatusCommand(program2) {
       success("Dependencies installed.");
       console.log();
     }
-    const envPath = path11.join(cwd, ".env.local");
-    if (fs10.existsSync(envPath)) {
-      const envContent = fs10.readFileSync(envPath, "utf-8");
+    const envPath = path9.join(cwd, ".env.local");
+    if (fs8.existsSync(envPath)) {
+      const envContent = fs8.readFileSync(envPath, "utf-8");
       const convexUrlMatch = envContent.match(/CONVEX_URL=(.+)/);
       if (convexUrlMatch) {
-        const dashEnvPath = path11.join(dashDir, ".env.local");
+        const dashEnvPath = path9.join(dashDir, ".env.local");
         const dashEnvContent = `VITE_CONVEX_URL=${convexUrlMatch[1].trim()}
 `;
-        fs10.writeFileSync(dashEnvPath, dashEnvContent);
+        fs8.writeFileSync(dashEnvPath, dashEnvContent);
       }
     }
     header("AgentForge Dashboard");
@@ -4943,17 +4394,18 @@ Configuration saved to AGENTFORGE_STORAGE environment variable.`);
     try {
       info(`Creating ${storage} workspace...`);
       const workspace = createWorkspace(config);
+      const fs17 = workspace.filesystem ?? workspace;
       const testPath = `agentforge-test-${Date.now()}.txt`;
       const testContent = `AgentForge workspace test at ${(/* @__PURE__ */ new Date()).toISOString()}`;
       info(`Writing test file: ${testPath}`);
-      await workspace.write(testPath, testContent);
+      await fs17.write(testPath, testContent);
       info(`Reading test file...`);
-      const readContent = await workspace.read(testPath);
+      const readContent = await fs17.read(testPath);
       if (readContent === testContent) {
         success(`\u2713 Storage test passed!`);
         info(`Written and read: "${testContent}"`);
         info(`Cleaning up test file...`);
-        await workspace.delete(testPath);
+        await fs17.delete(testPath);
         success(`\u2713 Test file deleted`);
         info(`
 \u2713 ${storage.toUpperCase()} storage is working correctly.`);
@@ -5096,8 +4548,8 @@ Use it as: Authorization: Bearer ${result.token}`);
 }
 
 // src/commands/channel-telegram.ts
-import fs11 from "fs-extra";
-import path12 from "path";
+import fs9 from "fs-extra";
+import path10 from "path";
 import readline13 from "readline";
 function prompt9(q) {
   const rl = readline13.createInterface({ input: process.stdin, output: process.stdout });
@@ -5110,9 +4562,9 @@ function readEnvValue(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path12.join(cwd, envFile);
-    if (fs11.existsSync(envPath)) {
-      const content = fs11.readFileSync(envPath, "utf-8");
+    const envPath = path10.join(cwd, envFile);
+    if (fs9.existsSync(envPath)) {
+      const content = fs9.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
       if (match) return match[1].trim().replace(/["']/g, "");
     }
@@ -5120,10 +4572,10 @@ function readEnvValue(key) {
   return void 0;
 }
 function writeEnvValue(key, value, envFile = ".env.local") {
-  const envPath = path12.join(process.cwd(), envFile);
+  const envPath = path10.join(process.cwd(), envFile);
   let content = "";
-  if (fs11.existsSync(envPath)) {
-    content = fs11.readFileSync(envPath, "utf-8");
+  if (fs9.existsSync(envPath)) {
+    content = fs9.readFileSync(envPath, "utf-8");
   }
   const lines = content.split("\n");
   const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
@@ -5132,7 +4584,7 @@ function writeEnvValue(key, value, envFile = ".env.local") {
   } else {
     lines.push(`${key}=${value}`);
   }
-  fs11.writeFileSync(envPath, lines.join("\n"));
+  fs9.writeFileSync(envPath, lines.join("\n"));
 }
 function registerChannelTelegramCommand(program2) {
   const channel = program2.command("channel:telegram").description("Manage the Telegram messaging channel");
@@ -5461,8 +4913,8 @@ Commands:
 }
 
 // src/commands/channel-whatsapp.ts
-import fs12 from "fs-extra";
-import path13 from "path";
+import fs10 from "fs-extra";
+import path11 from "path";
 import readline14 from "readline";
 function prompt10(q) {
   const rl = readline14.createInterface({ input: process.stdin, output: process.stdout });
@@ -5475,9 +4927,9 @@ function readEnvValue2(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path13.join(cwd, envFile);
-    if (fs12.existsSync(envPath)) {
-      const content = fs12.readFileSync(envPath, "utf-8");
+    const envPath = path11.join(cwd, envFile);
+    if (fs10.existsSync(envPath)) {
+      const content = fs10.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
       if (match) return match[1].trim().replace(/["']/g, "");
     }
@@ -5485,10 +4937,10 @@ function readEnvValue2(key) {
   return void 0;
 }
 function writeEnvValue2(key, value, envFile = ".env.local") {
-  const envPath = path13.join(process.cwd(), envFile);
+  const envPath = path11.join(process.cwd(), envFile);
   let content = "";
-  if (fs12.existsSync(envPath)) {
-    content = fs12.readFileSync(envPath, "utf-8");
+  if (fs10.existsSync(envPath)) {
+    content = fs10.readFileSync(envPath, "utf-8");
   }
   const lines = content.split("\n");
   const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
@@ -5497,7 +4949,7 @@ function writeEnvValue2(key, value, envFile = ".env.local") {
   } else {
     lines.push(`${key}=${value}`);
   }
-  fs12.writeFileSync(envPath, lines.join("\n"));
+  fs10.writeFileSync(envPath, lines.join("\n"));
 }
 function registerChannelWhatsAppCommand(program2) {
   const channel = program2.command("channel:whatsapp").description("Manage the WhatsApp messaging channel");
@@ -5934,8 +5386,8 @@ async function runMinimalWhatsAppBot(config) {
 }
 
 // src/commands/channel-slack.ts
-import fs13 from "fs-extra";
-import path14 from "path";
+import fs11 from "fs-extra";
+import path12 from "path";
 import readline15 from "readline";
 function prompt11(q) {
   const rl = readline15.createInterface({ input: process.stdin, output: process.stdout });
@@ -5948,9 +5400,9 @@ function readEnvValue3(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path14.join(cwd, envFile);
-    if (fs13.existsSync(envPath)) {
-      const content = fs13.readFileSync(envPath, "utf-8");
+    const envPath = path12.join(cwd, envFile);
+    if (fs11.existsSync(envPath)) {
+      const content = fs11.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
       if (match) return match[1].trim().replace(/["']/g, "");
     }
@@ -5958,10 +5410,10 @@ function readEnvValue3(key) {
   return void 0;
 }
 function writeEnvValue3(key, value, envFile = ".env.local") {
-  const envPath = path14.join(process.cwd(), envFile);
+  const envPath = path12.join(process.cwd(), envFile);
   let content = "";
-  if (fs13.existsSync(envPath)) {
-    content = fs13.readFileSync(envPath, "utf-8");
+  if (fs11.existsSync(envPath)) {
+    content = fs11.readFileSync(envPath, "utf-8");
   }
   const lines = content.split("\n");
   const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
@@ -5970,7 +5422,7 @@ function writeEnvValue3(key, value, envFile = ".env.local") {
   } else {
     lines.push(`${key}=${value}`);
   }
-  fs13.writeFileSync(envPath, lines.join("\n"));
+  fs11.writeFileSync(envPath, lines.join("\n"));
 }
 function registerChannelSlackCommand(program2) {
   const channel = program2.command("channel:slack").description("Manage the Slack messaging channel");
@@ -6474,8 +5926,8 @@ async function runMinimalSlackBot(config) {
 }
 
 // src/commands/channel-discord.ts
-import fs14 from "fs-extra";
-import path15 from "path";
+import fs12 from "fs-extra";
+import path13 from "path";
 import readline16 from "readline";
 function prompt12(q) {
   const rl = readline16.createInterface({ input: process.stdin, output: process.stdout });
@@ -6488,9 +5940,9 @@ function readEnvValue4(key) {
   const cwd = process.cwd();
   const envFiles = [".env.local", ".env", ".env.production"];
   for (const envFile of envFiles) {
-    const envPath = path15.join(cwd, envFile);
-    if (fs14.existsSync(envPath)) {
-      const content = fs14.readFileSync(envPath, "utf-8");
+    const envPath = path13.join(cwd, envFile);
+    if (fs12.existsSync(envPath)) {
+      const content = fs12.readFileSync(envPath, "utf-8");
       const match = content.match(new RegExp(`^${key}=(.+)$`, "m"));
       if (match) return match[1].trim().replace(/["']/g, "");
     }
@@ -6498,10 +5950,10 @@ function readEnvValue4(key) {
   return void 0;
 }
 function writeEnvValue4(key, value, envFile = ".env.local") {
-  const envPath = path15.join(process.cwd(), envFile);
+  const envPath = path13.join(process.cwd(), envFile);
   let content = "";
-  if (fs14.existsSync(envPath)) {
-    content = fs14.readFileSync(envPath, "utf-8");
+  if (fs12.existsSync(envPath)) {
+    content = fs12.readFileSync(envPath, "utf-8");
   }
   const lines = content.split("\n");
   const idx = lines.findIndex((l) => l.startsWith(`${key}=`));
@@ -6510,7 +5962,7 @@ function writeEnvValue4(key, value, envFile = ".env.local") {
   } else {
     lines.push(`${key}=${value}`);
   }
-  fs14.writeFileSync(envPath, lines.join("\n"));
+  fs12.writeFileSync(envPath, lines.join("\n"));
 }
 function registerChannelDiscordCommand(program2) {
   const channel = program2.command("channel:discord").description("Manage the Discord messaging channel");
@@ -6846,9 +6298,9 @@ async function runMinimalDiscordBot(config) {
 }
 
 // src/commands/sandbox.ts
-import fs15 from "fs-extra";
-import path16 from "path";
-import { execSync as execSync4 } from "child_process";
+import fs13 from "fs-extra";
+import path14 from "path";
+import { execSync as execSync3 } from "child_process";
 function registerSandboxCommand(program2) {
   const sandboxCmd = program2.command("sandbox").description("Run code in an isolated Docker sandbox");
   sandboxCmd.command("run-file").argument("<file>", "Path to the JavaScript/TypeScript file to execute").option("-i, --image <image>", "Docker image to use (default: node:22-slim)", "node:22-slim").option("-t, --timeout <ms>", "Execution timeout in milliseconds (default: 30000)", "30000").action(async (file, options) => {
@@ -6863,8 +6315,8 @@ function registerSandboxCommand(program2) {
 }
 async function runSandbox(file, options) {
   header("Sandbox");
-  const filePath = path16.resolve(file);
-  if (!await fs15.pathExists(filePath)) {
+  const filePath = path14.resolve(file);
+  if (!await fs13.pathExists(filePath)) {
     error(`File not found: ${file}`);
     process.exit(1);
   }
@@ -6901,8 +6353,8 @@ async function runSandbox(file, options) {
     if (containerId) {
       dim(`Container ID: ${containerId}`);
     }
-    const fileContent = await fs15.readFile(filePath, "utf-8");
-    const fileName = path16.basename(filePath);
+    const fileContent = await fs13.readFile(filePath, "utf-8");
+    const fileName = path14.basename(filePath);
     await sandbox.writeFile(`/workspace/${fileName}`, fileContent);
     dim(`File written to sandbox: /workspace/${fileName}`);
     info("Executing file...");
@@ -6937,7 +6389,7 @@ async function runAgentInSandbox(agentId, options) {
   header("Sandbox Agent Execution");
   let dockerVersion;
   try {
-    dockerVersion = execSync4("docker --version", { encoding: "utf-8" }).trim();
+    dockerVersion = execSync3("docker --version", { encoding: "utf-8" }).trim();
     dim(`Docker: ${dockerVersion}`);
   } catch (err) {
     error("Docker is not installed or not accessible. Please install Docker first.");
@@ -6959,7 +6411,7 @@ async function runAgentInSandbox(agentId, options) {
   dim(`Message: ${options.message.substring(0, 100)}${options.message.length > 100 ? "..." : ""}`);
   info("Checking Docker image...");
   try {
-    execSync4(`docker pull ${sandboxImage}`, { stdio: "inherit" });
+    execSync3(`docker pull ${sandboxImage}`, { stdio: "inherit" });
   } catch (err) {
     error(`Failed to pull Docker image: ${sandboxImage}`);
     process.exit(1);
@@ -6979,7 +6431,7 @@ console.log('\\n\u26A0\uFE0F  Full sandbox execution requires Convex client in c
 console.log('For now, this demonstrates the Docker container spawning.');
 `;
     const dockerCommand = `docker run --rm -i ${sandboxImage} node -e "${execScript.replace(/\n/g, "\\n")}"`;
-    const result = execSync4(dockerCommand, { encoding: "utf-8", stdio: "inherit" });
+    const result = execSync3(dockerCommand, { encoding: "utf-8", stdio: "inherit" });
     success("Sandbox execution completed");
   } catch (err) {
     error(`Sandbox execution failed: ${err instanceof Error ? err.message : String(err)}`);
@@ -6988,8 +6440,8 @@ console.log('For now, this demonstrates the Docker container spawning.');
 }
 
 // src/commands/research.ts
-import fs16 from "fs-extra";
-import path17 from "path";
+import fs14 from "fs-extra";
+import path15 from "path";
 function registerResearchCommand(program2) {
   program2.command("research").description("Deep Research Mode \u2014 parallel multi-agent research").argument("<topic>", "Research topic or question").option("-d, --depth <depth>", "Research depth: shallow, standard, or deep", "standard").option("-p, --provider <provider>", "LLM provider (default: openai)", "openai").option("-m, --model <model>", "Model to use (default: gpt-4o-mini)", "gpt-4o-mini").option("-k, --key <key>", "API key (default: from environment)").action(async (topic, options) => {
     await runResearch(topic, options);
@@ -7039,9 +6491,9 @@ async function runResearch(topic, options) {
     dim(`  Synthesized comprehensive report`);
     const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-").slice(0, -5);
     const filename = `research-${timestamp}.md`;
-    const filepath = path17.resolve(filename);
+    const filepath = path15.resolve(filename);
     const reportContent = formatReport(report);
-    await fs16.writeFile(filepath, reportContent, "utf-8");
+    await fs14.writeFile(filepath, reportContent, "utf-8");
     console.log("\n" + reportContent);
     success(`Report saved to: ${filename}`);
   } catch (err) {
@@ -7084,281 +6536,198 @@ function formatReport(report) {
   return lines.join("\n");
 }
 
-// src/commands/browser.ts
-import { Command } from "commander";
-import { createBrowserTool } from "@agentforge-ai/core";
-import { writeFile as writeFile2, mkdir as mkdir2 } from "fs/promises";
-import { dirname } from "path";
-var browserCommand = new Command("browser");
-browserCommand.description("Browser automation for testing and web scraping");
-browserCommand.command("open").description("Open a URL in the browser and get page info").argument("<url>", "URL to open").option("-w, --wait <ms>", "Wait time after navigation in ms", "5000").option("-s, --screenshot", "Take a screenshot after loading").option("-o, --output <path>", "Screenshot output path").option("-t, --text", "Extract text content from page").option("--headed", "Run in headed mode (visible browser)").action(async (url, options) => {
-  const { tool, shutdown, sessionManager } = createBrowserTool({
-    headless: !options.headed
-  });
-  try {
-    console.log("Opening:", url);
-    const navResult = await tool.handler({
-      action: { kind: "navigate", url }
-    });
-    if (!navResult.success) {
-      console.error("Failed to navigate:", navResult.error);
+// src/commands/start.ts
+import fs15 from "fs-extra";
+import path16 from "path";
+import net from "net";
+import { fileURLToPath as fileURLToPath3 } from "url";
+import { dirname, resolve as resolve2 } from "path";
+var __filename3 = fileURLToPath3(import.meta.url);
+var __dirname3 = dirname(__filename3);
+function registerStartCommand(program2) {
+  program2.command("start").description("Start the AgentForge daemon with channel adapters").option("-p, --port <n>", "HTTP channel port (default: 3001)", "3001").option("--discord", "Enable Discord channel (requires DISCORD_BOT_TOKEN)").option("--telegram", "Enable Telegram channel (requires TELEGRAM_BOT_TOKEN)").option("--no-http", "Disable HTTP channel").option("--agent <id>", "Load specific agent only (repeatable)", (val, prev) => [...prev, val], []).option("--dev", "Dev mode: verbose logging, no process.exit on error").action(async (opts) => {
+    header("AgentForge Daemon");
+    const cwd = process.cwd();
+    const port = parseInt(opts.port, 10);
+    const agentsFilter = opts.agent;
+    const pkgPath = path16.join(cwd, "package.json");
+    if (!fs15.existsSync(pkgPath)) {
+      error("Not an AgentForge project directory.");
+      info("Run this command from inside an AgentForge project.");
       process.exit(1);
     }
-    console.log("\u2713 Page loaded");
-    console.log("  Title:", navResult.pageTitle);
-    console.log("  URL:", navResult.currentUrl);
-    if (options.wait !== "0") {
-      await tool.handler({
-        action: { kind: "wait", timeMs: parseInt(options.wait, 10) }
-      });
-    }
-    if (options.text) {
-      const textResult = await tool.handler({
-        action: { kind: "extractText" }
-      });
-      if (textResult.success && textResult.data) {
-        const text = typeof textResult.data === "string" ? textResult.data : JSON.stringify(textResult.data);
-        console.log("\n--- Page Text ---");
-        console.log(text.substring(0, 2e3));
-        if (text.length > 2e3) {
-          console.log("...(truncated)");
-        }
+    let convexUrl = process.env.CONVEX_URL;
+    if (!convexUrl) {
+      const envPath = path16.join(cwd, ".env.local");
+      if (fs15.existsSync(envPath)) {
+        const envContent = fs15.readFileSync(envPath, "utf-8");
+        const match = envContent.match(/CONVEX_URL=(.+)/);
+        if (match) convexUrl = match[1].trim();
       }
     }
-    if (options.screenshot || options.output) {
-      const screenshotResult = await tool.handler({
-        action: { kind: "screenshot", fullPage: false }
-      });
-      if (screenshotResult.success && screenshotResult.screenshot) {
-        const outputPath = options.output || `screenshot-${Date.now()}.png`;
-        const buffer = Buffer.from(screenshotResult.screenshot, "base64");
-        const dir = dirname(outputPath);
-        await mkdir2(dir, { recursive: true });
-        await writeFile2(outputPath, buffer);
-        console.log("\n\u2713 Screenshot saved to:", outputPath);
-      }
-    }
-    const snapshotResult = await tool.handler({
-      action: { kind: "snapshot" }
-    });
-    if (snapshotResult.success && snapshotResult.data) {
-      console.log("\n--- Page Structure ---");
-      const snapshot = typeof snapshotResult.data === "string" ? snapshotResult.data : JSON.stringify(snapshotResult.data, null, 2);
-      console.log(snapshot.substring(0, 1e3));
-      if (snapshot.length > 1e3) {
-        console.log("...(truncated)");
-      }
-    }
-  } finally {
-    await shutdown();
-  }
-});
-browserCommand.command("screenshot").description("Take a screenshot of a webpage").argument("<url>", "URL to screenshot").option("-o, --output <path>", "Output file path", "screenshot.png").option("--full-page", "Capture full page (not just viewport)").option("--headed", "Run in headed mode (visible browser)").option("-w, --wait <ms>", "Wait time before screenshot in ms", "3000").action(async (url, options) => {
-  const { tool, shutdown } = createBrowserTool({
-    headless: !options.headed
-  });
-  try {
-    console.log("Navigating to:", url);
-    const navResult = await tool.handler({
-      action: { kind: "navigate", url }
-    });
-    if (!navResult.success) {
-      console.error("Failed to navigate:", navResult.error);
+    if (!convexUrl) {
+      error("CONVEX_URL not found. Make sure you have run: npx convex dev");
       process.exit(1);
     }
-    await tool.handler({
-      action: { kind: "wait", timeMs: parseInt(options.wait, 10) }
-    });
-    console.log("Taking screenshot...");
-    const screenshotResult = await tool.handler({
-      action: { kind: "screenshot", fullPage: options.fullPage }
-    });
-    if (!screenshotResult.success || !screenshotResult.screenshot) {
-      console.error("Failed to take screenshot:", screenshotResult.error);
+    info(`Connected to Convex: ${convexUrl}`);
+    const client = await createClient();
+    let agents = [];
+    try {
+      const result = await safeCall(
+        () => client.query("agents:list", {}),
+        "Failed to fetch agents from Convex"
+      );
+      agents = result || [];
+    } catch (err) {
+      error(`Failed to fetch agents: ${err instanceof Error ? err.message : String(err)}`);
       process.exit(1);
     }
-    const buffer = Buffer.from(screenshotResult.screenshot, "base64");
-    const dir = dirname(options.output);
-    await mkdir2(dir, { recursive: true });
-    await writeFile2(options.output, buffer);
-    console.log("\u2713 Screenshot saved to:", options.output);
-    console.log("  Size:", (buffer.length / 1024).toFixed(2), "KB");
-  } finally {
-    await shutdown();
-  }
-});
-browserCommand.command("extract").description("Extract text content from a webpage").argument("<url>", "URL to extract text from").option("-s, --selector <selector>", "CSS selector to extract text from").option("-o, --output <path>", "Save text to file").option("--headed", "Run in headed mode (visible browser)").action(async (url, options) => {
-  const { tool, shutdown } = createBrowserTool({
-    headless: !options.headed
-  });
-  try {
-    console.log("Extracting text from:", url);
-    const navResult = await tool.handler({
-      action: { kind: "navigate", url }
-    });
-    if (!navResult.success) {
-      console.error("Failed to navigate:", navResult.error);
-      process.exit(1);
-    }
-    await tool.handler({
-      action: { kind: "wait", timeMs: 3e3 }
-    });
-    const extractResult = await tool.handler({
-      action: { kind: "extractText", selector: options.selector }
-    });
-    if (!extractResult.success || !extractResult.data) {
-      console.error("Failed to extract text:", extractResult.error);
-      process.exit(1);
-    }
-    const text = typeof extractResult.data === "string" ? extractResult.data : JSON.stringify(extractResult.data);
-    if (options.output) {
-      const dir = dirname(options.output);
-      await mkdir2(dir, { recursive: true });
-      await writeFile2(options.output, text);
-      console.log("\u2713 Text saved to:", options.output);
-      console.log("  Characters:", text.length);
-    } else {
-      console.log("--- Extracted Text ---");
-      console.log(text);
-    }
-  } finally {
-    await shutdown();
-  }
-});
-browserCommand.command("interact").description("Interact with a webpage (click, type, etc.)").argument("<url>", "URL to open").option("--click <selector>", "Click an element").option("--type <selector:text>", "Type into an element (format: selector:text)").option("--wait <ms>", "Wait time in ms").option("--screenshot", "Take screenshot after interaction").option("--headed", "Run in headed mode").action(async (url, options) => {
-  const { tool, shutdown } = createBrowserTool({
-    headless: !options.headed
-  });
-  try {
-    console.log("Opening:", url);
-    const navResult = await tool.handler({
-      action: { kind: "navigate", url }
-    });
-    if (!navResult.success) {
-      console.error("Failed to navigate:", navResult.error);
-      process.exit(1);
-    }
-    if (options.wait) {
-      await tool.handler({
-        action: { kind: "wait", timeMs: parseInt(options.wait, 10) }
-      });
-    }
-    if (options.click) {
-      console.log("Clicking:", options.click);
-      const clickResult = await tool.handler({
-        action: { kind: "click", selector: options.click }
-      });
-      if (!clickResult.success) {
-        console.error("Failed to click:", clickResult.error);
-      } else {
-        console.log("\u2713 Clicked");
-      }
-    }
-    if (options.type) {
-      const [selector, text] = options.type.split(":");
-      if (!selector || !text) {
-        console.error("Invalid --type format. Use: selector:text");
+    if (agentsFilter.length > 0) {
+      agents = agents.filter((a) => agentsFilter.includes(a.id));
+      if (agents.length === 0) {
+        error(`No agents found matching: ${agentsFilter.join(", ")}`);
         process.exit(1);
       }
-      console.log("Typing into:", selector);
-      const typeResult = await tool.handler({
-        action: { kind: "type", selector, text }
-      });
-      if (!typeResult.success) {
-        console.error("Failed to type:", typeResult.error);
-      } else {
-        console.log("\u2713 Typed");
-      }
     }
-    if (options.screenshot) {
-      const screenshotPath = `interaction-${Date.now()}.png`;
-      const screenshotResult = await tool.handler({
-        action: { kind: "screenshot" }
-      });
-      if (screenshotResult.success && screenshotResult.screenshot) {
-        const buffer = Buffer.from(screenshotResult.screenshot, "base64");
-        await writeFile2(screenshotPath, buffer);
-        console.log("\u2713 Screenshot saved to:", screenshotPath);
-      }
-    }
-    console.log("\u2713 Interactions completed");
-  } finally {
-    await shutdown();
-  }
-});
-
-// src/commands/voice.ts
-import { ElevenLabsTTS, createTTSEngine } from "@agentforge-ai/core";
-import { writeFile as writeFile3 } from "fs/promises";
-import { resolve as resolve2 } from "path";
-var MAX_TEXT_LENGTH = 5e3;
-function validateText(text) {
-  if (!text) return { valid: false, error: "Text is required" };
-  const trimmed = text.trim();
-  if (trimmed.length === 0) return { valid: false, error: "Text cannot be empty" };
-  if (trimmed.length > MAX_TEXT_LENGTH) {
-    return { valid: false, error: `Text exceeds maximum length of ${MAX_TEXT_LENGTH} characters` };
-  }
-  return { valid: true };
-}
-function registerVoiceCommand(program2) {
-  const voiceCmd = program2.command("voice").description("Voice synthesis commands");
-  voiceCmd.command("say").argument("<text>", "Text to synthesize to speech").option("-v, --voice <voiceId>", "ElevenLabs voice ID (default: 21m00Tcm4TlvDq8ikWAM)").option("-o, --output <file>", "Output MP3 file path (default: speech-<timestamp>.mp3)").option("--provider <provider>", "TTS provider (elevenlabs, webspeech)", "elevenlabs").description("Synthesize text to speech").action(async (text, opts) => {
-    const validation = validateText(text);
-    if (!validation.valid) {
-      error(validation.error);
+    if (agents.length === 0) {
+      error("No agents found in Convex.");
+      info("Create an agent first: agentforge agents create");
       process.exit(1);
     }
-    header("Voice Synthesis");
-    if (opts.provider === "webspeech") {
-      info("Using Web Speech API (browser-only)");
-      const engine = createTTSEngine({ provider: "webspeech" });
-      const result = engine.synthesize(text);
-      console.log(result);
-      success("Generated browser script. Include in HTML to play.");
-      return;
-    }
-    const client = await createClient();
-    const apiKeyData = await safeCall(
-      () => client.query("apiKeys:getDecryptedForProvider", { provider: "elevenlabs" }),
-      "Failed to fetch ElevenLabs API key"
-    );
-    if (!apiKeyData || !apiKeyData.apiKey) {
-      error("ElevenLabs API key not configured");
-      info("Add it with: agentforge keys add elevenlabs");
+    success(`Loaded ${agents.length} agent(s): ${agents.map((a) => a.name).join(", ")}`);
+    const portInUse = await isPortInUse(port);
+    if (portInUse) {
+      error(`Port ${port} is already in use.`);
+      info("Another process may be running. Use --port to use a different port.");
       process.exit(1);
     }
-    const outputFile = opts.output ? resolve2(opts.output) : resolve2(`speech-${Date.now()}.mp3`);
-    dim(`Provider: ElevenLabs`);
-    dim(`Voice: ${opts.voice || "21m00Tcm4TlvDq8ikWAM (default)"}`);
-    dim(`Text: "${text.substring(0, 60)}${text.length > 60 ? "..." : ""}"`);
+    const shutdownFns = [];
+    if (!opts.noHttp) {
+      info(`Starting HTTP channel on port ${port}...`);
+      const httpModulePath = resolve2(__dirname3, "../lib/http-channel.js");
+      try {
+        const { startHttpChannel } = await import(httpModulePath);
+        const close = await startHttpChannel(port, agents, convexUrl, opts.dev);
+        shutdownFns.push(close);
+      } catch (err) {
+        error(`Failed to start HTTP channel: ${err instanceof Error ? err.message : String(err)}`);
+        if (!opts.dev) process.exit(1);
+      }
+    }
+    if (opts.discord) {
+      const discordToken = process.env.DISCORD_BOT_TOKEN;
+      if (!discordToken) {
+        error("DISCORD_BOT_TOKEN not set. Set it in .env.local");
+        process.exit(1);
+      }
+      info("Discord channel not yet implemented.");
+    }
+    if (opts.telegram) {
+      const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
+      if (!telegramToken) {
+        error("TELEGRAM_BOT_TOKEN not set. Set it in .env.local");
+        process.exit(1);
+      }
+      info("Telegram channel not yet implemented.");
+    }
+    success("AgentForge daemon started!");
+    dim(`  HTTP: http://localhost:${port}`);
+    dim("  Press Ctrl+C to stop");
     console.log();
-    try {
-      const tts = new ElevenLabsTTS({
-        apiKey: apiKeyData.apiKey,
-        voiceId: opts.voice
-      });
-      info("Synthesizing speech...");
-      const audioBuffer = await tts.synthesize(text);
-      await writeFile3(outputFile, audioBuffer);
-      success(`Saved audio to: ${colors.cyan}${outputFile}${colors.reset}`);
-    } catch (err) {
-      const errMsg = err instanceof Error ? err.message : String(err);
-      error(`Synthesis failed: ${errMsg}`);
-      process.exit(1);
-    }
+    await keepAlive();
+    await Promise.all(shutdownFns.map((fn) => fn()));
   });
-  voiceCmd.command("list-voices").description("List available ElevenLabs voices").action(async () => {
-    header("Available ElevenLabs Voices");
-    info("Common voice IDs:");
-    console.log();
-    console.log(`  ${colors.cyan}21m00Tcm4TlvDq8ikWAM${colors.reset}  - Rachel (Default)`);
-    console.log(`  ${colors.cyan}AZnzlk1XvdvUeBnXmlld${colors.reset}  - Dom`);
-    console.log(`  ${colors.cyan}EXAVITQu4vr4xnSDxMaL${colors.reset}  - Bella`);
-    console.log(`  ${colors.cyan}ErXwobaYi8WM5FbVDYjL${colors.reset}  - Elli`);
-    console.log(`  ${colors.cyan}MF3mGyEYCl7XYWbV9V6O${colors.reset}  - Josh`);
-    console.log();
-    dim("Browse more voices at: https://elevenlabs.io/voice-library");
+}
+async function isPortInUse(port) {
+  return new Promise((resolve4) => {
+    const server = net.createServer();
+    server.once("error", (err) => {
+      resolve4(err.code === "EADDRINUSE" || err.code === "EACCES");
+    });
+    server.once("listening", () => {
+      server.close();
+      resolve4(false);
+    });
+    server.listen(port);
+  });
+}
+async function keepAlive() {
+  return new Promise((resolve4) => {
+    const shutdown = () => {
+      console.log();
+      info("Shutting down AgentForge daemon...");
+      resolve4();
+    };
+    process.once("SIGINT", shutdown);
+    process.once("SIGTERM", shutdown);
+  });
+}
+
+// src/commands/deploy.ts
+import fs16 from "fs-extra";
+import path17 from "path";
+import { execSync as execSync4 } from "child_process";
+async function deployProject(options) {
+  const projectDir = process.cwd();
+  const pkgPath = path17.join(projectDir, "package.json");
+  if (!await fs16.pathExists(pkgPath)) {
+    console.error("Error: No package.json found. Are you in an AgentForge project directory?");
+    process.exit(1);
+  }
+  const convexDir = path17.join(projectDir, "convex");
+  if (!await fs16.pathExists(convexDir)) {
+    console.error("Error: No convex/ directory found. Are you in an AgentForge project directory?");
+    process.exit(1);
+  }
+  header("AgentForge Deploy");
+  dim("Deploys Convex schema and functions to production");
+  if (options.rollback) {
+    console.log("\n\u{1F504} Rolling back to previous Convex deployment...\n");
+    try {
+      execSync4("npx convex deploy --rollback", {
+        cwd: projectDir,
+        stdio: "inherit"
+      });
+      console.log("\n  \u2705 Rollback completed successfully.");
+    } catch {
+      console.error("\n  \u274C Rollback failed.");
+      process.exit(1);
+    }
+    return;
+  }
+  const envPath = path17.resolve(projectDir, options.env);
+  const envExists = await fs16.pathExists(envPath);
+  if (options.dryRun) {
+    console.log("\n\u{1F50D} Dry run \u2014 previewing deployment plan:\n");
+    console.log(`  Project directory: ${projectDir}`);
+    console.log(`  Convex directory:  ${convexDir}`);
+    console.log(`  Environment file:  ${envExists ? envPath : "(not found)"}`);
+    console.log("\n  \u2139\uFE0F  No changes were made (dry run).\n");
+    return;
+  }
+  if (!options.force) {
+    console.log("\n\u{1F680} Ready to deploy Convex backend to production.\n");
+    console.log(`  Project: ${projectDir}`);
+    console.log(`  Env file: ${envPath}`);
+    console.log("\n  Use --force to skip this confirmation.\n");
+  }
+  console.log("\u{1F4E6} Deploying Convex backend...\n");
+  try {
+    execSync4("npx convex deploy", {
+      cwd: projectDir,
+      stdio: "inherit"
+    });
+    console.log("\n  \u2705 Deployment completed successfully!");
+    console.log('  Use "agentforge deploy --rollback" to revert if needed.\n');
+  } catch {
+    console.error("\n  \u274C Deployment failed.");
+    console.error("  Check the Convex dashboard for details.");
+    process.exit(1);
+  }
+}
+function registerDeployCommand(program2) {
+  program2.command("deploy").description("Deploy Convex schema and functions to production").option("--env <path>", "Path to environment file", ".env.production").option("--dry-run", "Preview deployment without executing", false).option("--rollback", "Rollback to previous deployment", false).option("--force", "Skip confirmation prompts", false).action(async (options) => {
+    await deployProject(options);
   });
 }
 
@@ -7522,12 +6891,12 @@ function registerWorkflowsCommand(program2) {
 
 // src/index.ts
 import { readFileSync as readFileSync3 } from "fs";
-import { fileURLToPath as fileURLToPath3 } from "url";
+import { fileURLToPath as fileURLToPath4 } from "url";
 import { dirname as dirname2, resolve as resolve3 } from "path";
-var __filename3 = fileURLToPath3(import.meta.url);
-var __dirname3 = dirname2(__filename3);
-var pkg = JSON.parse(readFileSync3(resolve3(__dirname3, "..", "package.json"), "utf-8"));
-var program = new Command2();
+var __filename4 = fileURLToPath4(import.meta.url);
+var __dirname4 = dirname2(__filename4);
+var pkg = JSON.parse(readFileSync3(resolve3(__dirname4, "..", "package.json"), "utf-8"));
+var program = new Command();
 program.name("agentforge").description("AgentForge \u2014 NanoClaw: A minimalist agent framework powered by Mastra + Convex").version(pkg.version);
 program.command("create").argument("<project-name>", "Name of the project to create").description("Create a new AgentForge project").option("-t, --template <template>", "Project template to use", "default").action(async (projectName, options) => {
   await createProject(projectName, options);
@@ -7535,12 +6904,11 @@ program.command("create").argument("<project-name>", "Name of the project to cre
 program.command("run").description("Start the local development environment").option("-p, --port <port>", "Port for the dev server", "3000").option("-s, --sandbox <type>", "Sandbox provider for agent execution (local, docker, e2b, none)", "local").action(async (options) => {
   await runProject(options);
 });
-program.command("deploy").description("Deploy the project to production").option("--env <path>", "Path to environment file", ".env.production").option("--dry-run", "Preview deployment without executing", false).option("--rollback", "Rollback to previous deployment", false).option("--force", "Skip confirmation prompts", false).option("--provider <provider>", "Deployment provider (convex or cloud)", "convex").option("--project <projectId>", "Project ID for cloud deployments").option("--version <tag>", "Version tag for the deployment").action(async (options) => {
-  await deployProject(options);
-});
+registerDeployCommand(program);
 program.command("upgrade").description("Sync convex/ directory with latest AgentForge template").option("-y, --yes", "Skip confirmation prompt", false).option("--dry-run", "Preview changes without applying", false).option("--only <file>", "Only upgrade specific file").action(async (options) => {
   await upgradeProject(options);
 });
+registerStartCommand(program);
 registerModelsCommand(program);
 registerWorkspaceCommand(program);
 registerTokensCommand(program);
@@ -7563,8 +6931,6 @@ registerChannelSlackCommand(program);
 registerChannelDiscordCommand(program);
 registerSandboxCommand(program);
 registerResearchCommand(program);
-program.addCommand(browserCommand);
-registerVoiceCommand(program);
 registerWorkflowsCommand(program);
 registerStatusCommand(program);
 program.parse();
