@@ -159,7 +159,7 @@ function ProjectsPage() {
                 <h2 className="text-lg font-bold">{editingProject ? 'Edit Project' : 'New Project'}</h2>
                 <button onClick={() => { setIsModalOpen(false); setEditingProject(null); }} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
               </div>
-              <ProjectForm initial={editingProject} onSave={handleSave} onClose={() => { setIsModalOpen(false); setEditingProject(null); }} />
+              <ProjectForm key={editingProject?._id ?? 'create'} initial={editingProject} onSave={handleSave} onClose={() => { setIsModalOpen(false); setEditingProject(null); }} />
             </div>
           </div>
         )}

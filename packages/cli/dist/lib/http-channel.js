@@ -49,6 +49,39 @@ async function fetchModels(provider, apiKey) {
         if (chatModels.length > 0) models = chatModels;
       }
     }
+    if (provider === "groq" && apiKey) {
+      const resp = await fetch("https://api.groq.com/openai/v1/models", {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5e3)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const chatModels = data.data.map((m) => m.id);
+        if (chatModels.length > 0) models = chatModels;
+      }
+    }
+    if (provider === "together" && apiKey) {
+      const resp = await fetch("https://api.together.xyz/v1/models", {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5e3)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const chatModels = data.filter((m) => m.type === "chat").map((m) => m.id);
+        if (chatModels.length > 0) models = chatModels;
+      }
+    }
+    if (provider === "mistral" && apiKey) {
+      const resp = await fetch("https://api.mistral.ai/v1/models", {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5e3)
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        const chatModels = data.data.filter((m) => m.capabilities.completion_chat === true).map((m) => m.id);
+        if (chatModels.length > 0) models = chatModels;
+      }
+    }
   } catch {
   }
   modelsCache.set(provider, { models, fetchedAt: Date.now() });
@@ -154,6 +187,9 @@ async function startHttpChannel(port, agents, convexUrl, dev = false, agentConfi
           });
           try {
             const stream = await agent.stream(messages);
+            let promptTokens = 0;
+            let completionTokens = 0;
+            let totalTokens = 0;
             for await (const chunk of stream.fullStream) {
               const text = chunk.type === "text-delta" ? chunk.payload?.text ?? chunk.textDelta ?? "" : null;
               if (text !== null && text !== "") {
@@ -171,6 +207,31 @@ async function startHttpChannel(port, agents, convexUrl, dev = false, agentConfi
                 res.write(`data: ${data}
 
 `);
+              }
+              if (chunk.type === "finish" || chunk.type === "usage") {
+                const usage = chunk.usage ?? chunk.payload?.usage ?? null;
+                if (usage) {
+                  promptTokens = usage.promptTokens ?? usage.prompt_tokens ?? usage.inputTokens ?? 0;
+                  completionTokens = usage.completionTokens ?? usage.completion_tokens ?? usage.outputTokens ?? 0;
+                  totalTokens = usage.totalTokens ?? usage.total_tokens ?? promptTokens + completionTokens;
+                }
+              }
+            }
+            if (convex && agent.id && totalTokens > 0) {
+              try {
+                const cfg = configMap.get(agent.id) ?? { provider: "openai", model: agent.model ?? "unknown" };
+                const cost = estimateCost(cfg.provider, cfg.model, promptTokens, completionTokens);
+                await convex.mutation("usage:record", {
+                  agentId: agent.id,
+                  provider: cfg.provider,
+                  model: cfg.model,
+                  promptTokens,
+                  completionTokens,
+                  totalTokens,
+                  cost
+                });
+              } catch (usageErr) {
+                if (dev) console.warn("[/v1/chat/completions] Failed to record usage:", usageErr);
               }
             }
             const finalData = JSON.stringify({

@@ -93,7 +93,10 @@ function FilesPage() {
 
   const handleCreateFolder = async () => {
     if (!newFolderName.trim()) return;
-    await createFolder({ name: newFolderName.trim(), parentId: currentFolderId ? (currentFolderId as Id<'folders'>) : undefined });
+    await createFolder({
+      name: newFolderName.trim(),
+      ...(currentFolderId ? { parentId: currentFolderId as Id<'folders'> } : {})
+    });
     setNewFolderName('');
     setShowNewFolder(false);
   };
