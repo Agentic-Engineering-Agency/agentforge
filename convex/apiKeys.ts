@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalQuery } from "./_generated/server";
+import { requireTokenOrAuth } from "./lib/auth";
 
 declare const process: { env: Record<string, string | undefined> };
 
@@ -119,18 +120,23 @@ export const create = mutation({
     keyName: v.string(),
     encryptedKey: v.string(),
     userId: v.optional(v.string()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
+    const { token, ...keyData } = args;
     const salt = getEncryptionSalt();
-    const { encoded, iv } = encodeKey(args.encryptedKey, salt);
+    const { encoded, iv } = encodeKey(keyData.encryptedKey, salt);
 
     const keyId = await ctx.db.insert("apiKeys", {
-      provider: args.provider,
-      keyName: args.keyName,
+      provider: keyData.provider,
+      keyName: keyData.keyName,
       encryptedKey: encoded,
       iv,
       isActive: true,
-      userId: args.userId,
+      userId: keyData.userId,
       createdAt: Date.now(),
     });
     return keyId;
@@ -144,9 +150,13 @@ export const update = mutation({
     keyName: v.optional(v.string()),
     encryptedKey: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { id, encryptedKey, ...rest } = args;
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
+    const { id, token, encryptedKey, ...rest } = args;
     const updates: Record<string, unknown> = { ...rest };
 
     if (encryptedKey !== undefined) {
@@ -163,18 +173,21 @@ export const update = mutation({
 
 // Mutation: Toggle API key active status
 export const toggleActive = mutation({
-  args: { id: v.id("apiKeys") },
+  args: { id: v.id("apiKeys"), token: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
     const key = await ctx.db.get(args.id);
-    
+
     if (!key) {
       throw new Error(`API key not found`);
     }
-    
+
     await ctx.db.patch(args.id, {
       isActive: !key.isActive,
     });
-    
+
     return { success: true, isActive: !key.isActive };
   },
 });
@@ -192,8 +205,11 @@ export const updateLastUsed = mutation({
 
 // Mutation: Delete API key
 export const remove = mutation({
-  args: { id: v.id("apiKeys") },
+  args: { id: v.id("apiKeys"), token: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
     await ctx.db.delete(args.id);
     return { success: true };
   },
