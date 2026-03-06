@@ -82,7 +82,7 @@ export class DiscordChannel implements ChannelAdapter {
         await progressiveStream(
           agent,
           content,
-          { threadId, resourceId: threadId },
+          { threadId, resourceId: threadId, editIntervalMs: this.config.editIntervalMs },
           async (text, done) => {
             if (!done && text.length > 0) {
               await thinkingMsg.edit(text.slice(0, 2000)); // Discord limit

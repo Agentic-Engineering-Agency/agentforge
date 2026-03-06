@@ -17,14 +17,14 @@ import type { Agent } from '@mastra/core/agent';
 export async function progressiveStream(
   agent: Agent,
   message: string,
-  opts: { threadId?: string; resourceId?: string },
+  opts: { threadId?: string; resourceId?: string; editIntervalMs?: number },
   onChunk: (text: string, done: boolean) => Promise<void>,
 ): Promise<string> {
   // Mastra agent.stream() expects messages array and optional execution options
   const stream = await agent.stream([{ role: 'user', content: message }]);
   let buffer = '';
   let lastEdit = Date.now();
-  const EDIT_INTERVAL = 1500; // 1.5s default edit interval
+  const EDIT_INTERVAL = opts.editIntervalMs ?? 1500;
 
   try {
     for await (const chunk of stream.fullStream) {
