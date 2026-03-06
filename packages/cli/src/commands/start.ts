@@ -7,8 +7,8 @@
 
 import { Command } from 'commander';
 import { createClient, safeCall } from '../lib/convex-client.js';
-import { header, success, error, info, dim, colors } from '../lib/display.js';
-import { spawn } from 'node:child_process';
+import { header, success, error, info, dim } from '../lib/display.js';
+import net from 'node:net';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -150,7 +150,7 @@ export function registerStartCommand(program: Command) {
  */
 async function isPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const server = require('net').createServer();
+    const server = net.createServer();
 
     server.once('error', (err: any) => {
       if (err.code === 'EADDRINUSE') {

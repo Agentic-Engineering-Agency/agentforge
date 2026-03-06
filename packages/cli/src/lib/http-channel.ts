@@ -5,15 +5,11 @@
  * Uses Server-Sent Events (SSE) for streaming responses.
  */
 
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { createClient } from '../lib/convex-client.js';
+import { createServer } from 'node:http';
+import { Agent } from '@agentforge-ai/core';
 
-interface HttpChannelOptions {
-  port: number;
-  agents: any[];
-  convexUrl: string;
-  dev?: boolean;
-}
+/** Maximum allowed request body size (1 MB) to prevent DoS. */
+const MAX_BODY_BYTES = 1_048_576;
 
 export async function startHttpChannel(
   port: number,
@@ -21,9 +17,21 @@ export async function startHttpChannel(
   convexUrl: string,
   dev = false
 ): Promise<void> {
-  const agentMap = new Map<string, any>();
-  for (const agent of agents) {
-    agentMap.set(agent.id, agent);
+  // Build a map of real Agent instances from Convex agent definitions
+  const agentMap = new Map<string, Agent>();
+  for (const convexAgent of agents) {
+    if (!convexAgent.provider || !convexAgent.model) {
+      console.warn(`[HttpChannel] Skipping agent "${convexAgent.id}": missing provider or model`);
+      continue;
+    }
+    const modelString = `${convexAgent.provider}/${convexAgent.model}`;
+    const agent = new Agent({
+      id: convexAgent.id,
+      name: convexAgent.name,
+      instructions: convexAgent.instructions || 'You are a helpful assistant.',
+      model: modelString,
+    });
+    agentMap.set(convexAgent.id, agent);
   }
 
   const server = createServer(async (req, res) => {
@@ -61,28 +69,51 @@ export async function startHttpChannel(
       }
 
       let body = '';
-      req.on('data', (chunk) => {
+      let bodyBytes = 0;
+      let tooLarge = false;
+
+      req.on('data', (chunk: Buffer) => {
+        bodyBytes += chunk.length;
+        if (bodyBytes > MAX_BODY_BYTES) {
+          tooLarge = true;
+          req.removeAllListeners('data');
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Request body too large' }));
+          req.destroy();
+          return;
+        }
         body += chunk.toString();
       });
 
       req.on('end', async () => {
+        if (tooLarge) return;
         try {
           const requestData = JSON.parse(body) as ChatCompletionRequest;
 
-          // Get agent by ID or use first agent
+          // Get agent by ID or fall back to the first loaded agent
           const agentId = requestData.model?.split(':')[1] || agents[0]?.id;
-          const agent = agentMap.get(agentId) || agents[0];
+          const resolvedAgent = (agentId ? agentMap.get(agentId) : undefined) ?? agentMap.values().next().value as Agent | undefined;
 
-          if (!agent) {
+          if (!resolvedAgent) {
             res.writeHead(404, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Agent not found' }));
             return;
           }
 
-          const messages = requestData.messages.map(m => ({
-            role: m.role,
-            content: m.content,
-          }));
+          // Extract the last user message as the prompt
+          let prompt = '';
+          for (let i = requestData.messages.length - 1; i >= 0; i--) {
+            if (requestData.messages[i].role === 'user') {
+              prompt = requestData.messages[i].content;
+              break;
+            }
+          }
+
+          if (!prompt) {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'No user message found in request' }));
+            return;
+          }
 
           // Set SSE headers
           res.writeHead(200, {
@@ -91,25 +122,21 @@ export async function startHttpChannel(
             'Connection': 'keep-alive',
           });
 
-          // Stream response
+          // Stream response using Agent.stream() which yields StreamChunk { content: string }
           try {
-            const stream = await agent.stream(messages);
-
-            for await (const chunk of stream.fullStream) {
-              if (chunk.type === 'text-delta') {
-                const data = JSON.stringify({
-                  id: `chatcmpl-${Date.now()}`,
-                  object: 'chat.completion.chunk',
-                  created: Math.floor(Date.now() / 1000),
-                  model: agentId,
-                  choices: [{
-                    index: 0,
-                    delta: { content: chunk.textDelta },
-                    finish_reason: null,
-                  }],
-                });
-                res.write(`data: ${data}\n\n`);
-              }
+            for await (const chunk of resolvedAgent.stream(prompt)) {
+              const data = JSON.stringify({
+                id: `chatcmpl-${Date.now()}`,
+                object: 'chat.completion.chunk',
+                created: Math.floor(Date.now() / 1000),
+                model: agentId,
+                choices: [{
+                  index: 0,
+                  delta: { content: chunk.content },
+                  finish_reason: null,
+                }],
+              });
+              res.write(`data: ${data}\n\n`);
             }
 
             // Send final chunk
