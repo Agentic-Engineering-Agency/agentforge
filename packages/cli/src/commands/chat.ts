@@ -24,14 +24,16 @@ function validateMessage(msg: string | undefined): { valid: boolean; error?: str
 }
 
 /**
- * Send a message to the HTTP endpoint and get a streaming response
+ * Send a message to the HTTP endpoint and get a streaming response.
+ * When stream=false, buffers the full response and calls onChunk once.
  */
 async function chatViaHttp(
   agentId: string,
   message: string,
   port: number,
   onChunk: (chunk: string) => void,
-  onError?: (error: string) => void
+  onError?: (error: string) => void,
+  stream = true
 ): Promise<void> {
   const response = await fetch(`http://localhost:${port}/v1/chat/completions`, {
     method: 'POST',
@@ -56,6 +58,7 @@ async function chatViaHttp(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
+  let buffered = '';
 
   while (true) {
     const { done, value } = await reader.read();
@@ -73,7 +76,11 @@ async function chatViaHttp(
           const parsed = JSON.parse(data);
           const content = parsed.choices?.[0]?.delta?.content;
           if (content) {
-            onChunk(content);
+            if (stream) {
+              onChunk(content);
+            } else {
+              buffered += content;
+            }
           }
 
           const errorMsg = parsed.error;
@@ -85,6 +92,10 @@ async function chatViaHttp(
         }
       }
     }
+  }
+
+  if (!stream && buffered) {
+    onChunk(buffered);
   }
 }
 
@@ -131,7 +142,7 @@ export function registerChatCommand(program: Command) {
         console.log();
         const rl2 = readline.createInterface({ input: process.stdin, output: process.stdout });
         const choice = await new Promise<string>((r) => rl2.question('Select agent (number or ID): ', (a) => { rl2.close(); r(a.trim()); }));
-        const idx = parseInt(choice) - 1;
+        const idx = parseInt(choice, 10) - 1;
         agentId = idx >= 0 && idx < (agents as any[]).length ? (agents as any[])[idx].id : choice;
       }
 
@@ -179,7 +190,8 @@ export function registerChatCommand(program: Command) {
             },
             (errorMsg) => {
               console.log(`\n${colors.yellow}[Error: ${errorMsg}]${colors.reset}`);
-            }
+            },
+            opts.stream !== false
           );
           console.log(); // Newline after response
           process.exit(0);
@@ -280,7 +292,8 @@ export function registerChatCommand(program: Command) {
             },
             (errorMsg) => {
               console.log(`\n${colors.yellow}[Error: ${errorMsg}]${colors.reset}`);
-            }
+            },
+            opts.stream !== false
           );
           console.log();
           history.push({ role: 'assistant', content: fullResponse });
