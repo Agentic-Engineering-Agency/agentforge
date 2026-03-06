@@ -3,6 +3,14 @@ import { mutation, query, internalQuery, internalAction, internalMutation, actio
 import { encryptApiKey, decryptApiKey } from "./apiKeysCrypto";
 import { internal } from "./_generated/api";
 
+// Helper: strip encrypted fields from an API key document before returning to clients
+function stripEncryptedFields<T extends { encryptedKey: unknown; iv: unknown; tag: unknown }>(
+  key: T
+): Omit<T, "encryptedKey" | "iv" | "tag"> {
+  const { encryptedKey, iv, tag, ...safeFields } = key;
+  return safeFields;
+}
+
 // Query: List API keys
 export const list = query({
   args: {
@@ -17,13 +25,12 @@ export const list = query({
         .collect();
 
       if (args.userId) {
-        return keys.filter((k) => k.userId === args.userId);
+        return keys
+          .filter((k) => k.userId === args.userId)
+          .map(stripEncryptedFields);
       }
       // Strip sensitive fields before returning
-      return keys.map((k) => {
-        const { encryptedKey, iv, tag, ...safeFields } = k;
-        return safeFields;
-      });
+      return keys.map(stripEncryptedFields);
     }
 
     if (args.userId) {
@@ -32,18 +39,12 @@ export const list = query({
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
         .collect();
       // Strip sensitive fields before returning
-      return keys.map((k) => {
-        const { encryptedKey, iv, tag, ...safeFields } = k;
-        return safeFields;
-      });
+      return keys.map(stripEncryptedFields);
     }
 
     const allKeys = await ctx.db.query("apiKeys").collect();
     // Strip sensitive fields before returning
-    return allKeys.map((k) => {
-      const { encryptedKey, iv, tag, ...safeFields } = k;
-      return safeFields;
-    });
+    return allKeys.map(stripEncryptedFields);
   },
 });
 
@@ -54,8 +55,7 @@ export const get = query({
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
     // Strip sensitive fields before returning
-    const { encryptedKey, iv, tag, ...safeFields } = doc;
-    return safeFields;
+    return stripEncryptedFields(doc);
   },
 });
 
@@ -79,16 +79,14 @@ export const getActiveForProvider = query({
       if (!userKey) return null;
 
       // Return only safe metadata - never return encrypted fields
-      const { encryptedKey, iv, tag, ...safeFields } = userKey;
-      return safeFields;
+      return stripEncryptedFields(userKey);
     }
 
     const firstKey = activeKeys[0];
     if (!firstKey) return null;
 
     // Return only safe metadata - never return encrypted fields
-    const { encryptedKey, iv, tag, ...safeFields } = firstKey;
-    return safeFields;
+    return stripEncryptedFields(firstKey);
   },
 });
 

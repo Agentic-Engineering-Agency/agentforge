@@ -16,6 +16,9 @@ function getSalt(): string {
   if (!salt || salt.length === 0) {
     throw new Error("AGENTFORGE_KEY_SALT environment variable is required and must not be empty");
   }
+  if (salt.length < 32) {
+    throw new Error("AGENTFORGE_KEY_SALT must be at least 32 characters for AES-256-GCM key derivation");
+  }
   return salt;
 }
 
