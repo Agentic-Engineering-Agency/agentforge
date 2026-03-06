@@ -171,7 +171,7 @@ function AgentsPage() {
           </div>
         )}
 
-        {isModalOpen && <AgentModal agent={editingAgent} onSave={handleSave} onClose={() => { setIsModalOpen(false); setEditingAgent(null); }} />}
+        {isModalOpen && <AgentModal key={editingAgent?._id ?? 'create'} agent={editingAgent} onSave={handleSave} onClose={() => { setIsModalOpen(false); setEditingAgent(null); }} />}
       </div>
     </DashboardLayout>
   );
@@ -212,7 +212,9 @@ function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
-    if (formData.name.length > VALIDATION.name.maxLength) {
+    if (!formData.name.trim()) {
+      newErrors.name = 'Name is required';
+    } else if (formData.name.length > VALIDATION.name.maxLength) {
       newErrors.name = `Name must be ${VALIDATION.name.maxLength} characters or less`;
     }
     if (formData.description.length > VALIDATION.description.maxLength) {
@@ -335,7 +337,7 @@ function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any
         </form>
         <div className="flex justify-end p-4 border-t border-border gap-2">
           <button type="button" onClick={onClose} className="bg-background border border-border px-4 py-2 rounded-lg hover:bg-muted">Cancel</button>
-          <button type="submit" onClick={handleSubmit} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90">Save Agent</button>
+          <button type="submit" onClick={handleSubmit} disabled={!formData.name.trim()} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">Save Agent</button>
         </div>
       </div>
     </div>
