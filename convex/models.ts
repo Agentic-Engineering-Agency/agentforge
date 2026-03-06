@@ -6,7 +6,7 @@
  */
 import { action } from "./_generated/server";
 import { v } from "convex/values";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import { LLM_MODELS, LLM_PROVIDERS, type LLMModel } from "./llmProviders";
 
 // ---------------------------------------------------------------------------
@@ -155,8 +155,8 @@ export const fetchForProvider = action({
     // Try to get the stored API key for this provider
     let apiKey: string | null = null;
     try {
-      const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
-      apiKey = keyData?.apiKey ?? null;
+      const keyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, { provider });
+      apiKey = keyData ?? null;
     } catch {
       // No key stored — fall through to static list
     }
@@ -195,7 +195,7 @@ export const fetchAll = action({
     const providers = LLM_PROVIDERS.map((p) => p.key);
     await Promise.all(
       providers.map(async (provider) => {
-        results[provider] = await ctx.runAction(internal.models.fetchForProvider, { provider });
+        results[provider] = await ctx.runAction(api.models.fetchForProvider, { provider });
       })
     );
     return results;

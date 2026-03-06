@@ -6,7 +6,7 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 
 // Query: Get research job by ID
 export const get = query({
@@ -31,19 +31,32 @@ export const list = query({
     ),
   },
   handler: async (ctx, args) => {
-    let query = ctx.db.query("researchJobs");
+    let result;
 
     if (args.status) {
-      query = query.withIndex("byStatus", (q) => q.eq("status", args.status!));
+      const status = args.status;
+      result = await ctx.db
+        .query("researchJobs")
+        .withIndex("byStatus", (q) => q.eq("status", status))
+        .take(50);
     } else if (args.userId) {
-      query = query.withIndex("byUserId", (q) => q.eq("userId", args.userId!));
+      result = await ctx.db
+        .query("researchJobs")
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .take(50);
     } else if (args.projectId) {
-      query = query.withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!));
+      result = await ctx.db
+        .query("researchJobs")
+        .withIndex("byProjectId", (q) => q.eq("projectId", args.projectId!))
+        .take(50);
     } else {
-      query = query.withIndex("byCreatedAt");
+      result = await ctx.db
+        .query("researchJobs")
+        .withIndex("byCreatedAt")
+        .take(50);
     }
 
-    return await query.take(50); // Limit to most recent 50 jobs
+    return result;
   },
 });
 
@@ -67,7 +80,7 @@ export const create = mutation({
 });
 
 // Mutation: Update research job status and results
-export const update = mutation({
+export const update = internalMutation({
   args: {
     jobId: v.id("researchJobs"),
     status: v.optional(
@@ -114,7 +127,7 @@ export const update = mutation({
 });
 
 // Internal mutation: Create research job (called from action)
-export const createInternal = mutation({
+export const createInternal = internalMutation({
   args: {
     topic: v.string(),
     depth: v.union(v.literal("shallow"), v.literal("medium"), v.literal("deep")),

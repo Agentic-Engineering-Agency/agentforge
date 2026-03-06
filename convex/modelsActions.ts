@@ -9,6 +9,7 @@
 
 import { action } from "./_generated/server";
 import { v } from "convex/values";
+import { api } from "./_generated/api";
 
 // Model definitions from various providers
 const PROVIDER_MODELS: Record<string, Array<{ id: string; name: string; context: number; pricing?: { input: number; output: number } }>> = {

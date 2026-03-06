@@ -351,7 +351,7 @@ export const executeAgent = action({
         if (providersSeen2.has(provider)) continue;
         providersSeen2.add(provider);
         try {
-          const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+          const keyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, { provider });
           if (keyData) {
             keyMap[provider] = keyData;
             const providerCfg = LLM_PROVIDERS.find((p: { key: string }) => p.key === provider);
