@@ -6609,7 +6609,7 @@ function registerStartCommand(program2) {
     const shutdownFns = [];
     if (!opts.noHttp) {
       info(`Starting HTTP channel on port ${port}...`);
-      const httpModulePath = resolve2(__dirname3, "../lib/http-channel.js");
+      const httpModulePath = resolve2(__dirname3, "./lib/http-channel.js");
       try {
         const { startHttpChannel } = await import(httpModulePath);
         const close = await startHttpChannel(port, agents, convexUrl, opts.dev);
