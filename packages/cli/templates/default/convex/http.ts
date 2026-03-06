@@ -308,60 +308,18 @@ http.route({
             channel: "api",
           });
 
-          // Import Agent class for streaming
-          const { Agent: AgentClass } = await import("./lib/agent");
-          const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
-
-          // Get API key for provider
-          const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
-            provider: agent.provider || "openrouter",
+          // NOTE: LLM streaming moved to runtime daemon (SPEC-020).
+          // Store user message; daemon handles response via HTTP channel.
+          await ctx.runMutation(internal.messages.create, {
+            threadId: currentThreadId,
+            content: message,
+            role: "user" as const,
+            agentId,
           });
-
-          if (!apiKeyData || !apiKeyData.apiKey) {
-            throw new Error(`No API key found for provider: ${agent.provider}`);
-          }
-
-          // Create agent instance
-          const mastraAgent = new AgentClass({
-            id: agentId,
-            name: agent.name,
-            instructions: agent.instructions || "You are a helpful AI assistant.",
-            model: {
-              providerId: agent.provider || "openrouter",
-              modelId: getBaseModelId(agent.provider || "openrouter", agent.model || "gpt-4o-mini"),
-              apiKey: apiKeyData.apiKey,
-              url: getProviderBaseUrl(agent.provider || "openrouter"),
-            },
-            temperature: agent.temperature,
-            maxTokens: agent.maxTokens,
-          });
-
-          // Stream the response
-          let fullResponse = "";
-          for await (const chunk of mastraAgent.stream(message)) {
-            const text = chunk.content;
-            fullResponse += text;
-
-            // Send SSE event
-            controller.enqueue(
-              encoder.encode(`data: ${JSON.stringify({ type: "text-delta", textDelta: text })}\n\n`)
-            );
-          }
-
-          // Add assistant message to thread
-          await ctx.runMutation(api.messages.add, {
-            threadId: currentThreadId as any,
-            role: "assistant",
-            content: fullResponse,
-          });
-
-          // Update session status
-          await ctx.runMutation(api.sessions.updateStatus, {
-            sessionId,
-            status: "completed",
-          });
-
-          // Send done event
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify({ type: "text-delta", textDelta: "Processing via daemon..." })}\n\n`)
+          );
+          await ctx.runMutation(api.sessions.updateStatus, { sessionId, status: "completed" });
           controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
           controller.close();
         } catch (error: unknown) {
@@ -606,12 +564,14 @@ http.route({
     }
 
     // Execute agent
-    const result = await ctx.runAction(api.mastraIntegration.executeAgent, {
-      agentId: connection.agentId,
-      prompt: text,
+    // NOTE: LLM execution moved to runtime daemon (SPEC-020).
+    await ctx.runMutation(internal.messages.create, {
       threadId: actualThreadId,
-      userId: `telegram-${chatId}`,
+      content: text,
+      role: "user" as const,
+      agentId: connection.agentId,
     });
+    const result = { response: "Queued for daemon processing" };
 
     // Send reply via Telegram Bot API
     try {

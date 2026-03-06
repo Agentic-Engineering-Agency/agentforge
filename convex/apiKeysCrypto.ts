@@ -24,7 +24,7 @@ function getSalt(): string {
  */
 function deriveKey(salt: string): Buffer {
   if (!salt || salt.length < 32) throw new Error("Salt must be at least 32 characters");
-  return crypto.hkdfSync("sha256", Buffer.from(salt, "utf8"), Buffer.alloc(0), "agentforge-api-key-v1", 32);
+  return Buffer.from(crypto.hkdfSync("sha256", Buffer.from(salt, "utf8"), Buffer.alloc(0), "agentforge-api-key-v1", 32) as ArrayBuffer);
 }
 
 /**

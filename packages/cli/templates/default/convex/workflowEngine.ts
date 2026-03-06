@@ -75,76 +75,20 @@ export const executeWorkflow = internalAction({
           });
 
           try {
-            // Import Agent class from local lib
-            const { Agent: AgentClass } = await import("./lib/agent");
-            const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
-
-            // Get API key for provider
-            const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
-              provider: agent.provider || "openrouter",
+            // NOTE: LLM execution moved to runtime daemon (SPEC-020).
+            // Queue the workflow step as a message; daemon processes it.
+            const threadId = await ctx.runMutation(internal.threads.createInternal, {
+              agentId: stepConfig.agentId,
+              title: `Workflow step: ${stepConfig.stepId}`,
             });
-
-            if (!apiKeyData || !apiKeyData.apiKey) {
-              throw new Error(`No API key found for provider: ${agent.provider}`);
-            }
-
-            // Load installed skills and MCP connections for tool injection
-            let toolDescriptions: string[] = [];
-            if (run.projectId) {
-              try {
-                const skills = await ctx.runQuery(api.skills.listInstalled, {});
-                for (const skill of skills as Array<{ name: string; displayName: string; description: string }>) {
-                  toolDescriptions.push(`- ${skill.name}: ${skill.description}`);
-                }
-              } catch (e) {
-                console.debug("[workflow.executeStep] Skills loading skipped:", e);
-              }
-
-              try {
-                const mcpConnections = await ctx.runQuery(api.mcpConnections.list, {
-                  projectId: run.projectId,
-                  isEnabled: true,
-                });
-                for (const mcp of mcpConnections as Array<{ name: string; serverUrl: string; capabilities?: any }>) {
-                  const toolList = mcp.capabilities?.tools
-                    ? Object.keys(mcp.capabilities.tools).map((t) => `  - ${t}`).join("\n")
-                    : "  (tools listed in server capabilities)";
-                  toolDescriptions.push(`- MCP:${mcp.name}:
-${toolList}`);
-                }
-              } catch (e) {
-                console.debug("[workflow.executeStep] MCP loading skipped:", e);
-              }
-            }
-
-            // Build instructions with available tools
-            let instructions = agent.instructions || "You are a helpful AI assistant.";
-            if (toolDescriptions.length > 0) {
-              instructions += `\n\n## Available Tools\n\nYou have access to the following tools:\n${toolDescriptions.join("\n")}\n\nWhen you need to use a tool, mention it in your response and the system will execute it.`;
-            }
-
-            // Create agent instance
-            const mastraAgent = new AgentClass({
-              id: stepConfig.agentId,
-              name: agent.name,
-              instructions,
-              model: {
-                providerId: agent.provider || "openrouter",
-                modelId: getBaseModelId(agent.provider || "openrouter", agent.model || "gpt-4o-mini"),
-                apiKey: apiKeyData.apiKey,
-                url: getProviderBaseUrl(agent.provider || "openrouter"),
-              },
-              temperature: agent.temperature,
-              maxTokens: agent.maxTokens,
+            await ctx.runMutation(internal.messages.create, {
+              threadId,
+              content: input || "Execute workflow step.",
+              role: "user" as const,
+              agentId: stepConfig.agentId,
             });
+            const fullResponse = "Workflow step queued for daemon processing";
 
-            // Execute agent
-            let fullResponse = "";
-            for await (const chunk of mastraAgent.stream(input || "")) {
-              fullResponse += chunk.content;
-            }
-
-            // Update step to completed
             await ctx.runMutation(api.workflows.updateStep, {
               id: stepRecordId,
               status: "completed",

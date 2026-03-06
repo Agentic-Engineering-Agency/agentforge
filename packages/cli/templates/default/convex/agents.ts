@@ -230,17 +230,21 @@ export const run = action({
     }
     if (!threadId) throw new Error('threadId is required');
 
-    // Delegate to the chat action for actual LLM execution
-    const result = await ctx.runAction(api.chat.sendMessage, {
-      agentId: args.agentId,
+    // NOTE: LLM execution is handled by the AgentForge runtime daemon (SPEC-020).
+    // The daemon polls threads/messages and responds via its channel adapters.
+    // Store the user message; the daemon will process it asynchronously.
+    const result = await ctx.runMutation(internal.messages.create, {
       threadId,
       content: args.prompt,
+      role: "user" as const,
+      agentId: args.agentId,
       userId: args.userId,
     });
 
     return {
       threadId: threadId as string,
-      message: result.response,
+      // Message stored — the runtime daemon will process and respond asynchronously
+      messageId: result,
       agentId: args.agentId,
     };
   },
