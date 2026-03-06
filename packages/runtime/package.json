@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/runtime",
-  "version": "0.12.4",
+  "version": "0.12.5",
   "description": "Mastra persistent daemon runtime for AgentForge",
   "type": "module",
   "main": "./dist/index.js",
