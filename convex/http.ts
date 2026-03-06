@@ -310,8 +310,8 @@ http.route({
 
           // NOTE: LLM streaming moved to runtime daemon (SPEC-020).
           // Store user message; daemon handles response via HTTP channel.
-          await ctx.runMutation(internal.messages.create, {
-            threadId: currentThreadId,
+          await ctx.runMutation(api.messages.create, {
+            threadId: currentThreadId as any,
             content: message,
             role: "user" as const,
             agentId,
@@ -565,11 +565,10 @@ http.route({
 
     // Execute agent
     // NOTE: LLM execution moved to runtime daemon (SPEC-020).
-    await ctx.runMutation(internal.messages.create, {
-      threadId: actualThreadId,
+    await ctx.runMutation(api.messages.create, {
+      threadId: actualThreadId as any,
       content: text,
       role: "user" as const,
-      agentId: connection.agentId,
     });
     const result = { response: "Queued for daemon processing" };
 
