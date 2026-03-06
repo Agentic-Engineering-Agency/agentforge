@@ -5,6 +5,159 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.11.21] - 2026-03-05
+
+### Changed
+- **Documentation cleanup** — Removed 14 stale documentation files
+- **Security** — Fixed Hono CVE vulnerabilities
+- **Template sync** — Synchronized template files with core
+
+## [0.11.20] - 2026-03-04
+
+### Fixed
+- **CLI models display** — Show model display name instead of `[object Object]`
+- **TypeScript** — Fixed type issues in agent.ts
+
+## [0.11.19] - 2026-03-04
+
+### Added
+- **Native SDK integrations** — Proper Anthropic and Google SDK authentication for all providers
+
+### Changed
+- Unified authentication handling across all LLM providers
+
+## [0.11.18] - 2026-03-03
+
+### Fixed
+- **CRITICAL: modelFetcher API key bug** — Live model fetching was non-functional due to `keyData?.apiKey` always being undefined (same issue as v0.11.14)
+- API keys now properly passed to live model fetch endpoints
+
+## [0.11.17] - 2026-03-03
+
+### Fixed
+- **CLI models display** — Corrected handling of cached models structure (array, not `{models:[]}` object)
+
+## [0.11.16] - 2026-03-03
+
+### Fixed
+- **getModelsForProvider** — Changed from query to action (was incorrectly classified)
+- **refreshAllModels** — Made public for external use
+
+## [0.11.15] - 2026-03-02
+
+### Changed
+- **CLI create command** — Falls back to `npm install` if pnpm is unavailable
+- Improved compatibility across different package managers
+
+## [0.11.14] - 2026-03-02
+
+### Fixed
+- **CRITICAL: API key authentication bug** — `keyData?.apiKey` was always undefined, causing API keys to never work properly
+- This was a critical bug affecting all authenticated API calls
+
+## [0.11.13] - 2026-03-02
+
+### Changed
+- **Provider failover** — Removed OpenRouter from default failover list
+- **Model updates** — Fixed deprecated Claude model references
+
+## [0.11.12] - 2026-03-01
+
+### Fixed
+- **Syntax errors** — Fixed stray braces in codebase
+
+## [0.11.11] - 2026-03-01
+
+### Changed
+- **insertToken** — Moved to correct file for proper organization
+
+## [0.11.10] - 2026-02-28
+
+### Fixed
+- **TypeScript errors** — Proper tsc fixes for ctx.db in actions
+- **Function rename** — `generateResponse` renamed to `executeAgent` for clarity
+
+## [0.11.9] - 2026-02-28
+
+### Fixed
+- **TypeScript errors** — Fixed 58 additional TypeScript compilation errors
+
+## [0.11.8] - 2026-02-27
+
+### Fixed
+- **TypeScript errors** — Fixed 110 TypeScript compilation errors across codebase
+
+## [0.11.7] - 2026-02-27
+
+### Fixed
+- **Template** — Added missing `llmProviders.ts` file to project template
+
+## [0.11.6] - 2026-02-26
+
+### Added
+- **`agentforge upgrade` command** — Automated upgrade path for existing projects
+- **Convex login detection** — Detects and prompts for Convex authentication
+
+## [0.11.5] - 2026-02-26
+
+### Fixed
+- **fileIds validator** — Improved validation for file ID references
+- **Model prefix handling** — Strips model prefixes for consistency
+- **cronJobs.updateRun** — Fixed cron job run updates
+
+## [0.11.4] - 2026-02-25
+
+### Fixed
+- **Functional tests** — Schema validation fixes
+- **Model prefix** — Fixed model prefix handling in tests
+
+## [0.11.3] - 2026-02-25
+
+### Fixed
+- **Functional tests** — Additional model reference fixes
+
+## [0.11.2] - 2026-02-25
+
+### Fixed
+- **Functional tests** — Fixed chat crash in test scenarios
+
+## [0.11.1] - 2026-02-24
+
+### Fixed
+- **Functional tests** — Fixed skills reference issues
+
+## [0.11.0] - 2026-02-24
+
+### Added
+- **SPEC-017: Workspace** — Workspace management and organization
+- **SPEC-018: Skills** — Enhanced skills system
+- **SPEC-019: Deprecated models** — Model deprecation tracking and handling
+
+## [0.10.22] - 2026-02-23
+
+### Changed
+- **Agent modals** — Now use dynamic `useProviderModels()` hook for model selection
+
+## [0.10.21] - 2026-02-23
+
+### Fixed
+- **Provider cards** — Descriptions now wired to live `modelFetcher` for real-time data
+
+## [0.10.20] - 2026-02-22
+
+### Fixed
+- **Template** — Fixed bare calls to `usage.list` and `logs.list`
+
+## [0.10.19] - 2026-02-21
+
+### Fixed
+- **Voice module** — Fixed module exports for proper import/usage
+
+## [0.10.18] - 2026-02-20
+
+### Changed
+- **Auth system** — Removed auth/login system (simplified architecture)
+
 ## [0.10.3] - 2026-03-02
 
 ### Fixed

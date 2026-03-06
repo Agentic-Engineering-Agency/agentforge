@@ -201,7 +201,9 @@ export type DataModel = {
       keyName: string;
       lastUsedAt?: number;
       provider: string;
+      tag?: string;
       userId?: string;
+      version?: string;
       _id: Id<"apiKeys">;
       _creationTime: number;
     };
@@ -215,7 +217,9 @@ export type DataModel = {
       | "keyName"
       | "lastUsedAt"
       | "provider"
-      | "userId";
+      | "tag"
+      | "userId"
+      | "version";
     indexes: {
       by_id: ["_id"];
       by_creation_time: ["_creationTime"];
@@ -234,6 +238,7 @@ export type DataModel = {
         botToken?: string;
         botUsername?: string;
         iv?: string;
+        salt?: string;
         teamId?: string;
         webhookSecret?: string;
       };
@@ -256,6 +261,7 @@ export type DataModel = {
       | "config.botToken"
       | "config.botUsername"
       | "config.iv"
+      | "config.salt"
       | "config.teamId"
       | "config.webhookSecret"
       | "createdAt"
@@ -587,6 +593,281 @@ export type DataModel = {
     searchIndexes: {};
     vectorIndexes: {};
   };
+  mastra_documents: {
+    document: {
+      primaryKey: string;
+      record: any;
+      table: string;
+      _id: Id<"mastra_documents">;
+      _creationTime: number;
+    };
+    fieldPaths: "_creationTime" | "_id" | "primaryKey" | "record" | "table";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_table: ["table", "_creationTime"];
+      by_table_primary: ["table", "primaryKey", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  mastra_messages: {
+    document: {
+      content: string;
+      createdAt: string;
+      id: string;
+      resourceId?: string;
+      role: string;
+      thread_id: string;
+      type: string;
+      _id: Id<"mastra_messages">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "content"
+      | "createdAt"
+      | "id"
+      | "resourceId"
+      | "role"
+      | "thread_id"
+      | "type";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_record_id: ["id", "_creationTime"];
+      by_resource: ["resourceId", "_creationTime"];
+      by_thread: ["thread_id", "_creationTime"];
+      by_thread_created: ["thread_id", "createdAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  mastra_resources: {
+    document: {
+      createdAt: string;
+      id: string;
+      metadata?: any;
+      updatedAt: string;
+      workingMemory?: string;
+      _id: Id<"mastra_resources">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "id"
+      | "metadata"
+      | "updatedAt"
+      | "workingMemory";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_record_id: ["id", "_creationTime"];
+      by_updated: ["updatedAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  mastra_scorers: {
+    document: {
+      additionalContext?: any;
+      analyzePrompt?: string;
+      analyzeStepResult?: any;
+      createdAt: string;
+      entity?: any;
+      entityId?: string;
+      entityType?: string;
+      extractPrompt?: string;
+      extractStepResult?: any;
+      generateReasonPrompt?: string;
+      generateScorePrompt?: string;
+      id: string;
+      input: any;
+      metadata?: any;
+      output: any;
+      preprocessPrompt?: string;
+      preprocessStepResult?: any;
+      reason?: string;
+      reasonPrompt?: string;
+      requestContext?: any;
+      resourceId?: string;
+      runId: string;
+      score: number;
+      scorer: any;
+      scorerId: string;
+      source: string;
+      spanId?: string;
+      threadId?: string;
+      traceId?: string;
+      updatedAt: string;
+      _id: Id<"mastra_scorers">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "additionalContext"
+      | "analyzePrompt"
+      | "analyzeStepResult"
+      | "createdAt"
+      | "entity"
+      | "entityId"
+      | "entityType"
+      | "extractPrompt"
+      | "extractStepResult"
+      | "generateReasonPrompt"
+      | "generateScorePrompt"
+      | "id"
+      | "input"
+      | "metadata"
+      | "output"
+      | "preprocessPrompt"
+      | "preprocessStepResult"
+      | "reason"
+      | "reasonPrompt"
+      | "requestContext"
+      | "resourceId"
+      | "runId"
+      | "score"
+      | "scorer"
+      | "scorerId"
+      | "source"
+      | "spanId"
+      | "threadId"
+      | "traceId"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_created: ["createdAt", "_creationTime"];
+      by_entity: ["entityId", "entityType", "_creationTime"];
+      by_record_id: ["id", "_creationTime"];
+      by_run: ["runId", "_creationTime"];
+      by_scorer: ["scorerId", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  mastra_threads: {
+    document: {
+      createdAt: string;
+      id: string;
+      metadata?: any;
+      resourceId: string;
+      title: string;
+      updatedAt: string;
+      _id: Id<"mastra_threads">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "id"
+      | "metadata"
+      | "resourceId"
+      | "title"
+      | "updatedAt";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_created: ["createdAt", "_creationTime"];
+      by_record_id: ["id", "_creationTime"];
+      by_resource: ["resourceId", "_creationTime"];
+      by_updated: ["updatedAt", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  mastra_vector_indexes: {
+    document: {
+      createdAt: string;
+      dimension: number;
+      id: string;
+      indexName: string;
+      metric: string;
+      _id: Id<"mastra_vector_indexes">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "dimension"
+      | "id"
+      | "indexName"
+      | "metric";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_name: ["indexName", "_creationTime"];
+      by_record_id: ["id", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  mastra_vectors: {
+    document: {
+      embedding: Array<number>;
+      id: string;
+      indexName: string;
+      metadata?: any;
+      _id: Id<"mastra_vectors">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "embedding"
+      | "id"
+      | "indexName"
+      | "metadata";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_index: ["indexName", "_creationTime"];
+      by_index_id: ["indexName", "id", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
+  mastra_workflow_snapshots: {
+    document: {
+      createdAt: string;
+      id?: string;
+      resourceId?: string;
+      run_id: string;
+      snapshot: any;
+      updatedAt: string;
+      workflow_name: string;
+      _id: Id<"mastra_workflow_snapshots">;
+      _creationTime: number;
+    };
+    fieldPaths:
+      | "_creationTime"
+      | "_id"
+      | "createdAt"
+      | "id"
+      | "resourceId"
+      | "run_id"
+      | "snapshot"
+      | "updatedAt"
+      | "workflow_name";
+    indexes: {
+      by_id: ["_id"];
+      by_creation_time: ["_creationTime"];
+      by_created: ["createdAt", "_creationTime"];
+      by_record_id: ["id", "_creationTime"];
+      by_resource: ["resourceId", "_creationTime"];
+      by_workflow: ["workflow_name", "_creationTime"];
+      by_workflow_run: ["workflow_name", "run_id", "_creationTime"];
+    };
+    searchIndexes: {};
+    vectorIndexes: {};
+  };
   mcpConnections: {
     document: {
       capabilities?: any;
@@ -777,6 +1058,7 @@ export type DataModel = {
   };
   projects: {
     document: {
+      agentIds?: Array<string>;
       createdAt: number;
       deletedAt?: number;
       description?: string;
@@ -791,6 +1073,7 @@ export type DataModel = {
     fieldPaths:
       | "_creationTime"
       | "_id"
+      | "agentIds"
       | "createdAt"
       | "deletedAt"
       | "description"
@@ -994,10 +1277,8 @@ export type DataModel = {
       isInstalled: boolean;
       name: string;
       projectId?: Id<"projects">;
-      references?: Array<{ content: string; name: string }>;
       repository?: string;
       schema?: any;
-      skillMdContent?: string;
       updatedAt: number;
       userId?: string;
       version: string;
@@ -1019,10 +1300,8 @@ export type DataModel = {
       | "isInstalled"
       | "name"
       | "projectId"
-      | "references"
       | "repository"
       | "schema"
-      | "skillMdContent"
       | "updatedAt"
       | "userId"
       | "version";
