@@ -7,4 +7,7 @@ export default defineConfig({
   splitting: false,
   sourcemap: true,
   clean: true,
+  outDir: 'dist',
+  target: 'es2022',
+  external: ['@mastra/core', '@mastra/memory', '@mastra/convex', '@ai-sdk/moonshotai'],
 });

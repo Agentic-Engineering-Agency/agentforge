@@ -1,150 +1,59 @@
-/**
- * AgentForge Daemon Implementation
- *
- * Central daemon that manages agents and coordinates channel adapters.
- * This is a persistent Node.js process (not a Convex action).
- */
+import type { Agent } from '@mastra/core/agent';
+import { initStorage } from '../agent/shared.js';
+import { createStandardAgent } from '../agent/create-standard-agent.js';
+import type { ChannelAdapter, AgentDefinition, DaemonConfig } from './types.js';
 
-import type {
-  AgentDefinition,
-  AgentForgeDaemon,
-  ChannelAdapter,
-  DaemonConfig,
-} from './types.js';
-
-/**
- * AgentForge Daemon
- *
- * Manages the lifecycle of agents and channel adapters.
- * Acts as the central coordinator for the AgentForge runtime.
- */
-export class AgentForgeDaemonImpl implements AgentForgeDaemon {
-  private agents: Map<string, any> = new Map();
+export class AgentForgeDaemon {
+  private agents = new Map<string, Agent>();
   private channels: ChannelAdapter[] = [];
-  private config: DaemonConfig;
-  private running = false;
-  private cleanupHandlers: (() => Promise<void>)[] = [];
 
   constructor(config: DaemonConfig = {}) {
-    this.config = config;
-  }
-
-  /**
-   * Load agents from configuration
-   */
-  async loadAgents(agents: AgentDefinition[]): Promise<void> {
-    for (const agentDef of agents) {
-      // Store agent definition - actual agent creation happens in HTTP channel
-      this.agents.set(agentDef.id, agentDef);
+    if (config.deploymentUrl && config.adminAuthToken) {
+      initStorage(config.deploymentUrl, config.adminAuthToken);
     }
   }
 
-  /**
-   * Add a channel adapter
-   */
-  async addChannel(adapter: ChannelAdapter): Promise<void> {
+  async loadAgents(definitions: AgentDefinition[]): Promise<void> {
+    for (const def of definitions) {
+      const agent = createStandardAgent({
+        id: def.id,
+        name: def.name,
+        description: def.description,
+        instructions: def.instructions,
+        model: def.model,
+        workingMemoryTemplate: def.workingMemoryTemplate,
+      });
+      this.agents.set(def.id, agent);
+    }
+  }
+
+  addChannel(adapter: ChannelAdapter): void {
     this.channels.push(adapter);
   }
 
-  /**
-   * Start all channels and begin serving requests
-   */
   async start(): Promise<void> {
-    if (this.running) {
-      throw new Error('Daemon is already running');
-    }
-
-    this.running = true;
-
-    if (this.config.dev) {
-      console.log(`[AgentForgeDaemon] Starting with ${this.agents.size} agent(s)`);
-    }
-
-    // Start all channels
-    for (const channel of this.channels) {
-      if (this.config.dev) {
-        console.log(`[AgentForgeDaemon] Starting channel: ${channel.name}`);
-      }
-      await channel.start(this.agents, this);
-    }
-
-    // Register signal handlers for graceful shutdown
-    this.setupSignalHandlers();
+    await Promise.all(this.channels.map(ch => ch.start(this.agents, this)));
   }
 
-  /**
-   * Stop all channels and cleanup
-   */
   async stop(): Promise<void> {
-    if (!this.running) {
-      return;
-    }
-
-    if (this.config.dev) {
-      console.log('[AgentForgeDaemon] Stopping...');
-    }
-
-    // Stop all channels in reverse order
-    for (const channel of [...this.channels].reverse()) {
-      if (channel.isRunning()) {
-        await channel.stop();
-      }
-    }
-
-    // Run cleanup handlers
-    for (const handler of this.cleanupHandlers) {
-      await handler();
-    }
-
-    this.running = false;
+    await Promise.all(this.channels.map(ch => ch.stop()));
   }
 
-  /**
-   * Get a loaded agent by ID
-   */
-  getAgent(id: string): any | undefined {
+  getAgent(id: string): Agent | undefined {
     return this.agents.get(id);
   }
 
-  /**
-   * Get all loaded agents
-   */
-  getAgents(): Map<string, any> {
-    return new Map(this.agents);
+  listAgents(): AgentDefinition[] {
+    return Array.from(this.agents.entries()).map(([id, agent]) => {
+      return {
+        id,
+        name: agent.name,
+        description: (agent as any).description,
+        instructions: typeof (agent as any).instructions === 'string' ? (agent as any).instructions : '',
+        model: typeof agent.model === 'string' ? agent.model : undefined,
+        tools: [],
+        workingMemoryTemplate: undefined,
+      };
+    });
   }
-
-  /**
-   * Check if daemon is running
-   */
-  isRunning(): boolean {
-    return this.running;
-  }
-
-  /**
-   * Add cleanup handler
-   */
-  addCleanupHandler(handler: () => Promise<void>): void {
-    this.cleanupHandlers.push(handler);
-  }
-
-  /**
-   * Setup signal handlers for graceful shutdown
-   */
-  private setupSignalHandlers(): void {
-    const shutdown = async (signal: string) => {
-      console.log(`\n[AgentForgeDaemon] Received ${signal}, shutting down gracefully...`);
-      await this.stop();
-      process.exit(0);
-    };
-
-    process.on('SIGTERM', () => shutdown('SIGTERM'));
-    process.on('SIGINT', () => shutdown('SIGINT'));
-  }
-}
-
-/**
- * Factory function to create a daemon instance
- */
-export function createDaemon(config?: DaemonConfig): AgentForgeDaemon {
-  return new AgentForgeDaemonImpl(config);
 }
