@@ -32,6 +32,21 @@ export function registerStatusCommand(program: Command) {
         checks['Convex Connection'] = '✖ Not connected (run `npx convex dev`)';
       }
 
+      // Check runtime daemon
+      try {
+        const healthResponse = await fetch('http://localhost:3001/health', {
+          signal: AbortSignal.timeout(1000),
+        });
+        if (healthResponse.ok) {
+          const health = await healthResponse.json() as { agents: number; agentIds: string[] };
+          checks['Runtime Daemon'] = `✔ Running on :3001 (${health.agents} agent${health.agents !== 1 ? 's' : ''})`;
+        } else {
+          checks['Runtime Daemon'] = '✗ Not responding';
+        }
+      } catch {
+        checks['Runtime Daemon'] = '✗ Not running (run `agentforge start`)';
+      }
+
       // Check LLM provider
       let providerStatus = 'Not configured';
       let storedKeysCount = 0;

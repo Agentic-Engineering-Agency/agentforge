@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { createProject } from './commands/create.js';
 import { runProject } from './commands/run.js';
-import { deployProject } from './commands/deploy.js';
 import { upgradeProject } from './commands/upgrade.js';
 import { registerAgentsCommand } from './commands/agents.js';
 import { registerChatCommand } from './commands/chat.js';
@@ -25,8 +24,8 @@ import { registerChannelSlackCommand } from './commands/channel-slack.js';
 import { registerChannelDiscordCommand } from './commands/channel-discord.js';
 import { registerSandboxCommand } from './commands/sandbox.js';
 import { registerResearchCommand } from './commands/research.js';
-import { browserCommand } from './commands/browser.js';
-import { registerVoiceCommand } from './commands/voice.js';
+import { registerStartCommand } from './commands/start.js';
+import { registerDeployCommand } from './commands/deploy.js';
 import { registerWorkflowsCommand } from './commands/workflows.js';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -62,27 +61,7 @@ program
     await runProject(options as import('./commands/run.js').RunOptions);
   });
 
-program
-  .command('deploy')
-  .description('Deploy the project to production')
-  .option('--env <path>', 'Path to environment file', '.env.production')
-  .option('--dry-run', 'Preview deployment without executing', false)
-  .option('--rollback', 'Rollback to previous deployment', false)
-  .option('--force', 'Skip confirmation prompts', false)
-  .option('--provider <provider>', 'Deployment provider (convex or cloud)', 'convex')
-  .option('--project <projectId>', 'Project ID for cloud deployments')
-  .option('--version <tag>', 'Version tag for the deployment')
-  .action(async (options: {
-    env: string;
-    dryRun: boolean;
-    rollback: boolean;
-    force: boolean;
-    provider: 'convex' | 'cloud';
-    project?: string;
-    version?: string;
-  }) => {
-    await deployProject(options);
-  });
+registerDeployCommand(program);
 
 program
   .command('upgrade')
@@ -93,6 +72,9 @@ program
   .action(async (options: { yes: boolean; dryRun: boolean; only?: string }) => {
     await upgradeProject(options);
   });
+
+// ─── Runtime ─────────────────────────────────────────────────────
+registerStartCommand(program);
 
 // ─── Cloud Authentication ────────────────────────────────────────
 registerModelsCommand(program);
@@ -146,13 +128,7 @@ registerSandboxCommand(program);
 // ─── Research ─────────────────────────────────────────────────────
 registerResearchCommand(program);
 
-
-// ─── Browser Automation ───────────────────────────────────────────
-// ─── Dashboard Auth ───────────────────────────────────────────────
-// ─── Voice ─────────────────────────────────────────────────────
 // ─── Workflows ─────────────────────────────────────────────────
-program.addCommand(browserCommand);
-registerVoiceCommand(program);
 registerWorkflowsCommand(program);
 
 // ─── Status, Dashboard, Logs, Heartbeat ──────────────────────────
