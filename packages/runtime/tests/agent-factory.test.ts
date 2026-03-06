@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createStandardAgent } from '../src/agent/create-standard-agent.js';
 import { initStorage } from '../src/agent/shared.js';
 import { Agent } from '@mastra/core/agent';

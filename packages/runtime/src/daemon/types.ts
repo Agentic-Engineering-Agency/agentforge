@@ -1,11 +1,5 @@
 import type { Agent } from '@mastra/core/agent';
 
-export interface ChannelAdapter {
-  name: string;
-  start(agents: Map<string, Agent>, daemon: AgentForgeDaemon): Promise<void>;
-  stop(): Promise<void>;
-}
-
 export interface AgentDefinition {
   id: string;
   name: string;
@@ -22,4 +16,14 @@ export interface DaemonConfig {
   defaultModel?: string;
 }
 
-import type { AgentForgeDaemon } from './daemon.js';
+/** Minimal interface exposed to channel adapters — avoids circular import with daemon.ts */
+export interface DaemonHandle {
+  getAgent(id: string): Agent | undefined;
+  listAgents(): AgentDefinition[];
+}
+
+export interface ChannelAdapter {
+  name: string;
+  start(agents: Map<string, Agent>, daemon: DaemonHandle): Promise<void>;
+  stop(): Promise<void>;
+}

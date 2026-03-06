@@ -34,6 +34,14 @@ function generateId(): string {
   return `note-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+const noteSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  content: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
 export const manageNotesTool = createTool({
   id: 'manage-notes',
   description: 'Create, read, update, delete persistent notes.',
@@ -45,8 +53,8 @@ export const manageNotesTool = createTool({
   }),
   outputSchema: z.object({
     success: z.boolean(),
-    notes: z.array(z.any()).optional(),
-    note: z.any().optional(),
+    notes: z.array(noteSchema).optional(),
+    note: noteSchema.optional(),
   }),
   execute: async ({ action, id, content, title }) => {
     const notes = loadNotes();

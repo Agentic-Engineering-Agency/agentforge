@@ -29,4 +29,4 @@ export { manageNotesTool } from './tools/manage-notes.js';
 
 // Daemon
 export { AgentForgeDaemon } from './daemon/daemon.js';
-export type { ChannelAdapter, AgentDefinition, DaemonConfig } from './daemon/types.js';
+export type { ChannelAdapter, AgentDefinition, DaemonConfig, DaemonHandle } from './daemon/types.js';
