@@ -1,380 +1,318 @@
-# AgentForge — Project State Document
+# AgentForge — Project State & Architecture Redesign
 
-**Version:** v0.11.21  
-**Date:** March 4, 2026  
-**Author:** Seshat (automated audit)  
-**Purpose:** Comprehensive codebase state for Lalo to continue development
+**Last Updated:** March 5, 2026  
+**Authors:** Seshat (audit) + Luci (architecture decision)  
+**Status:** v0.11.21 published — full architectural refactor approved and planned
 
 ---
 
-## 1. Architecture Overview
+## Part 1 — What Was Built (v0.11.21)
 
-### Published Packages (npm)
-| Package | Version | Description |
-|---------|---------|-------------|
-| `@agentforge-ai/core` | 0.11.21 | Core library — Convex schema, functions, LLM integration |
-| `@agentforge-ai/cli` | 0.11.21 | CLI tool — project scaffolding, agent management, dashboard |
+### Published Packages
+| Package | Version |
+|---------|---------|
+| `@agentforge-ai/core` | 0.11.21 |
+| `@agentforge-ai/cli` | 0.11.21 |
 
-### Legacy Packages (NOT published, can be removed)
-| Directory | Status |
-|-----------|--------|
-| `packages/cloud-client/` | Empty — no package.json |
-| `packages/convex-adapter/` | Empty — no package.json |
-| `packages/sandbox/` | Empty — no package.json |
-| `packages/web/` | v0.8.0 — old web UI, superseded by per-project `dashboard/` |
+### What Works
+- `agentforge create <name>` — scaffolds a project
+- `agentforge status / agents list / models list / keys / tokens / threads / logs / skills / dashboard`
+- All 8 LLM providers: OpenAI, Anthropic, Google, Mistral, DeepSeek, xAI, OpenRouter, Cohere
+- Convex schema deploys cleanly (25+ tables, 108 indexes, 0 TS errors)
+- 757 unit tests passing
+- Dashboard Vite server starts, Convex real-time queries work
 
-### Monorepo Structure
+### What Doesn't Work Well
+| Issue | Root Cause |
+|-------|------------|
+| Chat latency 10-15s | Mastra running inside Convex "use node" actions — cold starts |
+| No real streaming | Convex actions are request/response, not streams |
+| XOR encryption on API keys | crypto.subtle too slow in V8 runtime for proper AES |
+| No auth/authorization | Any caller can access all Convex data |
+| No rate limiting | Unbounded LLM calls |
+| `voice` / `browser` commands empty | Not implemented |
+| 4-way template sync | Manual, error-prone, caused most regressions this week |
+
+---
+
+## Part 2 — The Architectural Problem
+
+### The Core Mistake
+Mastra is a **persistent runtime**. It maintains in-memory state, streams responses, and manages long-lived memory. We have been running it inside Convex actions — serverless functions with cold starts, execution time limits, and no streaming support.
+
+This is like running an Express server inside a Lambda function. It works barely, but it's wrong by design.
+
+### Evidence
+- **Chico** (Koki's repo, reviewed March 5): correct Mastra usage — persistent Node.js process, LibSQL memory, streaming Discord responses, <1s latency
+- **AgentForge**: Mastra inside `convex/lib/agent.ts` ("use node" action) → 10-15s cold starts, no streaming, crypto.subtle too slow for real encryption
+
+### What Convex Is Good For
+- Real-time reactive data (great for dashboards)
+- Config storage (agents, API keys, files, settings)
+- Audit logs + usage tracking
+- Schema + validation
+
+### What Convex Is Bad For
+- Running LLM calls
+- Persistent processes
+- Streaming
+- Crypto operations (V8 runtime is slow)
+
+---
+
+## Part 3 — New Architecture
+
+### Decision (confirmed by Luci, March 5, 2026)
+- **Central daemon** model (like OpenClaw, not per-project like Chico)
+- **One AgentForge instance** manages multiple agents
+- **Channels v1:** HTTP, Discord, Telegram
+
 ```
-agentforge/
-├── packages/
-│   ├── core/           # Published — template files, core lib, tests (757 tests)
-│   ├── cli/            # Published — CLI commands, project scaffolding
-│   │   └── templates/default/  # ⭐ Canonical template source
-│   ├── web/            # ❌ Legacy — remove or archive
-│   ├── cloud-client/   # ❌ Empty — remove
-│   ├── convex-adapter/ # ❌ Empty — remove
-│   └── sandbox/        # ❌ Empty — remove
-├── convex/             # Template copy #2 (for local dev/testing)
-├── templates/default/  # Template copy #3
-├── docs/               # User-facing documentation
-├── examples/finforge/  # Example project (builds, typechecks)
-├── specs/              # SpecSafe specifications
-├── research/           # Research notes
-└── tests/              # Integration tests
+┌──────────────────────────────────────────────────────────┐
+│  AgentForge Daemon  (persistent Node.js process)          │
+│                                                           │
+│  ┌────────────────────────────────────────────────────┐  │
+│  │  Mastra Core                                        │  │
+│  │  ├── createStandardAgent() factory                  │  │
+│  │  ├── createStandardMemory() — LibSQL (local)        │  │
+│  │  ├── models/registry.ts — capability/tier metadata  │  │
+│  │  └── tools/ — web-search, read-url, datetime, etc.  │  │
+│  └────────────────────────────────────────────────────┘  │
+│                                                           │
+│  Channels:                                                │
+│  ├── HTTP  → /v1/chat/completions (OpenAI-compatible)     │
+│  │           /health, /v1/agents, /v1/threads             │
+│  ├── Discord → bot.ts, progressive streaming              │
+│  └── Telegram → grammy, progressive streaming             │
+│                                                           │
+│  Sync Layer:                                              │
+│  ├── reads agent config from Convex on startup            │
+│  ├── writes logs/usage/messages to Convex in real-time    │
+│  └── hot-reload on Convex config changes                  │
+└───────────────────────────┬──────────────────────────────┘
+                            │ Convex HTTP client
+┌───────────────────────────▼──────────────────────────────┐
+│  Convex Backend  (data layer ONLY — no LLM logic)         │
+│                                                           │
+│  Tables: agents, apiKeys, threads, messages,              │
+│          files, settings, logs, usage, tokens             │
+│                                                           │
+│  Removed: chat.ts, mastraIntegration.ts, lib/agent.ts    │
+│           modelFetcher.ts (moves to runtime)              │
+└───────────────────────────┬──────────────────────────────┘
+                            │ Convex real-time
+┌───────────────────────────▼──────────────────────────────┐
+│  Dashboard  (React + Vite)                                │
+│  agent management, API keys, logs, usage, channels        │
+└──────────────────────────────────────────────────────────┘
 ```
 
-### Template Sync Problem ⚠️
-There are **4 locations** where Convex template files must stay in sync:
-1. `packages/cli/templates/default/convex/` ← **CANONICAL SOURCE**
-2. `packages/cli/dist/default/convex/` ← built copy for npm
-3. `templates/default/convex/` ← root copy
-4. `convex/` ← local dev copy
-
-**Any edit to template files MUST be synced to all 4 locations** or bugs will appear in new vs existing projects. This is the #1 source of regressions.
-
-**Recommendation:** Automate this with a `sync-templates` script or eliminate redundant copies.
-
----
-
-## 2. What Works (Verified with Live Convex Deployment)
-
-### Tested against: `hallowed-stork-858` (Convex cloud, AgenticEngineering team)
-
-### CLI Commands ✅
-| Command | Status | Notes |
-|---------|--------|-------|
-| `agentforge create <name>` | ✅ | Scaffolds project, installs deps (pnpm/npm fallback) |
-| `agentforge status` | ✅ | Shows project health, Convex connection, provider config |
-| `agentforge agents list` | ✅ | Lists agents with ID, model, provider, active status |
-| `agentforge agents create` | ✅ | Interactive agent creation |
-| `agentforge models list --provider openai` | ✅ | Shows 12 live models from OpenAI API (v0.11.20 fix) |
-| `agentforge keys add <provider> <key>` | ✅ | Stores encrypted API key |
-| `agentforge keys list` | ✅ | Lists stored keys (values hidden) |
-| `agentforge vault set/get/list/delete` | ✅ | Requires `VAULT_ENCRYPTION_KEY` env var (AES-256-GCM) |
-| `agentforge tokens generate` | ✅ | Creates API access tokens for `/v1/chat/completions` |
-| `agentforge threads list` | ✅ | Lists conversation threads |
-| `agentforge logs` | ✅ | Shows recent activity logs |
-| `agentforge skills list` | ✅ | Shows installed skills |
-| `agentforge cron list` | ✅ | Lists cron jobs |
-| `agentforge config show` | ✅ | Shows env config |
-| `agentforge heartbeat` | ✅ | Checks pending tasks |
-| `agentforge dashboard` | ✅ | Launches Vite dev server on port 3000 |
-| `agentforge upgrade` | ✅ | Syncs convex/ from latest template |
-
-### CLI Commands That Need Work
-| Command | Status | Issue |
-|---------|--------|-------|
-| `agentforge chat <agent-id>` | ⚠️ | Works but stdin pipe hangs; interactive mode requires manual exit |
-| `agentforge projects create` | ⚠️ | Interactive only — no `--name` flag for non-interactive use |
-| `agentforge cron create` | ⚠️ | Interactive only — no non-interactive flags |
-| `agentforge research <topic>` | ⚠️ | Runs but `--format` flag documented but doesn't exist |
-| `agentforge voice` | ❌ | No subcommands registered (empty) |
-| `agentforge browser` | ❌ | No subcommands registered (empty) |
-
-### Chat Pipeline ✅
-| Test | Result | Latency |
-|------|--------|---------|
-| OpenAI gpt-4o-mini chat | ✅ | ~1-13s (cold start varies) |
-| Agent creation + thread + message | ✅ | End-to-end verified |
-| Multi-provider failover chain | ✅ | Falls to next provider on auth errors |
-| Error classification (rate_limit, auth, timeout) | ✅ | Breaks retry on auth errors |
-
-### Dashboard (Web UI) ✅
-| Feature | Status |
-|---------|--------|
-| Vite dev server startup | ✅ (port 3000) |
-| Convex real-time connection | ✅ |
-| All query endpoints (agents, threads, sessions, etc.) | ✅ (10/10 verified via HTTP) |
-
-### Convex Deployment ✅
-| Metric | Value |
-|--------|-------|
-| Schema tables | 25+ |
-| Indexes created | 108 |
-| TypeScript errors | 0 |
-| Deploy time | ~5s |
-
----
-
-## 3. Provider Support Matrix
-
-### Model Fetching (modelFetcher.ts)
-| Provider | Live API Fetch | Static Fallback |
-|----------|---------------|-----------------|
-| OpenAI | ✅ (12 models via allowlist) | ✅ |
-| Anthropic | ✅ | ✅ |
-| Google | ✅ | ✅ |
-| Mistral | ✅ | ✅ |
-| DeepSeek | ✅ | ✅ |
-| xAI / Grok | ✅ | ✅ |
-| OpenRouter | ✅ | ✅ |
-| Cohere | ✅ | ✅ |
-
-### Chat (lib/agent.ts)
-| Provider | SDK Used | Status |
-|----------|----------|--------|
-| OpenAI | `@ai-sdk/openai-compatible` | ✅ Verified |
-| Anthropic | `@ai-sdk/anthropic` (native) | ✅ Added v0.11.19 |
-| Google | `@ai-sdk/google` (native) | ✅ Added v0.11.19 |
-| Mistral | `@ai-sdk/openai-compatible` | ✅ Compatible |
-| DeepSeek | `@ai-sdk/openai-compatible` | ✅ Compatible |
-| xAI / Grok | `@ai-sdk/openai-compatible` | ✅ Compatible |
-| OpenRouter | `@ai-sdk/openai-compatible` | ✅ Compatible |
-| Cohere | `@ai-sdk/openai-compatible` | ⚠️ Uses `/compatibility/v1` |
-
----
-
-## 4. Security Audit
-
-### Dependency Vulnerabilities
-| Package | Severity | Status |
-|---------|----------|--------|
-| `hono` < 4.12.4 | HIGH — arbitrary file access | ✅ Fixed via pnpm overrides |
-| `@hono/node-server` < 1.19.10 | HIGH — auth bypass | ✅ Fixed via pnpm overrides |
-| `hono` < 4.12.4 | MODERATE — cookie injection, SSE injection | ✅ Fixed via pnpm overrides |
-
-**Current: 0 known vulnerabilities** (`pnpm audit` clean)
-
-### Secret Scanning
-| Check | Result |
-|-------|--------|
-| Hardcoded API keys in source | ✅ None found |
-| Credentials in test files | ✅ None found |
-| Leaked keys in git history | ⚠️ Not checked (recommend `git-secrets` or `trufflehog`) |
-
-### API Key Encryption (CRITICAL ⚠️)
-**Current implementation in `apiKeys.ts`:** XOR cipher with repeating key
-
+### Key Pattern: `createStandardAgent()` (from Chico)
 ```typescript
-// Current (WEAK):
-const key = salt + iv;
-charCode ^ key.charCodeAt(i % key.length)
+// packages/runtime/src/agent/create-standard-agent.ts
+export function createStandardAgent(config: {
+  id: string
+  name: string
+  instructions: string
+  model?: string
+  tools?: ToolsInput
+  workingMemoryTemplate?: string
+}): Agent {
+  const memory = createStandardMemory(config)
+  return new Agent({
+    id: config.id,
+    name: config.name,
+    model: config.model ?? DAEMON_MODEL,
+    memory,
+    tools: config.tools ?? {},
+    inputProcessors: [new UnicodeNormalizer(), new TokenLimiterProcessor(...)],
+    instructions: config.instructions,
+  })
+}
 ```
 
-**Issues:**
-1. **XOR with repeating key is trivially breakable** — known-plaintext attacks work since API keys have known prefixes (`sk-`, `sk-ant-`, etc.)
-2. **Default salt is hardcoded:** `"agentforge-default-salt"` — if `AGENTFORGE_KEY_SALT` env var not set, all keys are trivially decryptable
-3. **No authentication (no HMAC/tag)** — ciphertext can be modified without detection
-4. **IV is `Date.now().toString(36)`** — predictable, not cryptographically random
-
-**Why not already fixed:** Attempted AES-256-GCM upgrade. Convex V8 runtime's `crypto.subtle` PBKDF2/HKDF adds 10-19s latency per decryption. This makes chat unusable. Proper fix requires:
-- Move `getDecryptedForProvider` to a `"use node"` action file (native Node.js crypto is fast)
-- Change callers from `ctx.runQuery()` to `ctx.runAction()`
-- Update `chat.ts` and `modelFetcher.ts` accordingly
-
-**Contrast:** `vault.ts` uses proper AES-256-GCM with `crypto.subtle` and 100k PBKDF2 iterations — this works because vault operations are infrequent. API key decryption happens on every chat message.
-
-**Recommendation:** HIGH priority fix. Move encryption to `"use node"` action file.
-
-### Convex Function Security
-| Check | Result |
-|-------|--------|
-| `getActiveForProvider` returns decrypted key? | ⚠️ YES — public query returns `decryptedKey` field. **Should strip sensitive fields.** |
-| Auth/ownership checks on queries | ⚠️ `userId` is optional — no enforcement. Any caller can read all agents/keys/files |
-| Decrypted keys logged to console | ✅ No console.log/error on decrypted keys |
-| Input validation on mutations | ✅ Convex validators enforce types |
-| Rate limiting on LLM calls | ❌ None — any client can spam `chat:sendMessage` |
-
-### Recommendations (Priority Order)
-1. **HIGH:** Move API key decryption to `"use node"` action with real AES-256-GCM
-2. **HIGH:** Remove `decryptedKey` from `getActiveForProvider` response (public query leaks decrypted keys)
-3. **HIGH:** Add authentication/authorization to Convex functions (currently no user verification)
-4. **MEDIUM:** Add rate limiting to `chat:sendMessage` action
-5. **MEDIUM:** Run `trufflehog` or `git-secrets` on git history
-6. **LOW:** Replace `Date.now().toString(36)` IV with `crypto.getRandomValues()`
-
----
-
-## 5. Quality Check
-
-### TypeScript
-| Package | `tsc --noEmit` | Notes |
-|---------|----------------|-------|
-| `packages/core` | ✅ 0 errors | |
-| `packages/cli` | ✅ 0 errors | |
-| Template `convex/` | ✅ 0 errors | Verified via `npx convex dev --once` |
-| `examples/finforge` | ✅ 0 errors | |
-
-### Tests
-| Suite | Count | Status |
-|-------|-------|--------|
-| `packages/core` (vitest) | 757 | ✅ All passing |
-| Duration | 10.4s | |
-
-### Code Quality Issues
-1. **Template duplication:** 4 copies of every Convex file. Any bug fix requires 4-way sync.
-2. **Empty CLI commands:** `voice` and `browser` have no subcommands — show empty help.
-3. **Interactive-only commands:** `projects create`, `cron create` can't be scripted.
-4. **`usage` command doesn't exist** — shown in some docs but not implemented.
-
-### Documentation Status (after cleanup)
-| File | Status | Notes |
-|------|--------|-------|
-| `README.md` | ⚠️ Needs update | References old package structure |
-| `docs/getting-started.md` | ✅ Updated | Reflects v0.11.x flow |
-| `docs/CLI.md` | ⚠️ Review needed | May reference removed commands |
-| `docs/architecture.md` | ⚠️ Review needed | Should reflect 2-package structure |
-| `docs/DESIGN-PROJECT-CONFIG.md` | ✅ Keep | Useful internal design doc (1367 lines) |
-| `docs/skills.md` | ✅ Current | |
-| `docs/mcp.md` | ✅ Current | |
-| `docs/channels.md` | ⚠️ Review | May reference removed auth system |
-| `docs/deployment-guide.md` | ⚠️ Review | Only remaining deployment doc |
-| `CHANGELOG.md` | ⚠️ Needs update | Missing v0.10.18 through v0.11.21 entries |
-| `CONTRIBUTING.md` | ✅ Keep | |
-| `CODE_OF_CONDUCT.md` | ✅ Keep | |
-| `PROJECT_STATE.md` | ✅ This document | |
-
-### Files Removed (14 stale docs)
-```
-AUDIT-AGENT-PROMPT.md, AUDIT-FEATURE-REPORT-2026-03-02.md,
-AUDIT-REPORT-2026-03-02-SUPERSEDED.md, AUDIT-REPORT-2026-03-02.md,
-AUDIT-REPORT.md, AUDIT.md, CLOUD_DEPLOY_SUMMARY.md, 
-COMPLETION_SUMMARY.md, CONCURRENT_PLAN.md, CONVEX-FIXES.md,
-HEARTBEAT.md, INTEGRATION_SYNC.md, NPM_PUBLISH_INSTRUCTIONS.md,
-RELEASE_v0.3.0.md, docs/deployment.md (stale), docs/cli-reference.md (empty)
+### Key Pattern: Channel Adapter Interface
+```typescript
+interface ChannelAdapter {
+  name: string
+  start(agents: Map<string, Agent>): Promise<void>
+  stop(): Promise<void>
+}
+// Implementations: HttpChannel, DiscordChannel, TelegramChannel
 ```
 
 ---
 
-## 6. Version History (v0.10.18 → v0.11.21)
+## Part 4 — Migration Plan (SpecSafe Specs)
 
-| Version | Key Changes |
-|---------|-------------|
-| v0.10.18 | Auth/login system removed |
-| v0.10.19 | Voice module exports fixed |
-| v0.10.20 | Template `usage.list`/`logs.list` bare calls fixed |
-| v0.10.21 | Provider card descriptions wired to live `modelFetcher` |
-| v0.10.22 | Agent modals use dynamic `useProviderModels()` hook |
-| v0.11.0 | SPEC-017 (Workspace), SPEC-018 (Skills), SPEC-019 (Deprecated models) |
-| v0.11.1-4 | Functional test fixes: skills refs, chat crash, schema, model prefix |
-| v0.11.5 | fileIds validator, model prefix strip, cronJobs.updateRun |
-| v0.11.6 | `agentforge upgrade` command, Convex login detection |
-| v0.11.7 | Missing `llmProviders.ts` in template |
-| v0.11.8-9 | TypeScript error fixes (110+58 errors fixed) |
-| v0.11.10 | Real tsc fixes: ctx.db in action, generateResponse→executeAgent |
-| v0.11.11-12 | Moved `insertToken` to correct file, fixed stray braces |
-| v0.11.13 | Removed openrouter from default failover, fixed deprecated claude model |
-| v0.11.14 | **CRITICAL:** `keyData?.apiKey` always undefined — API keys never worked before this |
-| v0.11.15 | `agentforge create` falls back to npm install if pnpm unavailable |
-| v0.11.16 | `getModelsForProvider` is action not query; `refreshAllModels` made public |
-| v0.11.17 | CLI models display: `cached` is array not `{models:[]}` |
-| v0.11.18 | **modelFetcher:** same `keyData?.apiKey` bug — live fetch was dead code |
-| v0.11.19 | **Native Anthropic + Google SDK** — proper auth for all providers |
-| v0.11.20 | CLI models display: show `m.displayName` not `[object Object]`; agent.ts type fix |
-| v0.11.21 | Docs cleanup (14 files), hono CVE fixes, template sync |
+All specs follow SpecSafe workflow: `spec → test → code → qa → complete`
 
----
+### SPEC-020 — Runtime Package Foundation
+**Priority:** P0 — blocks everything else  
+**What:** New `packages/runtime/` package with:
+- `src/agent/create-standard-agent.ts` — factory (from Chico)
+- `src/agent/shared.ts` — DAEMON_MODEL, createStandardMemory(), LibSQL storage
+- `src/models/registry.ts` — full model registry (providers, capabilities, tiers, costs)
+- `src/tools/` — datetime, web-search (Gemini grounding or Brave), read-url (jsdom+Readability), manage-notes
+- `src/daemon.ts` — AgentForgeDaemon class: loads agents from Convex, starts channels, handles shutdown
 
-## 7. Known Issues & Technical Debt
+**Tests:** Unit tests for factory, registry, tools. Integration test: daemon starts and loads a test agent.
 
-### Critical
-1. **API key encryption is XOR** — trivially breakable with known-plaintext attacks
-2. **`getActiveForProvider` leaks decrypted keys** — public query returns raw API keys
-3. **No authentication on Convex functions** — any caller can access all data
+### SPEC-021 — Channel Adapters (HTTP + Discord + Telegram)
+**Priority:** P0  
+**Depends on:** SPEC-020  
+**What:**
+- `src/channels/http.ts` — Hono server, `/v1/chat/completions` (OpenAI-compatible streaming), `/health`, `/v1/agents`
+- `src/channels/discord.ts` — discord.js, progressive streaming (edit every 1.5s), mention + DM support
+- `src/channels/telegram.ts` — grammy, streaming via message edits
 
-### High
-4. **Template 4-way sync** — every file change requires manual sync to 4 locations
-5. **Chat cold start latency** — first call to `"use node"` action takes 10-15s
-6. **`packages/web/`** — stale v0.8.0 package, not used, confuses contributors
-7. **CHANGELOG.md** — not updated since early versions
-8. **README.md** — references old architecture
+**Tests:** Unit tests for message splitting/formatting. Integration: HTTP endpoint responds correctly.
 
-### Medium
-9. **Empty CLI commands** — `voice`, `browser` have no implementations
-10. **Interactive-only commands** — `projects create`, `cron create` need `--name` flags
-11. **Usage tracking** — `completionTokens`/`promptTokens` always 0 (AI SDK v5 streaming usage not awaited correctly)
-12. **`research --format` flag** — documented but doesn't exist
-13. **No rate limiting** on LLM calls
+### SPEC-022 — Convex Data Layer Refactor
+**Priority:** P1  
+**Depends on:** SPEC-020 (can run parallel to SPEC-021)  
+**What:**
+- Remove from Convex: `chat.ts`, `mastraIntegration.ts`, `lib/agent.ts`, `modelFetcher.ts` (all LLM logic)
+- Convex becomes: agents CRUD, apiKeys (AES-256-GCM via Node.js `node:crypto`), threads, messages, files, logs, usage
+- New `src/sync/convex.ts` in runtime — reads agent configs, writes logs/messages back
+- Fix `getActiveForProvider` — remove `decryptedKey` from public query (security fix)
+- Move encryption to a Convex `"use node"` action (real AES-256-GCM, fast in Node.js)
 
-### Low
-14. **`@tanstack/react-router` peer dependency** — unmet peer (1.120.20 vs ^1.160.2)
-15. **Dashboard form focus trap** — agent create modal name field clears on provider switch
-16. **`agentforge chat` stdin** — hangs on piped input, only works interactively
+**Tests:** Encryption round-trip. Sync layer reads agent from Convex correctly.
 
----
+### SPEC-023 — CLI Runtime Commands
+**Priority:** P1  
+**Depends on:** SPEC-020, SPEC-022  
+**What:**
+- `agentforge start [--port 3000] [--discord] [--telegram]` — boots daemon
+- `agentforge chat <agent-id>` — streams via HTTP (replaces Convex action call)
+- `agentforge status` — checks runtime health + Convex connection
+- `agentforge deploy` — deploys Convex schema (data layer only, no runtime needed)
+- Update `agentforge create` — scaffolds both Convex schema AND runtime config
 
-## 8. Recommendations for Lalo
+**Tests:** CLI integration tests against live HTTP endpoint.
 
-### Immediate (before any new features)
-1. **Fix API key encryption** — move to `"use node"` action with AES-256-GCM
-2. **Strip `decryptedKey` from public queries** — security vulnerability
-3. **Automate template sync** — add a `pnpm sync-templates` script
-4. **Remove empty packages** — `cloud-client/`, `convex-adapter/`, `sandbox/`
-5. **Update CHANGELOG.md and README.md**
+### SPEC-024 — Security Hardening
+**Priority:** P1  
+**Depends on:** SPEC-022  
+**What:**
+- AES-256-GCM encryption for API keys (in Convex `"use node"` action, not V8)
+- Rate limiting on HTTP channel (per-agent, per-token)
+- Basic auth check on Convex functions (token validation)
+- Input sanitization on all channel adapters
+- `npm audit` clean (already clean at v0.11.21 — maintain it)
 
-### Short-term
-6. **Add Convex Auth** — all functions currently accept any caller
-7. **Implement rate limiting** on `chat:sendMessage`
-8. **Fix usage tracking** — `await result.usage` in streaming mode
-9. **Add `--name` flags** to interactive-only commands
-10. **Wire up `voice` and `browser` CLI commands** or remove them
-
-### Architecture
-11. **Consider eliminating template duplication** — use a single source of truth with a build step that copies to dist
-12. **Evaluate cold-start optimization** — consider caching Convex actions or using edge functions
-13. **Add integration tests** — currently only unit tests; need end-to-end tests against a Convex deployment
+**Tests:** Encryption benchmark. Auth bypass tests. Rate limit tests.
 
 ---
 
-## 9. How to Test (Reproduction Steps)
+## Part 5 — Overnight Work Plan
 
-```bash
-# 1. Install CLI
-npm install -g @agentforge-ai/cli@0.11.21
+### Strategy
+- Write specs now (synchronously, this session)
+- Spawn 2 parallel Claude Code agents via tmux
+- Agent A: SPEC-020 (runtime foundation)
+- Agent B: SPEC-022 (Convex cleanup — can start before runtime is done)
+- Each agent: spec → test → code → qa → PR (never push to main)
+- Morning: review PRs, merge, start SPEC-021 (channels)
 
-# 2. Create project
-agentforge create my-test
-cd my-test
+### Order of Operations
+```
+Night 1 (now)
+  ├── Agent A: SPEC-020 runtime package
+  └── Agent B: SPEC-022 Convex data layer refactor
 
-# 3. Deploy to Convex
-npx convex dev  # Interactive — creates project, deploys schema
+Morning review
+  └── Merge PRs after review
 
-# 4. Set API key
-npx convex env set OPENAI_API_KEY "sk-..."
+Night 2 (tomorrow)
+  ├── Agent A: SPEC-021 HTTP + Discord channels
+  └── Agent B: SPEC-021 Telegram channel + SPEC-023 CLI
 
-# 5. Create agent
-npx convex run agents:create '{"id":"agent-1","name":"Test","model":"gpt-4o-mini","provider":"openai","instructions":"Be helpful."}'
+Night 3
+  ├── Agent A: SPEC-024 security hardening
+  └── Agent B: integration testing, dashboard verification
 
-# 6. Test chat
-THREAD=$(npx convex run threads:createThread '{"agentId":"agent-1"}' | tr -d '"')
-npx convex run chat:sendMessage "{\"agentId\":\"agent-1\",\"threadId\":\"$THREAD\",\"content\":\"Hello\"}"
-
-# 7. Launch dashboard
-agentforge dashboard
-# Open http://localhost:3000
+Release: v0.12.0 — new runtime architecture
 ```
 
----
-
-## 10. Test Deployments Created During Audit
-
-| Project | Convex ID | Team | Notes |
-|---------|-----------|------|-------|
-| test-app | `brazen-bulldog-292` | AgenticEngineering | First test (v0.11.16) |
-| test-proj | `hallowed-stork-858` | AgenticEngineering | Main test (v0.11.20+) |
-
-These can be deleted from the Convex dashboard when no longer needed.
+### Quality Gates (mandatory per spec)
+1. `pnpm test` — all tests pass (must add tests, not skip them)
+2. `tsc --noEmit` — 0 TypeScript errors
+3. `pnpm audit` — 0 high/critical vulnerabilities
+4. Manual CLI test: `agentforge start`, `agentforge chat`, `agentforge status`
+5. Manual dashboard test: agents load, real-time updates work
 
 ---
 
-*Generated by Seshat — AgentForge audit session, March 4, 2026*
+## Part 6 — What to Preserve vs Rebuild
+
+### Keep (good patterns)
+- Convex schema (tables are solid, just remove LLM logic from functions)
+- Dashboard React components (mostly fine, just update API calls)
+- CLI command structure (add `start`, fix `chat`)
+- `agentforge create` scaffolding
+- `agentforge upgrade` command
+- All 757 existing unit tests (add to, don't remove)
+
+### Remove / Replace
+| File | Why | Replacement |
+|------|-----|-------------|
+| `convex/lib/agent.ts` | Mastra in Convex action | `packages/runtime/src/agent/` |
+| `convex/mastraIntegration.ts` | Same | Runtime sync layer |
+| `convex/modelFetcher.ts` | Runs in V8 | `packages/runtime/src/models/registry.ts` |
+| `convex/chat.ts` | LLM in Convex | HTTP channel → runtime |
+| `packages/web/` | Legacy, unused | Delete |
+| `packages/cloud-client/` | Empty | Delete |
+| `packages/convex-adapter/` | Empty | Delete |
+| `packages/sandbox/` | Empty | Delete |
+
+### Fix
+- 4-way template sync → automate with `pnpm sync-templates` script or single source
+- `voice` / `browser` CLI stubs → implement or remove
+- `research --format` flag → remove non-existent flag from docs
+
+---
+
+## Part 7 — Reference: Chico (Koki's Implementation)
+
+Repo: `https://github.com/Agentic-Engineering-Agency/chico`  
+Reviewed: March 5, 2026
+
+**Patterns to directly adopt:**
+- `createStandardAgent()` factory + `shared.ts` — clean agent abstraction
+- `models/registry.ts` — typed model metadata (provider, context window, cost, capabilities, roles)
+- `delegation.ts` event emitter — inter-agent comms without tight coupling
+- `discord/bot.ts` progressive streaming — edit message every 1.5s while streaming
+- `tools/web-search.ts` — Gemini Search grounding (or adapt for Brave API)
+- `tools/read-url.ts` — jsdom + Mozilla Readability for URL content extraction
+- `TokenLimiterProcessor` — prevent context overflow
+- `UnicodeNormalizer` — basic input safety (guardrails disabled: Gemini rejects schemas)
+
+**Model:** Kimi K2.5 (`moonshotai/kimi-k2.5`) — cheap, capable, recommended default
+
+---
+
+## Part 8 — Known Issues Carried Forward
+
+These are NOT fixed in the current architecture and must be addressed in SPEC-022/024:
+
+1. **API key encryption is XOR** — `apiKeys.ts` in current template
+2. **`getActiveForProvider` leaks decrypted keys** — public query vulnerability
+3. **No auth on Convex functions** — any caller reads all data
+4. **No rate limiting** on any endpoint
+5. **Template 4-way sync** — manual, fragile
+6. **CHANGELOG.md** — not updated (v0.10.18 → v0.11.21 entries missing)
+
+---
+
+## Appendix — Test Deployments
+
+| Project | Purpose | Status |
+|---------|---------|--------|
+| `brazen-bulldog-292` | First v0.11.16 test | Can delete |
+| `hallowed-stork-858` | Main audit test (v0.11.20+) | Keep for SPEC-022 testing |
+
+---
+
+*AgentForge — building the right thing, the right way.*
