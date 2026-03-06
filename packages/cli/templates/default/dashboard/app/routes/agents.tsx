@@ -24,25 +24,21 @@ const FALLBACK_MODELS: Record<string, string[]> = {
 };
 
 /**
- * Fetches live model list from the provider API via Convex action.
- * Falls back to FALLBACK_MODELS if no key is set or the API call fails.
+ * Returns static model list for a provider.
+ * Live model fetching removed in v0.12 — models are managed by the runtime daemon.
  */
 function useProviderModels(provider: string) {
-  const fetchModels = useAction(api.modelFetcher.getModelsForProvider);
   const [models, setModels] = useState<string[]>(FALLBACK_MODELS[provider] ?? []);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
     setModels(FALLBACK_MODELS[provider] ?? []);
     if (!provider) return;
-    setLoading(true);
-    fetchModels({ provider })
-      .then((fetched: any[]) => {
-        if (cancelled) return;
-        if (fetched && fetched.length > 0) {
-          setModels(fetched.map((m: any) => m.id.includes('/') ? m.id.split('/').slice(1).join('/') : m.id));
-        } else {
+    // Static models only — live fetch was removed in SPEC-022.
+    // The runtime daemon resolves provider models at startup via agentforge.config.ts.
+    if (false) {
+      // dead code preserved for diff readability
+      if (false) {
           setModels(FALLBACK_MODELS[provider] ?? []);
         }
       })
