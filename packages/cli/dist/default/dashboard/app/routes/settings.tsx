@@ -83,9 +83,8 @@ function SettingsPage() {
   const toggleApiKey = useMutation(api.apiKeys.toggleActive);
   const storeVaultSecret = useMutation(api.vault.store);
   const removeVaultSecret = useMutation(api.vault.remove);
-  const getModelsForProvider = useAction(api.modelFetcher.getModelsForProvider);
-
-  // Live model names per provider — fetched dynamically when a key is present
+  // NOTE: Live model fetching removed in v0.12 — models are managed by the runtime daemon.
+  // The daemon reads providers from agentforge.config.ts on startup.
   const [liveModels, setLiveModels] = useState<Record<string, string>>({});
 
   const [tab, setTab] = useState<'providers' | 'vault' | 'general'>('providers');
@@ -109,7 +108,8 @@ function SettingsPage() {
     const providersWithKeys = AI_PROVIDERS.filter(p => (keysByProvider[p.id] || []).length > 0);
     for (const provider of providersWithKeys) {
       if (liveModels[provider.id]) continue; // already fetched
-      getModelsForProvider({ provider: provider.id })
+      // NOTE: Live model fetch removed in v0.12 — models handled by runtime daemon.
+      Promise.resolve([])
         .then((models: any[]) => {
           if (models && models.length > 0) {
             const top = models.slice(0, 3).map((m: any) => m.displayName || m.id.split('/').slice(1).join('/')).join(', ');
