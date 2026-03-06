@@ -1,6 +1,7 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -14,20 +15,20 @@ interface Note {
   updatedAt: string;
 }
 
-function loadNotes(): Note[] {
+async function loadNotes(): Promise<Note[]> {
   if (!existsSync(NOTES_PATH)) {
     return [];
   }
   try {
-    const data = readFileSync(NOTES_PATH, 'utf-8');
+    const data = await readFile(NOTES_PATH, 'utf-8');
     return JSON.parse(data);
   } catch {
     return [];
   }
 }
 
-function saveNotes(notes: Note[]): void {
-  writeFileSync(NOTES_PATH, JSON.stringify(notes, null, 2), 'utf-8');
+async function saveNotes(notes: Note[]): Promise<void> {
+  await writeFile(NOTES_PATH, JSON.stringify(notes, null, 2), 'utf-8');
 }
 
 function generateId(): string {
@@ -49,7 +50,7 @@ export const manageNotesTool = createTool({
     note: z.any().optional(),
   }),
   execute: async ({ action, id, content, title }) => {
-    const notes = loadNotes();
+    const notes = await loadNotes();
     const now = new Date().toISOString();
 
     switch (action) {
@@ -65,7 +66,7 @@ export const manageNotesTool = createTool({
           updatedAt: now,
         };
         notes.push(newNote);
-        saveNotes(notes);
+        await saveNotes(notes);
         return { success: true, note: newNote };
       }
 
@@ -93,7 +94,7 @@ export const manageNotesTool = createTool({
         if (content !== undefined) note.content = content;
         note.updatedAt = now;
         notes[index] = note;
-        saveNotes(notes);
+        await saveNotes(notes);
         return { success: true, note };
       }
 
@@ -106,7 +107,7 @@ export const manageNotesTool = createTool({
           throw new Error(`Note not found: ${id}`);
         }
         notes.splice(index, 1);
-        saveNotes(notes);
+        await saveNotes(notes);
         return { success: true };
       }
 

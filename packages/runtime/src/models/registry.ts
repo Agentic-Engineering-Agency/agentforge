@@ -303,17 +303,32 @@ const MODELS: readonly ModelEntry[] = [
     active: true,
   },
 
-  // OpenRouter (pass-through proxy)
+  // OpenRouter (pass-through proxy — models below are examples; add more entries as needed
+  // using the openrouter/<provider>/<model> ID format supported by Mastra's model router)
   {
-    id: 'openrouter/*',
-    displayName: 'OpenRouter (Pass-through)',
+    id: 'openrouter/anthropic/claude-3.5-sonnet',
+    displayName: 'Claude 3.5 Sonnet (via OpenRouter)',
     provider: 'openrouter',
     contextWindow: 200000,
-    costPerMInput: 0,
-    costPerMOutput: 0,
+    maxOutputTokens: 8192,
+    costPerMInput: 3,
+    costPerMOutput: 15,
     tier: 'standard',
-    capabilities: new Set(['chat', 'vision', 'code']),
+    capabilities: new Set(['chat', 'vision', 'code', 'structured-output']),
     roles: new Set(['agent']),
+    active: true,
+  },
+  {
+    id: 'openrouter/meta-llama/llama-3.1-70b-instruct',
+    displayName: 'Llama 3.1 70B Instruct (via OpenRouter)',
+    provider: 'openrouter',
+    contextWindow: 131072,
+    maxOutputTokens: 4096,
+    costPerMInput: 0.52,
+    costPerMOutput: 0.75,
+    tier: 'budget',
+    capabilities: new Set(['chat', 'code']),
+    roles: new Set(['agent', 'observer']),
     active: true,
   },
 

@@ -34,6 +34,9 @@ pnpm-debug.log*
 test_results.md
 test_results_security.md
 
+# Runtime data (runtime-generated files, not to be committed)
+packages/runtime/data/
+
 # E2E tests
 tests/e2e/.env.e2e
 tests/e2e/coverage/
