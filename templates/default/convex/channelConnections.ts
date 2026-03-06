@@ -50,7 +50,7 @@ async function encryptBotToken(token: string): Promise<{ encrypted: string; iv: 
 }
 
 // Helper: Decrypt a bot token
-async function decryptBotToken(encrypted: string, iv: string): Promise<string> {
+async function decryptBotToken(encrypted: string, iv: string, salt?: string): Promise<string> {
   const key = process.env.VAULT_ENCRYPTION_KEY;
   if (!key || key.length < 32) {
     throw new Error("VAULT_ENCRYPTION_KEY not configured");
@@ -65,13 +65,13 @@ async function decryptBotToken(encrypted: string, iv: string): Promise<string> {
     ["deriveBits", "deriveKey"]
   );
 
-  const salt = stored.config.salt
-    ? Uint8Array.from(Buffer.from(stored.config.salt, "base64"))
+  const saltBytes = salt
+    ? Uint8Array.from(atob(salt), (c) => c.charCodeAt(0))
     : new TextEncoder().encode(key.slice(0, 16)); // fallback for existing records
   const cryptoKey = await crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
-      salt: salt,
+      salt: saltBytes,
       iterations: 100000,
       hash: "SHA-256",
     },
@@ -198,6 +198,7 @@ export const create = mutation({
       config: {
         botToken: encrypted,
         iv: iv, // Store IV for decryption
+        salt: salt, // Store per-record PBKDF2 salt for decryption
         botUsername: rest.botUsername,
         teamId: rest.teamId,
         webhookSecret: rest.webhookSecret,
@@ -282,7 +283,11 @@ export const getDecryptedBotToken = internalQuery({
     }
 
     const iv = connection.config.iv || "";
-    const decrypted = await decryptBotToken(connection.config.botToken, iv);
+    const decrypted = await decryptBotToken(
+      connection.config.botToken,
+      iv,
+      connection.config.salt ?? undefined
+    );
 
     return {
       botToken: decrypted,
