@@ -58,17 +58,31 @@ OPENROUTER_API_KEY=sk-or-...
 # CONVEX_URL is set automatically by npx convex dev
 ```
 
-### 4. Start development
+### 4. Initialize Convex backend
 
 ```bash
-# Terminal 1: Start AgentForge (Convex backend)
+npx convex dev
+```
+
+Then set the required encryption secret (one-time, per deployment):
+
+```bash
+npx convex env set AGENTFORGE_KEY_SALT "$(openssl rand -base64 32)"
+```
+
+> ⚠️ **Required:** Without `AGENTFORGE_KEY_SALT`, creating API keys will fail with a cryptographic error. Run this command for every Convex deployment (dev, staging, production).
+
+### 5. Start development
+
+```bash
+# Terminal 1: Start AgentForge runtime
 agentforge run
 
 # Terminal 2: Launch the web dashboard (localhost:3000)
 agentforge dashboard
 ```
 
-### 5. Chat with your agent
+### 6. Chat with your agent
 
 ```bash
 agentforge chat
