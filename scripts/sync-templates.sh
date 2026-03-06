@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # Sync convex template files to all 4 locations
 # Single source of truth: packages/cli/templates/default/
 
@@ -18,7 +18,7 @@ for dest in \
 do
     echo "  → $dest"
     mkdir -p "$dest"
-    rsync -av --delete "$SRC/" "$dest/" --exclude='*_generated' --exclude='node_modules'
+    rsync -av --delete "$SRC/" "$dest/" --exclude='_generated' --exclude='node_modules'
 done
 
 echo "✅ Templates synced successfully"
