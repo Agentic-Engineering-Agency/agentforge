@@ -111,7 +111,11 @@ export async function startHttpChannel(
             const stream = await agent.stream(messages);
 
             for await (const chunk of stream.fullStream) {
-              if (chunk.type === 'text-delta') {
+              // Mastra v1.8+ stream: type='text-delta', payload.text (not chunk.textDelta)
+              const text = chunk.type === 'text-delta'
+                ? (chunk as any).payload?.text ?? (chunk as any).textDelta ?? ''
+                : null;
+              if (text !== null && text !== '') {
                 const data = JSON.stringify({
                   id: `chatcmpl-${Date.now()}`,
                   object: 'chat.completion.chunk',
@@ -119,7 +123,7 @@ export async function startHttpChannel(
                   model: agentId,
                   choices: [{
                     index: 0,
-                    delta: { content: chunk.textDelta },
+                    delta: { content: text },
                     finish_reason: null,
                   }],
                 });
