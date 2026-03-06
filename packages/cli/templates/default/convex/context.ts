@@ -13,7 +13,6 @@
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
 import { api } from "./_generated/api";
-import { Agent } from "./lib/agent";
 
 type MessageListInput = Array<{ role: "user" | "assistant" | "system"; content: string }>;
 
@@ -148,18 +147,18 @@ export const summarizeContext = internalAction({
       toSummarize.map((m) => `${m.role}: ${m.content}`).join("\n\n")
     }`;
 
-    const summaryAgent = new Agent({
-      id: "agentforge-summarizer",
-      name: "agentforge-summarizer",
-      instructions: "You are a helpful assistant that summarizes conversations concisely.",
-      model: { providerId: args.provider, modelId: "gpt-4o-mini", apiKey: args.apiKey },
-    });
-
+    // Using direct HTTP call — Agent instances belong in packages/runtime
     try {
-      const result = await summaryAgent.generate([
-        { role: "user", content: prompt },
-      ] as MessageListInput);
-      const summary = result.text;
+      const resp = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${args.apiKey}` },
+        body: JSON.stringify({ model: "gpt-4o-mini", messages: [
+          { role: "system", content: "Summarize conversations concisely." },
+          { role: "user", content: prompt },
+        ]}),
+      });
+      const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const summary = data.choices?.[0]?.message?.content ?? "";
       return {
         summary: `[Previous conversation summary: ${summary}]`,
         tokensSaved: Math.max(0, accumulatedTokens - countTokens(summary)),
