@@ -8,6 +8,7 @@
 import type { Command } from 'commander';
 import fs from 'fs-extra';
 import path from 'node:path';
+import readline from 'node:readline';
 import { execSync } from 'node:child_process';
 import { header, success, error, info, dim, colors } from '../lib/display.js';
 
@@ -116,7 +117,24 @@ export async function deployProject(options: DeployOptions): Promise<void> {
     console.log('\n🚀 Ready to deploy Convex backend to production.\n');
     console.log(`  Project: ${projectDir}`);
     console.log(`  Env file: ${envPath}`);
-    console.log('\n  Use --force to skip this confirmation.\n');
+
+    if (!process.stdin.isTTY) {
+      console.error('\n  ❌ Non-interactive environment detected. Use --force to deploy without confirmation.\n');
+      process.exit(1);
+    }
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await new Promise<string>((resolve) =>
+      rl.question('\n  Deploy to production? (y/N): ', (a) => {
+        rl.close();
+        resolve(a.trim().toLowerCase());
+      })
+    );
+
+    if (answer !== 'y' && answer !== 'yes') {
+      console.log('\n  ℹ️  Deployment cancelled.\n');
+      process.exit(0);
+    }
   }
 
   console.log('📦 Deploying Convex backend...\n');

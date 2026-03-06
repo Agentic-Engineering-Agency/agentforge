@@ -1,13 +1,57 @@
 /**
  * AgentForge Configuration File
  *
- * This file defines your agents, workspace, skills, and model failover
- * configuration. The CLI uses this to manage your AgentForge project.
+ * This file defines your agents, daemon settings, and channel configuration.
+ * The CLI uses this to manage your AgentForge project and runtime daemon.
  */
 
 export default {
   name: 'my-agent-project',
   version: '1.0.0',
+
+  /**
+   * Daemon Configuration
+   *
+   * Settings for the AgentForge runtime daemon.
+   * The daemon is started with `agentforge start` and runs as a persistent process.
+   */
+  daemon: {
+    /** Default model for agents (format: provider/model-id) */
+    defaultModel: 'moonshotai/kimi-k2.5',
+
+    /** Database URL (for Convex connection) */
+    dbUrl: process.env.CONVEX_URL || '',
+
+    /** Development mode (verbose logging) */
+    dev: false,
+  },
+
+  /**
+   * Channel Configuration
+   *
+   * Define how the daemon connects to external platforms.
+   * Channels are started when you run `agentforge start`.
+   */
+  channels: {
+    /** HTTP/SSE channel (OpenAI-compatible /v1/chat/completions) */
+    http: {
+      port: 3001,
+    },
+
+    /** Discord bot channel (optional) */
+    discord: {
+      enabled: false,
+      defaultAgentId: 'main',
+      // Requires: DISCORD_BOT_TOKEN in .env.local
+    },
+
+    /** Telegram bot channel (optional) */
+    telegram: {
+      enabled: false,
+      defaultAgentId: 'main',
+      // Requires: TELEGRAM_BOT_TOKEN in .env.local
+    },
+  },
 
   /**
    * Workspace configuration — Mastra Workspace integration.
@@ -94,84 +138,16 @@ export default {
 
   agents: [
     {
-      id: 'support-agent',
-      name: 'Customer Support Agent',
-      model: 'gpt-4o',
-      provider: 'openrouter',
-      instructions: `You are a helpful customer support agent.
-        
-Be polite, professional, and try to resolve customer issues quickly.
-If you don't know the answer, escalate to a human agent.`,
-      /**
-       * Agent-level failover models.
-       * These override the global `failover.defaultChain` for this agent.
-       * The primary model (provider + model above) is always tried first.
-       */
-      failoverModels: [
-        { provider: 'openai', model: 'gpt-4o' },
-        { provider: 'anthropic', model: 'claude-sonnet-4-20250514' },
-        { provider: 'google', model: 'gemini-2.5-flash' },
-      ],
-      tools: [
-        {
-          name: 'searchKnowledgeBase',
-          description: 'Search the knowledge base for articles',
-          parameters: {
-            type: 'object',
-            properties: {
-              query: { type: 'string' },
-            },
-            required: ['query'],
-          },
-        },
-        {
-          name: 'createTicket',
-          description: 'Create a support ticket',
-          parameters: {
-            type: 'object',
-            properties: {
-              subject: { type: 'string' },
-              description: { type: 'string' },
-              priority: { type: 'string', enum: ['low', 'medium', 'high'] },
-            },
-            required: ['subject', 'description'],
-          },
-        },
-      ],
-    },
-    {
-      id: 'code-assistant',
-      name: 'Code Assistant',
-      model: 'claude-sonnet-4-20250514',
-      provider: 'anthropic',
-      instructions: `You are an expert programming assistant.
-        
-Help users write clean, efficient, and well-documented code.
-Explain your reasoning and provide examples when helpful.`,
-      /**
-       * Agent-level failover: Anthropic → OpenAI → Google
-       */
-      failoverModels: [
-        { provider: 'openai', model: 'gpt-4.1' },
-        { provider: 'google', model: 'gemini-2.5-pro' },
-      ],
-      tools: [
-        {
-          name: 'runCode',
-          description: 'Execute code in a sandboxed environment',
-          parameters: {
-            type: 'object',
-            properties: {
-              language: { type: 'string', enum: ['javascript', 'python', 'typescript'] },
-              code: { type: 'string' },
-            },
-            required: ['language', 'code'],
-          },
-        },
-      ],
+      id: 'main',
+      name: 'Main Agent',
+      model: 'openai/gpt-4o-mini',
+      instructions: `You are a helpful AI assistant.
+
+Be polite, professional, and try to help users with their questions.
+If you don't know the answer, be honest about it.`,
     },
   ],
-  
+
   // Sandbox configuration for agent tool execution isolation
   sandbox: {
     // Provider: 'local' (default), 'docker', 'e2b', or 'none'

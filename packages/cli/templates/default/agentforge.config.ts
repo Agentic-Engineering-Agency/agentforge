@@ -140,8 +140,7 @@ export default {
     {
       id: 'main',
       name: 'Main Agent',
-      model: 'gpt-4o-mini',
-      provider: 'openai',
+      model: 'openai/gpt-4o-mini',
       instructions: `You are a helpful AI assistant.
 
 Be polite, professional, and try to help users with their questions.

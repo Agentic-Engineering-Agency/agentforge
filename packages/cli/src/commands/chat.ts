@@ -154,6 +154,11 @@ export function registerChatCommand(program: Command) {
 
       const a = agent as any;
 
+      // Deprecation warning for --session
+      if (opts.session) {
+        console.warn(`${colors.yellow}  ⚠ Warning: --session is deprecated and will be removed in a future release. Use --thread instead.${colors.reset}`);
+      }
+
       // One-shot --message mode (non-interactive)
       if (opts.message) {
         const validation = validateMessage(opts.message);
