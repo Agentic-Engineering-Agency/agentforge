@@ -314,7 +314,6 @@ http.route({
             threadId: currentThreadId as any,
             content: message,
             role: "user" as const,
-            agentId,
           });
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "text-delta", textDelta: "Processing via daemon..." })}\n\n`)
