@@ -6636,7 +6636,7 @@ function registerStartCommand(program2) {
     const mastraAgents = [];
     for (const agentConfig of agents) {
       try {
-        const modelStr = agentConfig.provider && agentConfig.model ? `${agentConfig.provider}:${agentConfig.model}` : agentConfig.model || "openai:gpt-4o-mini";
+        const modelStr = agentConfig.provider && agentConfig.model ? `${agentConfig.provider}/${agentConfig.model}` : agentConfig.model || "openai/gpt-4o-mini";
         const agent = _createStandardAgent({
           id: agentConfig.id ?? agentConfig._id,
           name: agentConfig.name ?? "Agent",
