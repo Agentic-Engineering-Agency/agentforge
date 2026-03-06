@@ -3,7 +3,7 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Key, Plus, Trash2, Eye, EyeOff, Check, X, Shield, AlertTriangle, ExternalLink, Settings } from 'lucide-react';
+import { Key, Plus, Trash2, Check, X, Shield, AlertTriangle, ExternalLink, Settings } from 'lucide-react';
 
 export const Route = createFileRoute('/settings')({ component: SettingsPage });
 
@@ -91,7 +91,7 @@ function SettingsPage() {
   const [addingProvider, setAddingProvider] = useState<typeof AI_PROVIDERS[0] | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
-  const [showKey, setShowKey] = useState<Record<string, boolean>>({});
+
   const [addingVaultSecret, setAddingVaultSecret] = useState(false);
   const [vaultForm, setVaultForm] = useState({ name: '', category: 'api_key', provider: '', value: '' });
   const [confirmingDeleteKeyId, setConfirmingDeleteKeyId] = useState<string | null>(null);
@@ -205,14 +205,9 @@ function SettingsPage() {
                             <div className="flex items-center gap-2 min-w-0">
                               <span className={`w-2 h-2 rounded-full ${key.isActive ? 'bg-green-500' : 'bg-muted-foreground'}`} />
                               <span className="text-sm truncate">{key.keyName}</span>
-                              <span className="text-xs font-mono text-muted-foreground">
-                                {showKey[key._id] ? key.encryptedKey : key.encryptedKey.substring(0, 8) + '...'}
-                              </span>
+                              <span className="text-xs font-mono text-muted-foreground">••••••••</span>
                             </div>
                             <div className="flex items-center gap-1">
-                              <button onClick={() => setShowKey(prev => ({ ...prev, [key._id]: !prev[key._id] }))} className="p-1 rounded hover:bg-muted">
-                                {showKey[key._id] ? <EyeOff className="w-3.5 h-3.5 text-muted-foreground" /> : <Eye className="w-3.5 h-3.5 text-muted-foreground" />}
-                              </button>
                               <button onClick={() => toggleApiKey({ id: key._id })} className="p-1 rounded hover:bg-muted">
                                 {key.isActive ? <Check className="w-3.5 h-3.5 text-green-500" /> : <X className="w-3.5 h-3.5 text-muted-foreground" />}
                               </button>
