@@ -3,7 +3,7 @@ import { mutation, query, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 // Helper: Encrypt a bot token using vault
-async function encryptBotToken(token: string): Promise<{ encrypted: string; iv: string }> {
+async function encryptBotToken(token: string): Promise<{ encrypted: string; iv: string; salt: string }> {
   const key = process.env.VAULT_ENCRYPTION_KEY;
   if (!key || key.length < 32) {
     throw new Error("VAULT_ENCRYPTION_KEY not configured");
@@ -18,7 +18,8 @@ async function encryptBotToken(token: string): Promise<{ encrypted: string; iv: 
     ["deriveBits", "deriveKey"]
   );
 
-  const salt = new TextEncoder().encode(key.slice(0, 16)); // Use first 16 chars as salt
+  const saltBytes = crypto.getRandomValues(new Uint8Array(16));
+  const salt = saltBytes;
   const cryptoKey = await crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
@@ -44,7 +45,8 @@ async function encryptBotToken(token: string): Promise<{ encrypted: string; iv: 
   const encryptedBase64 = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
   const ivBase64 = btoa(String.fromCharCode(...iv));
 
-  return { encrypted: encryptedBase64, iv: ivBase64 };
+  const saltBase64 = btoa(String.fromCharCode(...saltBytes));
+  return { encrypted: encryptedBase64, iv: ivBase64, salt: saltBase64 };
 }
 
 // Helper: Decrypt a bot token
@@ -63,7 +65,9 @@ async function decryptBotToken(encrypted: string, iv: string): Promise<string> {
     ["deriveBits", "deriveKey"]
   );
 
-  const salt = new TextEncoder().encode(key.slice(0, 16));
+  const salt = stored.config.salt
+    ? Uint8Array.from(Buffer.from(stored.config.salt, "base64"))
+    : new TextEncoder().encode(key.slice(0, 16)); // fallback for existing records
   const cryptoKey = await crypto.subtle.deriveKey(
     {
       name: "PBKDF2",
@@ -102,17 +106,23 @@ export const list = query({
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let connections = ctx.db.query("channelConnections");
+    let results;
 
     if (args.agentId) {
-      connections = connections.withIndex("byAgent", (q) => q.eq("agentId", args.agentId!));
+      results = await ctx.db.query("channelConnections")
+        .withIndex("byAgent", (q) => q.eq("agentId", args.agentId!))
+        .collect();
     } else if (args.channel) {
-      connections = connections.withIndex("byChannel", (q) => q.eq("channel", args.channel!));
+      results = await ctx.db.query("channelConnections")
+        .withIndex("byChannel", (q) => q.eq("channel", args.channel!))
+        .collect();
     } else if (args.userId) {
-      connections = connections.withIndex("byUserId", (q) => q.eq("userId", args.userId!));
+      results = await ctx.db.query("channelConnections")
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
+    } else {
+      results = await ctx.db.query("channelConnections").collect();
     }
-
-    const results = await connections.collect();
 
     // Return without sensitive data
     return results.map((c) => ({
@@ -179,7 +189,7 @@ export const create = mutation({
     const { botToken, ...rest } = args;
 
     // Encrypt the bot token
-    const { encrypted, iv } = await encryptBotToken(botToken);
+    const { encrypted, iv, salt } = await encryptBotToken(botToken);
 
     const now = Date.now();
     const id = await ctx.db.insert("channelConnections", {

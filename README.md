@@ -109,30 +109,78 @@ agentforge chat
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| [`@agentforge-ai/core`](packages/core) | Shared types, utilities, and core abstractions for the AgentForge framework |
-| [`@agentforge-ai/cli`](packages/cli) | CLI tool — project scaffolding, chat interface, and agent management |
+| Package | Version | Description |
+|---------|---------|-------------|
+| [`@agentforge-ai/core`](packages/core) | v0.11.21 | Core agent primitives, sandbox integration, MCP server, and channel adapters |
+| [`@agentforge-ai/cli`](packages/cli) | v0.11.21 | CLI tool for creating, running, and managing AgentForge projects |
 
 ---
 
 ## CLI Commands
 
+### Project Lifecycle
 ```bash
 agentforge create <name>     # Scaffold a new project
-agentforge run               # Start dev server
-agentforge deploy             # Deploy to production
-agentforge chat               # Interactive agent chat
-agentforge agents list        # List all agents
-agentforge agents create      # Create agent interactively
-agentforge skills             # Manage skills
-agentforge mcp                # Manage MCP connections
-agentforge channel-telegram   # Configure Telegram
-agentforge channel-whatsapp   # Configure WhatsApp
-agentforge config             # Project configuration
-agentforge vault              # Secrets management
-agentforge keys               # LLM provider keys
-agentforge status             # System health check
+agentforge run               # Start dev server (Convex backend)
+agentforge deploy            # Deploy to production
+agentforge upgrade           # Sync convex/ with latest template
+```
+
+### Cloud & Authentication
+```bash
+agentforge workspace         # Workspace management
+agentforge models            # LLM model management
+agentforge tokens            # Usage token tracking
+```
+
+### Agent Management
+```bash
+agentforge agents list       # List all agents
+agentforge agents create     # Create agent interactively
+agentforge agents show       # Show agent details
+agentforge agents delete     # Delete an agent
+agentforge chat              # Interactive agent chat
+```
+
+### Skills & Tools
+```bash
+agentforge skills            # Skills marketplace (search, publish, featured)
+agentforge skill             # Manage individual skills
+agentforge cron              # Cron job management
+agentforge workflows         # Workflow orchestration
+```
+
+### Data & State
+```bash
+agentforge sessions          # Chat session management
+agentforge threads           # Conversation thread management
+agentforge files             # File and folder management
+agentforge projects          # Project/workspace management
+```
+
+### Integrations
+```bash
+agentforge mcp               # MCP server connections
+agentforge channel-telegram  # Telegram bot setup
+agentforge channel-whatsapp  # WhatsApp Cloud API setup
+agentforge channel-slack     # Slack Bolt.js setup
+agentforge channel-discord   # Discord bot setup
+```
+
+### Tools & Utilities
+```bash
+agentforge sandbox           # E2B sandbox management
+agentforge browser           # Browser automation
+agentforge voice             # Voice (TTS/STT) tools
+agentforge research          # Research orchestrator
+```
+
+### Configuration
+```bash
+agentforge config            # Project configuration
+agentforge vault             # Secrets management
+agentforge keys              # LLM provider API keys
+agentforge status            # System health check
 ```
 
 See [docs/CLI.md](docs/CLI.md) for the full reference.

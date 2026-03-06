@@ -1,34 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, internalQuery } from "./_generated/server";
-
-declare const process: { env: Record<string, string | undefined> };
-
-function getEncryptionSalt(): string {
-  return process.env.AGENTFORGE_KEY_SALT ?? "agentforge-default-salt";
-}
-
-function encodeKey(value: string, salt: string): { encoded: string; iv: string } {
-  const iv = Date.now().toString(36);
-  const key = salt + iv;
-  let encoded = "";
-  for (let i = 0; i < value.length; i++) {
-    const charCode = value.charCodeAt(i) ^ key.charCodeAt(i % key.length);
-    encoded += charCode.toString(16).padStart(4, "0");
-  }
-  return { encoded, iv };
-}
-
-function decodeKey(encoded: string, iv: string, salt: string): string {
-  const key = salt + iv;
-  let decoded = "";
-  for (let i = 0; i < encoded.length; i += 4) {
-    decoded += String.fromCharCode(
-      parseInt(encoded.substring(i, i + 4), 16) ^ key.charCodeAt((i / 4) % key.length)
-    );
-  }
-  return decoded;
-}
-
+import { mutation, query, internalQuery, internalAction } from "./_generated/server";
+import { encryptApiKey, decryptApiKey } from "./apiKeysCrypto";
 
 // Query: List API keys
 export const list = query({
@@ -42,21 +14,35 @@ export const list = query({
         .query("apiKeys")
         .withIndex("byProvider", (q) => q.eq("provider", args.provider!))
         .collect();
-      
+
       if (args.userId) {
         return keys.filter((k) => k.userId === args.userId);
       }
-      return keys;
+      // Strip sensitive fields before returning
+      return keys.map((k) => {
+        const { encryptedKey, iv, tag, ...safeFields } = k;
+        return safeFields;
+      });
     }
-    
+
     if (args.userId) {
-      return await ctx.db
+      const keys = await ctx.db
         .query("apiKeys")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
         .collect();
+      // Strip sensitive fields before returning
+      return keys.map((k) => {
+        const { encryptedKey, iv, tag, ...safeFields } = k;
+        return safeFields;
+      });
     }
-    
-    return await ctx.db.query("apiKeys").collect();
+
+    const allKeys = await ctx.db.query("apiKeys").collect();
+    // Strip sensitive fields before returning
+    return allKeys.map((k) => {
+      const { encryptedKey, iv, tag, ...safeFields } = k;
+      return safeFields;
+    });
   },
 });
 
@@ -64,11 +50,16 @@ export const list = query({
 export const get = query({
   args: { id: v.id("apiKeys") },
   handler: async (ctx, args) => {
-    return await ctx.db.get(args.id);
+    const doc = await ctx.db.get(args.id);
+    if (!doc) return null;
+    // Strip sensitive fields before returning
+    const { encryptedKey, iv, tag, ...safeFields } = doc;
+    return safeFields;
   },
 });
 
-// Query: Get active API key for provider (returns decrypted key)
+// Query: Get active API key for provider (PUBLIC - does NOT return decrypted key)
+// SECURITY: This is a public query, so it only returns metadata, not the decrypted key
 export const getActiveForProvider = query({
   args: {
     provider: v.string(),
@@ -77,7 +68,7 @@ export const getActiveForProvider = query({
   handler: async (ctx, args) => {
     const keys = await ctx.db
       .query("apiKeys")
-      .withIndex("byProvider", (q) => q.eq("provider", args.provider!))
+      .withIndex("byProvider", (q) => q.eq("provider", args.provider))
       .collect();
 
     const activeKeys = keys.filter((k) => k.isActive);
@@ -86,49 +77,41 @@ export const getActiveForProvider = query({
       const userKey = activeKeys.find((k) => k.userId === args.userId);
       if (!userKey) return null;
 
-      const salt = getEncryptionSalt();
-      const decryptedKey = userKey.iv
-        ? decodeKey(userKey.encryptedKey, userKey.iv, salt)
-        : userKey.encryptedKey;
-
-      return {
-        ...userKey,
-        decryptedKey,
-      };
+      // Return only safe metadata - never return encrypted fields
+      const { encryptedKey, iv, tag, ...safeFields } = userKey;
+      return safeFields;
     }
 
     const firstKey = activeKeys[0];
     if (!firstKey) return null;
 
-    const salt = getEncryptionSalt();
-    const decryptedKey = firstKey.iv
-      ? decodeKey(firstKey.encryptedKey, firstKey.iv, salt)
-      : firstKey.encryptedKey;
-
-    return {
-      ...firstKey,
-      decryptedKey,
-    };
+    // Return only safe metadata - never return encrypted fields
+    const { encryptedKey, iv, tag, ...safeFields } = firstKey;
+    return safeFields;
   },
 });
 
-// Mutation: Create API key (encrypts before storing)
+// Mutation: Create API key (encrypts before storing using AES-256-GCM)
 export const create = mutation({
   args: {
     provider: v.string(),
     keyName: v.string(),
-    encryptedKey: v.string(),
+    encryptedKey: v.string(), // Plaintext key to encrypt
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const salt = getEncryptionSalt();
-    const { encoded, iv } = encodeKey(args.encryptedKey, salt);
+    // Call the internal action to encrypt the key
+    const encrypted = await ctx.runAction(internal.apiKeysCrypto.encryptApiKey, {
+      plaintext: args.encryptedKey,
+    });
 
     const keyId = await ctx.db.insert("apiKeys", {
       provider: args.provider,
       keyName: args.keyName,
-      encryptedKey: encoded,
-      iv,
+      encryptedKey: encrypted.ciphertext,
+      iv: encrypted.iv,
+      tag: encrypted.tag,
+      version: encrypted.version,
       isActive: true,
       userId: args.userId,
       createdAt: Date.now(),
@@ -142,7 +125,7 @@ export const update = mutation({
   args: {
     id: v.id("apiKeys"),
     keyName: v.optional(v.string()),
-    encryptedKey: v.optional(v.string()),
+    encryptedKey: v.optional(v.string()), // Plaintext key to encrypt
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -150,10 +133,14 @@ export const update = mutation({
     const updates: Record<string, unknown> = { ...rest };
 
     if (encryptedKey !== undefined) {
-      const salt = getEncryptionSalt();
-      const { encoded, iv } = encodeKey(encryptedKey, salt);
-      updates.encryptedKey = encoded;
-      updates.iv = iv;
+      // Call the internal action to encrypt the key
+      const encrypted = await ctx.runAction(internal.apiKeysCrypto.encryptApiKey, {
+        plaintext: encryptedKey,
+      });
+      updates.encryptedKey = encrypted.ciphertext;
+      updates.iv = encrypted.iv;
+      updates.tag = encrypted.tag;
+      updates.version = encrypted.version;
     }
 
     await ctx.db.patch(id, updates);
@@ -166,15 +153,15 @@ export const toggleActive = mutation({
   args: { id: v.id("apiKeys") },
   handler: async (ctx, args) => {
     const key = await ctx.db.get(args.id);
-    
+
     if (!key) {
       throw new Error(`API key not found`);
     }
-    
+
     await ctx.db.patch(args.id, {
       isActive: !key.isActive,
     });
-    
+
     return { success: true, isActive: !key.isActive };
   },
 });
@@ -199,10 +186,32 @@ export const remove = mutation({
   },
 });
 
-// Internal Query: Get decrypted (raw) API key for a provider
-// Used by mastraIntegration to pass the key to BYOK LLM provider factories.
-// Decrypts using the same XOR+IV encoding as getActiveForProvider.
-export const getDecryptedForProvider = internalQuery({
+// Internal Action: Get decrypted (raw) API key for a provider
+// Used by runtime processes that need the actual key value
+// SECURITY: This is an internalAction, not exposed to clients
+export const getDecryptedForProvider = internalAction({
+  args: { provider: v.string() },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, args) => {
+    // Run an internal query to get the key
+    const key = await ctx.runQuery(internal.apiKeys.getEncryptedKeyForProvider, {
+      provider: args.provider,
+    });
+
+    if (!key) return null;
+
+    // Decrypt the key using the crypto action
+    return await ctx.runAction(internal.apiKeysCrypto.decryptApiKey, {
+      ciphertext: key.encryptedKey,
+      iv: key.iv,
+      tag: key.tag,
+    });
+  },
+});
+
+// Internal Query: Get encrypted key for provider (used by getDecryptedForProvider)
+// This is internal-only, so it returns the encrypted fields
+export const getEncryptedKeyForProvider = internalQuery({
   args: { provider: v.string() },
   handler: async (ctx, args) => {
     const keys = await ctx.db
@@ -211,9 +220,10 @@ export const getDecryptedForProvider = internalQuery({
       .collect();
     const active = keys.find((k) => k.isActive);
     if (!active) return null;
-    const salt = getEncryptionSalt();
-    return active.iv
-      ? decodeKey(active.encryptedKey, active.iv, salt)
-      : active.encryptedKey;
+    return {
+      encryptedKey: active.encryptedKey,
+      iv: active.iv,
+      tag: active.tag,
+    };
   },
 });
