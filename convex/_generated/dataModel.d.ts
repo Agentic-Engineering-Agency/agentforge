@@ -238,6 +238,7 @@ export type DataModel = {
         botToken?: string;
         botUsername?: string;
         iv?: string;
+        salt?: string;
         teamId?: string;
         webhookSecret?: string;
       };
@@ -260,6 +261,7 @@ export type DataModel = {
       | "config.botToken"
       | "config.botUsername"
       | "config.iv"
+      | "config.salt"
       | "config.teamId"
       | "config.webhookSecret"
       | "createdAt"
