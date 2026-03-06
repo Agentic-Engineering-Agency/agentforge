@@ -24,6 +24,39 @@ function validateMessage(msg: string | undefined): { valid: boolean; error?: str
 }
 
 /**
+ * Parse a single SSE data line and call the appropriate callback.
+ * Returns the extracted text content, or undefined if none.
+ */
+function parseSseLine(
+  line: string,
+  onChunk: (chunk: string) => void,
+  onError: ((error: string) => void) | undefined,
+  stream: boolean,
+  buffered: { value: string }
+): void {
+  if (!line.startsWith('data: ')) return;
+  const data = line.slice(6);
+  if (data === '[DONE]') return;
+  try {
+    const parsed = JSON.parse(data);
+    const content = parsed.choices?.[0]?.delta?.content;
+    if (content) {
+      if (stream) {
+        onChunk(content);
+      } else {
+        buffered.value += content;
+      }
+    }
+    const errorMsg = parsed.error;
+    if (errorMsg && onError) {
+      onError(String(errorMsg));
+    }
+  } catch {
+    // Skip malformed JSON
+  }
+}
+
+/**
  * Send a message to the HTTP endpoint and get a streaming response.
  * When stream=false, buffers the full response and calls onChunk once.
  */
@@ -58,44 +91,29 @@ async function chatViaHttp(
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffered = '';
+  const buffered = { value: '' };
+  let sseBuffer = '';
 
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
 
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split('\n');
+    // Accumulate into sseBuffer so partial lines are not lost between reads
+    sseBuffer += decoder.decode(value, { stream: true });
+    const lines = sseBuffer.split('\n');
+    // The last element may be an incomplete line — keep it for the next read
+    sseBuffer = lines.pop() ?? '';
 
     for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const data = line.slice(6);
-        if (data === '[DONE]') continue;
-
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            if (stream) {
-              onChunk(content);
-            } else {
-              buffered += content;
-            }
-          }
-
-          const errorMsg = parsed.error;
-          if (errorMsg && onError) {
-            onError(String(errorMsg));
-          }
-        } catch {
-          // Skip malformed JSON
-        }
-      }
+      parseSseLine(line, onChunk, onError, stream, buffered);
     }
   }
 
-  if (!stream && buffered) {
-    onChunk(buffered);
+  // Flush any remaining complete data line left in the buffer
+  parseSseLine(sseBuffer, onChunk, onError, stream, buffered);
+
+  if (!stream && buffered.value) {
+    onChunk(buffered.value);
   }
 }
 

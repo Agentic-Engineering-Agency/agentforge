@@ -5,22 +5,17 @@
  * Uses Server-Sent Events (SSE) for streaming responses.
  */
 
-import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
-import { createClient } from '../lib/convex-client.js';
+import { createServer } from 'node:http';
 
-interface HttpChannelOptions {
-  port: number;
-  agents: any[];
-  convexUrl: string;
-  dev?: boolean;
-}
+/** Maximum allowed request body size (1 MB) to prevent memory exhaustion. */
+const MAX_BODY_BYTES = 1 * 1024 * 1024;
 
 export async function startHttpChannel(
   port: number,
   agents: any[],
-  convexUrl: string,
+  _convexUrl: string,
   dev = false
-): Promise<void> {
+): Promise<() => Promise<void>> {
   const agentMap = new Map<string, any>();
   for (const agent of agents) {
     agentMap.set(agent.id, agent);
@@ -61,11 +56,31 @@ export async function startHttpChannel(
       }
 
       let body = '';
-      req.on('data', (chunk) => {
+      let bodyBytes = 0;
+      let bodyLimitExceeded = false;
+
+      req.on('error', (err) => {
+        if (!res.headersSent && !res.writableEnded) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: err.message, type: 'bad_request' } }));
+        }
+      });
+
+      req.on('data', (chunk: Buffer) => {
+        if (bodyLimitExceeded) return;
+        bodyBytes += chunk.length;
+        if (bodyBytes > MAX_BODY_BYTES) {
+          bodyLimitExceeded = true;
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: { message: 'Request body too large', type: 'bad_request' } }));
+          req.destroy();
+          return;
+        }
         body += chunk.toString();
       });
 
       req.on('end', async () => {
+        if (res.writableEnded) return;
         try {
           const requestData = JSON.parse(body) as ChatCompletionRequest;
 
@@ -149,16 +164,23 @@ export async function startHttpChannel(
     res.end('Not found');
   });
 
-  server.listen(port, () => {
-    if (dev) {
-      console.log(`[HttpChannel] Listening on http://localhost:${port}`);
-    }
+  // Wait until the server is listening before returning the close function
+  await new Promise<void>((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(port, () => {
+      server.off('error', reject);
+      if (dev) {
+        console.log(`[HttpChannel] Listening on http://localhost:${port}`);
+      }
+      resolve();
+    });
   });
 
-  // Handle graceful shutdown
-  return new Promise((resolve) => {
-    server.on('close', resolve);
-  });
+  // Return a close function for graceful shutdown
+  return () =>
+    new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
 }
 
 interface ChatCompletionMessage {
