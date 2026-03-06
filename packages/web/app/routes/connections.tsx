@@ -2,7 +2,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import React, { useState, useMemo } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import { Id } from '../../../../convex/_generated/dataModel';
 import { Plug, Plus, RefreshCw, CheckCircle, XCircle, Trash2, MoreVertical, Edit, Search, MessageCircle, Send, Hash } from 'lucide-react';
@@ -204,7 +204,7 @@ function ConnectionsPage() {
     // --- Convex Hooks ---
     const connectionsQuery = useQuery(api.mcpConnections.list, {}) as Connection[] | undefined;
     const channelConns = useQuery(api.channelConnections.list, {}) ?? [];
-    const createChannelConn = useMutation(api.channelConnections.create);
+    const createChannelConn = useAction(api.channelConnections.create);
     const removeChannelConn = useMutation(api.channelConnections.remove);
     const [showTelegramDialog, setShowTelegramDialog] = React.useState(false);
     const [showSlackDialog, setShowSlackDialog] = React.useState(false);

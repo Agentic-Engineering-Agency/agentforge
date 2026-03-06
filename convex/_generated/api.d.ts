@@ -206,7 +206,7 @@ export declare const api: {
   };
   channelConnections: {
     create: FunctionReference<
-      "mutation",
+      "action",
       "public",
       {
         agentId: string;
@@ -1381,8 +1381,39 @@ export declare const internal: {
     >;
   };
   channelConnections: {
-    getDecryptedBotToken: FunctionReference<
+    getConnectionForDecrypt: FunctionReference<
       "query",
+      "internal",
+      { connectionId: Id<"channelConnections"> },
+      any
+    >;
+    insertConnection: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        agentId: string;
+        botUsername?: string;
+        channel: string;
+        ciphertext: string;
+        iv: string;
+        projectId?: Id<"projects">;
+        salt: string;
+        teamId?: string;
+        userId?: string;
+        webhookSecret?: string;
+      },
+      any
+    >;
+  };
+  channelConnectionsActions: {
+    encryptBotToken: FunctionReference<
+      "action",
+      "internal",
+      { plaintext: string },
+      { ciphertext: string; iv: string; salt: string }
+    >;
+    getDecryptedBotToken: FunctionReference<
+      "action",
       "internal",
       { connectionId: Id<"channelConnections"> },
       any

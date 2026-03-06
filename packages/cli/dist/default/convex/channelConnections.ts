@@ -1,98 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, internalQuery } from "./_generated/server";
+import { action, mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
-
-// Helper: Encrypt a bot token using vault
-async function encryptBotToken(token: string): Promise<{ encrypted: string; iv: string; salt: string }> {
-  const key = process.env.VAULT_ENCRYPTION_KEY;
-  if (!key || key.length < 32) {
-    throw new Error("VAULT_ENCRYPTION_KEY not configured");
-  }
-
-  // Derive key
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(key),
-    "PBKDF2",
-    false,
-    ["deriveBits", "deriveKey"]
-  );
-
-  const saltBytes = crypto.getRandomValues(new Uint8Array(16));
-  const salt = saltBytes;
-  const cryptoKey = await crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: salt,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
-
-  // Encrypt
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const encrypted = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: iv },
-    cryptoKey,
-    new TextEncoder().encode(token)
-  );
-
-  // Convert to base64
-  const encryptedBase64 = btoa(String.fromCharCode(...new Uint8Array(encrypted)));
-  const ivBase64 = btoa(String.fromCharCode(...iv));
-
-  const saltBase64 = btoa(String.fromCharCode(...saltBytes));
-  return { encrypted: encryptedBase64, iv: ivBase64, salt: saltBase64 };
-}
-
-// Helper: Decrypt a bot token
-async function decryptBotToken(encrypted: string, iv: string): Promise<string> {
-  const key = process.env.VAULT_ENCRYPTION_KEY;
-  if (!key || key.length < 32) {
-    throw new Error("VAULT_ENCRYPTION_KEY not configured");
-  }
-
-  // Derive key
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(key),
-    "PBKDF2",
-    false,
-    ["deriveBits", "deriveKey"]
-  );
-
-  const salt = stored.config.salt
-    ? Uint8Array.from(Buffer.from(stored.config.salt, "base64"))
-    : new TextEncoder().encode(key.slice(0, 16)); // fallback for existing records
-  const cryptoKey = await crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt: salt,
-      iterations: 100000,
-      hash: "SHA-256",
-    },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt", "decrypt"]
-  );
-
-  // Decrypt
-  const encryptedData = Uint8Array.from(atob(encrypted), (c) => c.charCodeAt(0));
-  const ivData = Uint8Array.from(atob(iv), (c) => c.charCodeAt(0));
-
-  const decrypted = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: ivData },
-    cryptoKey,
-    encryptedData
-  );
-
-  return new TextDecoder().decode(decrypted);
-}
 
 // ---- Queries ----
 
@@ -172,9 +80,10 @@ export const getById = query({
 // ---- Mutations ----
 
 /**
- * Create a new channel connection with encrypted config
+ * Create a new channel connection with encrypted bot token.
+ * Encryption is handled via the "use node" channelConnectionsActions module.
  */
-export const create = mutation({
+export const create = action({
   args: {
     agentId: v.string(),
     channel: v.string(),
@@ -188,30 +97,64 @@ export const create = mutation({
   handler: async (ctx, args) => {
     const { botToken, ...rest } = args;
 
-    // Encrypt the bot token
-    const { encrypted, iv, salt } = await encryptBotToken(botToken);
+    // Encrypt the bot token using the "use node" action (node:crypto HKDF + AES-256-GCM)
+    const { ciphertext, iv, salt } = await ctx.runAction(
+      internal.channelConnectionsActions.encryptBotToken,
+      { plaintext: botToken }
+    );
 
-    const now = Date.now();
-    const id = await ctx.db.insert("channelConnections", {
+    return await ctx.runMutation(internal.channelConnections.insertConnection, {
       agentId: rest.agentId,
       channel: rest.channel,
+      ciphertext,
+      iv,
+      salt,
+      botUsername: rest.botUsername,
+      teamId: rest.teamId,
+      webhookSecret: rest.webhookSecret,
+      userId: rest.userId,
+      projectId: rest.projectId,
+    });
+  },
+});
+
+/**
+ * Internal: Insert a channel connection document (called from create action after encryption).
+ */
+export const insertConnection = internalMutation({
+  args: {
+    agentId: v.string(),
+    channel: v.string(),
+    ciphertext: v.string(),
+    iv: v.string(),
+    salt: v.string(),
+    botUsername: v.optional(v.string()),
+    teamId: v.optional(v.string()),
+    webhookSecret: v.optional(v.string()),
+    userId: v.optional(v.string()),
+    projectId: v.optional(v.id("projects")),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    return await ctx.db.insert("channelConnections", {
+      agentId: args.agentId,
+      channel: args.channel,
       config: {
-        botToken: encrypted,
-        iv: iv, // Store IV for decryption
-        botUsername: rest.botUsername,
-        teamId: rest.teamId,
-        webhookSecret: rest.webhookSecret,
+        botToken: args.ciphertext,
+        iv: args.iv,
+        salt: args.salt,
+        botUsername: args.botUsername,
+        teamId: args.teamId,
+        webhookSecret: args.webhookSecret,
       },
       status: "active",
       lastActivity: undefined,
       messageCount: 0,
-      userId: rest.userId,
+      userId: args.userId,
       createdAt: now,
       updatedAt: now,
-      projectId: rest.projectId,
+      projectId: args.projectId,
     });
-
-    return id;
   },
 });
 
@@ -263,30 +206,25 @@ export const remove = mutation({
   },
 });
 
-// ---- Internal Actions ----
+// ---- Internal queries ----
 
 /**
- * Internal: Get decrypted bot token for a connection
- * Only callable from other Convex functions (actions/internal)
+ * Internal: Return raw encrypted config for a connection.
+ * Used by getDecryptedBotToken (internalAction in channelConnectionsActions.ts).
+ * Never returned to public clients.
  */
-export const getDecryptedBotToken = internalQuery({
+export const getConnectionForDecrypt = internalQuery({
   args: { connectionId: v.id("channelConnections") },
   handler: async (ctx, args) => {
     const connection = await ctx.db.get(args.connectionId);
-    if (!connection) {
-      throw new Error("Connection not found");
-    }
-
-    if (!connection.config.botToken) {
-      throw new Error("No bot token configured");
-    }
-
-    const iv = connection.config.iv || "";
-    const decrypted = await decryptBotToken(connection.config.botToken, iv);
-
+    if (!connection) return null;
     return {
-      botToken: decrypted,
-      botUsername: connection.config.botUsername,
+      config: {
+        botToken: connection.config.botToken,
+        iv: connection.config.iv,
+        salt: connection.config.salt,
+        botUsername: connection.config.botUsername,
+      },
       channel: connection.channel,
       agentId: connection.agentId,
     };
