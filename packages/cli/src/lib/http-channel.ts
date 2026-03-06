@@ -159,6 +159,52 @@ export async function startHttpChannel(
       return;
     }
 
+    // GET /api/agents — list loaded agents
+    if (url.pathname === '/api/agents' && req.method === 'GET') {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        agents: agents.map(a => ({
+          id: a.id,
+          name: a.name ?? a.id,
+          model: a.model ?? 'unknown',
+        })),
+      }));
+      return;
+    }
+
+    // POST /api/chat — simple chat endpoint used by dashboard
+    // Body: { agentId: string, message: string, threadId?: string }
+    // Returns: { reply: string, threadId: string }
+    if (url.pathname === '/api/chat' && req.method === 'POST') {
+      let body = '';
+      let bodyBytes = 0;
+      req.on('data', (chunk: Buffer) => {
+        bodyBytes += chunk.length;
+        if (bodyBytes > MAX_BODY_BYTES) { req.destroy(); return; }
+        body += chunk.toString();
+      });
+      req.on('end', async () => {
+        if (res.writableEnded) return;
+        try {
+          const { agentId, message, threadId } = JSON.parse(body) as { agentId?: string; message: string; threadId?: string };
+          const agent = (agentId ? agentMap.get(agentId) : null) ?? agents[0];
+          if (!agent) {
+            res.writeHead(404, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Agent not found' }));
+            return;
+          }
+          const result = await agent.generate([{ role: 'user', content: message }]);
+          const reply = result?.text ?? result?.content ?? String(result ?? '');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ reply, threadId: threadId ?? `thread-${Date.now()}`, agentId: agent.id }));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err instanceof Error ? err.message : String(err) }));
+        }
+      });
+      return;
+    }
+
     // 404 for other routes
     res.writeHead(404);
     res.end('Not found');
