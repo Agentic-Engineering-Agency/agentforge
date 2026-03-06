@@ -18,7 +18,7 @@ export const webSearchTool = createTool({
     }
 
     try {
-      const response = await fetch('https://api.search.brave.com/res/v1/web/search', {
+      const response = await fetch(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${count}`, {
         method: 'GET',
         headers: {
           'Accept': 'application/json',

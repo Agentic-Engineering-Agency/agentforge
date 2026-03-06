@@ -1,4 +1,5 @@
 import type { Agent } from '@mastra/core/agent';
+import type { AgentForgeDaemon } from './daemon.js';
 
 export interface ChannelAdapter {
   name: string;
@@ -21,5 +22,3 @@ export interface DaemonConfig {
   adminAuthToken?: string;
   defaultModel?: string;
 }
-
-import type { AgentForgeDaemon } from './daemon.js';

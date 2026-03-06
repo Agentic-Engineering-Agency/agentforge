@@ -37,3 +37,6 @@ test_results_security.md
 # E2E tests
 tests/e2e/.env.e2e
 tests/e2e/coverage/
+
+# Runtime data (generated at runtime)
+packages/runtime/data/
