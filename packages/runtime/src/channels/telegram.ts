@@ -120,7 +120,23 @@ export class TelegramChannel implements ChannelAdapter {
   async start(agents: Map<string, Agent>, daemon: any): Promise<void> {
     this.agents = agents;
     this.daemon = daemon;
-    await this.bot.start();
+
+    // bot.start() never resolves (long-running polling loop).
+    // Use onStart callback to signal readiness, then let polling run in background.
+    // .catch() is attached synchronously (before any async task can run), so
+    // there is no race with onStart.
+    await new Promise<void>((resolve, reject) => {
+      let started = false;
+      this.bot
+        .start({ onStart: () => { started = true; resolve(); } })
+        .catch((error) => {
+          if (!started) {
+            reject(error);
+          } else {
+            console.error('[TelegramChannel] Bot polling error:', error);
+          }
+        });
+    });
     console.log(`[TelegramChannel] Started with agent: ${this.config.defaultAgentId}`);
   }
 
