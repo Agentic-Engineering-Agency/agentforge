@@ -410,7 +410,7 @@ function SkillsPage() {
 
         {/* Code Preview Modal */}
         {selectedSkill && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+          <div key={selectedSkill.name} className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
               <div className="flex justify-between items-center p-4 border-b border-border">
                 <h2 className="text-lg font-bold">{selectedSkill.displayName} — Source Code</h2>

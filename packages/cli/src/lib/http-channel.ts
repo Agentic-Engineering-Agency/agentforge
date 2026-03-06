@@ -83,8 +83,47 @@ async function fetchModels(provider: string, apiKey?: string): Promise<string[]>
         if (chatModels.length > 0) models = chatModels;
       }
     }
-    // All other providers (Anthropic, xAI, Groq, Together, Mistral, DeepSeek, Perplexity,
-    // OpenRouter) don't have freely-accessible model-list endpoints — use static list.
+    // All other providers (Anthropic, xAI, DeepSeek, Perplexity, OpenRouter) don't have
+    // freely-accessible model-list endpoints — use static list.
+
+    // Groq: OpenAI-compatible /v1/models endpoint
+    if (provider === 'groq' && apiKey) {
+      const resp = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) {
+        const data = await resp.json() as { data: { id: string }[] };
+        const chatModels = data.data.map(m => m.id);
+        if (chatModels.length > 0) models = chatModels;
+      }
+    }
+
+    // Together: OpenAI-compatible /v1/models endpoint with type filtering
+    if (provider === 'together' && apiKey) {
+      const resp = await fetch('https://api.together.xyz/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) {
+        const data = await resp.json() as Array<{ id: string; type: string }>;
+        const chatModels = data.filter(m => m.type === 'chat').map(m => m.id);
+        if (chatModels.length > 0) models = chatModels;
+      }
+    }
+
+    // Mistral: /v1/models endpoint with completion_chat capability filter
+    if (provider === 'mistral' && apiKey) {
+      const resp = await fetch('https://api.mistral.ai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (resp.ok) {
+        const data = await resp.json() as { data: { id: string; capabilities: { completion_chat?: boolean } }[] };
+        const chatModels = data.data.filter(m => m.capabilities.completion_chat === true).map(m => m.id);
+        if (chatModels.length > 0) models = chatModels;
+      }
+    }
   } catch {
     // Network error / timeout — fall back to static list silently
   }
@@ -226,6 +265,11 @@ export async function startHttpChannel(
           try {
             const stream = await agent.stream(messages);
 
+            // Track usage from stream (if available)
+            let promptTokens = 0;
+            let completionTokens = 0;
+            let totalTokens = 0;
+
             for await (const chunk of stream.fullStream) {
               // Mastra v1.8+ stream: type='text-delta', payload.text (not chunk.textDelta)
               const text = chunk.type === 'text-delta'
@@ -244,6 +288,35 @@ export async function startHttpChannel(
                   }],
                 });
                 res.write(`data: ${data}\n\n`);
+              }
+
+              // Check for usage metadata in stream (Mastra may send this in a final chunk)
+              if (chunk.type === 'finish' || chunk.type === 'usage') {
+                const usage = (chunk as any).usage ?? (chunk as any).payload?.usage ?? null;
+                if (usage) {
+                  promptTokens = usage.promptTokens ?? usage.prompt_tokens ?? usage.inputTokens ?? 0;
+                  completionTokens = usage.completionTokens ?? usage.completion_tokens ?? usage.outputTokens ?? 0;
+                  totalTokens = usage.totalTokens ?? usage.total_tokens ?? promptTokens + completionTokens;
+                }
+              }
+            }
+
+            // Record usage to Convex after stream completes
+            if (convex && agent.id && totalTokens > 0) {
+              try {
+                const cfg = configMap.get(agent.id) ?? { provider: 'openai', model: agent.model ?? 'unknown' };
+                const cost = estimateCost(cfg.provider, cfg.model, promptTokens, completionTokens);
+                await (convex as any).mutation('usage:record', {
+                  agentId: agent.id,
+                  provider: cfg.provider,
+                  model: cfg.model,
+                  promptTokens,
+                  completionTokens,
+                  totalTokens,
+                  cost,
+                });
+              } catch (usageErr) {
+                if (dev) console.warn('[/v1/chat/completions] Failed to record usage:', usageErr);
               }
             }
 

@@ -94,6 +94,7 @@ function SettingsPage() {
 
   const [addingVaultSecret, setAddingVaultSecret] = useState(false);
   const [vaultForm, setVaultForm] = useState({ name: '', category: 'api_key', provider: '', value: '' });
+  const [defaultModel, setDefaultModel] = useState('');
   const [confirmingDeleteKeyId, setConfirmingDeleteKeyId] = useState<string | null>(null);
   const [confirmingDeleteSecretId, setConfirmingDeleteSecretId] = useState<string | null>(null);
 
@@ -313,9 +314,14 @@ function SettingsPage() {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Default Model</label>
-                  <select className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm">
+                  <select
+                    value={defaultModel}
+                    onChange={(e) => setDefaultModel(e.target.value)}
+                    className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">None (use agent default)</option>
                     {allModels.map(({ provider, model }) => (
-                      <option key={`${provider}/${model}`} value={model}>
+                      <option key={`${provider}/${model}`} value={`${provider}/${model}`}>
                         {model} ({provider})
                       </option>
                     ))}
