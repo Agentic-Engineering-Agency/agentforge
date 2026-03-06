@@ -1,17 +1,17 @@
+/**
+ * AgentForge Chat Command
+ *
+ * Interactive chat with agents via HTTP streaming.
+ * Replaces the broken Convex action approach with daemon HTTP endpoint.
+ */
+
 import { Command } from 'commander';
 import { createClient, safeCall } from '../lib/convex-client.js';
 import { header, success, error, info, dim, colors } from '../lib/display.js';
 import readline from 'node:readline';
 
-// Timeout wrapper for Convex action calls
-async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, errorMessage: string): Promise<T> {
-  const timeout = new Promise<never>((_, reject) => {
-    setTimeout(() => reject(new Error(errorMessage)), timeoutMs);
-  });
-  return Promise.race([promise, timeout]);
-}
-
 const MAX_MESSAGE_LENGTH = 10000;
+const DEFAULT_PORT = 3001;
 
 function validateMessage(msg: string | undefined): { valid: boolean; error?: string } {
   if (!msg) return { valid: false, error: 'Message is required' };
@@ -23,22 +23,102 @@ function validateMessage(msg: string | undefined): { valid: boolean; error?: str
   return { valid: true };
 }
 
+/**
+ * Send a message to the HTTP endpoint and get a streaming response
+ */
+async function chatViaHttp(
+  agentId: string,
+  message: string,
+  port: number,
+  onChunk: (chunk: string) => void,
+  onError?: (error: string) => void
+): Promise<void> {
+  const response = await fetch(`http://localhost:${port}/v1/chat/completions`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: agentId,
+      messages: [{ role: 'user', content: message }],
+      stream: true,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText || `HTTP ${response.status}`);
+  }
+
+  if (!response.body) {
+    throw new Error('No response body');
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    const chunk = decoder.decode(value, { stream: true });
+    const lines = chunk.split('\n');
+
+    for (const line of lines) {
+      if (line.startsWith('data: ')) {
+        const data = line.slice(6);
+        if (data === '[DONE]') continue;
+
+        try {
+          const parsed = JSON.parse(data);
+          const content = parsed.choices?.[0]?.delta?.content;
+          if (content) {
+            onChunk(content);
+          }
+
+          const errorMsg = parsed.error;
+          if (errorMsg && onError) {
+            onError(String(errorMsg));
+          }
+        } catch {
+          // Skip malformed JSON
+        }
+      }
+    }
+  }
+}
+
 export function registerChatCommand(program: Command) {
   program
     .command('chat')
     .argument('[agent-id]', 'Agent ID to chat with')
-    .option('-s, --session <id>', 'Resume an existing session')
-    .option('--message <text>', 'Send a single message and exit (non-interactive)')
+    .option('-s, --session <id>', 'Resume an existing session (deprecated, use --thread)')
+    .option('-m, --message <text>', 'Send a single message and exit (non-interactive)')
+    .option('--thread <id>', 'Continue existing thread (stored in Convex)')
+    .option('-p, --port <n>', 'Runtime HTTP port', String(DEFAULT_PORT))
     .option('--no-stream', 'Disable streaming (wait for full response)')
     .description('Start an interactive chat session with an agent')
     .action(async (agentId, opts) => {
+      const port = parseInt(opts.port, 10);
       const client = await createClient();
-      
-      // Get Convex site URL for streaming
-      const siteUrl = process.env.CONVEX_SITE_URL || process.env.CONVEX_URL?.replace('.cloud', '.site');
-      const enableStreaming = !!siteUrl && opts.stream !== false;
 
-      if (!agentId && !opts.session) {
+      // Check if runtime is running
+      let runtimeRunning = false;
+      try {
+        const healthResponse = await fetch(`http://localhost:${port}/health`);
+        runtimeRunning = healthResponse.ok;
+      } catch {
+        runtimeRunning = false;
+      }
+
+      if (!runtimeRunning) {
+        error('AgentForge daemon is not running.');
+        info('Start it first: agentforge start');
+        process.exit(1);
+      }
+
+      // Fetch agents from Convex
+      if (!agentId) {
         const agents = await safeCall(() => client.query('agents:list' as any, {}), 'Failed to list agents');
         if (!agents || (agents as any[]).length === 0) {
           error('No agents found. Create one first: agentforge agents create');
@@ -56,18 +136,12 @@ export function registerChatCommand(program: Command) {
       }
 
       const agent = await safeCall(() => client.query('agents:get' as any, { id: agentId }), 'Failed to fetch agent');
-      if (!agent) { error(`Agent "${agentId}" not found.`); process.exit(1); }
+      if (!agent) {
+        error(`Agent "${agentId}" not found.`);
+        process.exit(1);
+      }
 
       const a = agent as any;
-
-      // SPEC-016 Task 3: Show sandbox warning if agent has sandbox enabled
-      if (a.sandboxEnabled && a.sandboxImage) {
-        console.log();
-        console.log(`${colors.yellow}⚠  Agent has Docker Sandbox enabled (image: ${a.sandboxImage})${colors.reset}`);
-        console.log(`${colors.dim}   To execute with full sandbox isolation, run:${colors.reset}`);
-        console.log(`${colors.cyan}   agentforge sandbox run ${a.id} --message "your message"${colors.reset}`);
-        console.log();
-      }
 
       // One-shot --message mode (non-interactive)
       if (opts.message) {
@@ -78,56 +152,62 @@ export function registerChatCommand(program: Command) {
         }
 
         const input = opts.message.trim();
-        
-        let threadId = await safeCall(
-          () => client.mutation('threads:createThread' as any, { agentId: a.id }),
-          'Failed to create thread'
-        );
 
-        await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'user', content: input }), 'Failed to send');
+        // Save message to Convex for history
+        try {
+          let threadId = opts.thread || opts.session;
+          if (!threadId) {
+            threadId = await safeCall(
+              () => client.mutation('threads:createThread' as any, { agentId: a.id }),
+              'Failed to create thread'
+            );
+          }
+          await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'user', content: input }), 'Failed to save message');
+        } catch {
+          // Non-fatal: continue with chat even if Convex save fails
+        }
 
         try {
-          const response = await withTimeout(
-            safeCall(() => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }), 'Failed to get response'),
-            10000,
-            'Agent execution timed out after 10 seconds. This may indicate a missing or invalid API key.'
+          let fullResponse = '';
+          await chatViaHttp(
+            a.id,
+            input,
+            port,
+            (chunk) => {
+              process.stdout.write(chunk);
+              fullResponse += chunk;
+            },
+            (errorMsg) => {
+              console.log(`\n${colors.yellow}[Error: ${errorMsg}]${colors.reset}`);
+            }
           );
-          const text = (response as any)?.response || (response as any)?.text || (response as any)?.content || String(response);
-          console.log(text);
+          console.log(); // Newline after response
+          process.exit(0);
         } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('auth') || msg.includes('API key')) {
-            error(`Agent execution failed: No API key configured for provider "${a.provider || 'openai'}".
-  Run: agentforge agents edit ${a.id} --provider anthropic
-  Or configure your key: agentforge settings set ${a.provider?.toUpperCase() || 'OPENAI'}_API_KEY sk-...`);
-          } else {
-            console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
-          }
+          error(`Chat failed: ${err instanceof Error ? err.message : String(err)}`);
+          info('Make sure the daemon is running: agentforge start');
+          process.exit(1);
         }
-        process.exit(0);
       }
 
       // Interactive mode
       header(`Chat with ${a.name}`);
       dim(`  Model: ${a.model} | Provider: ${a.provider || 'openai'}`);
-      if (enableStreaming) {
-        dim(`  Streaming: ${colors.green}enabled${colors.reset}`);
-      } else {
-        dim(`  Streaming: ${colors.yellow}disabled${colors.reset}`);
-      }
-      dim(`  Type "exit" or "quit" to end. "/new" for new thread. "/history" for messages.`);
+      dim(`  Runtime: http://localhost:${port}`);
+      dim(`  Type "exit" or "quit" to end. "/new" for new thread.`);
       console.log();
 
-      let threadId = await safeCall(
-        () => client.mutation('threads:createThread' as any, { agentId: a.id }),
-        'Failed to create thread'
-      );
+      let threadId = opts.thread || opts.session;
+      if (!threadId) {
+        threadId = await safeCall(
+          () => client.mutation('threads:createThread' as any, { agentId: a.id }),
+          'Failed to create thread'
+        );
+      }
 
       const history: Array<{ role: string; content: string }> = [];
-      
-      // AGE-171: Detect TTY vs piped input
       const isTTY = process.stdin.isTTY ?? false;
-      
+
       const rl = readline.createInterface({
         input: process.stdin,
         output: isTTY ? process.stdout : undefined,
@@ -139,24 +219,23 @@ export function registerChatCommand(program: Command) {
 
       rl.on('line', async (line) => {
         const input = line.trim();
-        
-        // Skip empty input
+
         if (!input) {
           if (isTTY) rl.prompt();
           return;
         }
-        
-        // Validate message length
+
         if (input.length > MAX_MESSAGE_LENGTH) {
           error(`Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`);
           if (isTTY) rl.prompt();
           return;
         }
-        
+
         if (input === 'exit' || input === 'quit') {
           success('Session ended. Goodbye!');
           process.exit(0);
         }
+
         if (input === '/new') {
           threadId = await safeCall(() => client.mutation('threads:createThread' as any, { agentId: a.id }), 'Failed');
           history.length = 0;
@@ -164,6 +243,7 @@ export function registerChatCommand(program: Command) {
           if (isTTY) rl.prompt();
           return;
         }
+
         if (input === '/history') {
           history.forEach((m) => {
             const prefix = m.role === 'user' ? `${colors.green}You${colors.reset}` : `${colors.cyan}${a.name}${colors.reset}`;
@@ -176,109 +256,46 @@ export function registerChatCommand(program: Command) {
         }
 
         history.push({ role: 'user', content: input });
-        await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'user', content: input }), 'Failed to send');
+
+        // Save to Convex
+        try {
+          await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'user', content: input }), 'Failed to save');
+        } catch {
+          // Non-fatal
+        }
 
         if (isTTY) {
           process.stdout.write(`${colors.cyan}${a.name}${colors.reset} > `);
         }
-        if (enableStreaming && siteUrl) {
-          // AGE-173: SSE Streaming
+
+        try {
+          let fullResponse = '';
+          await chatViaHttp(
+            a.id,
+            input,
+            port,
+            (chunk) => {
+              process.stdout.write(chunk);
+              fullResponse += chunk;
+            },
+            (errorMsg) => {
+              console.log(`\n${colors.yellow}[Error: ${errorMsg}]${colors.reset}`);
+            }
+          );
+          console.log();
+          history.push({ role: 'assistant', content: fullResponse });
+
+          // Save assistant response to Convex
           try {
-            const response = await fetch(`${siteUrl}/stream-agent`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                agentId: a.id,
-                message: input,
-                threadId,
-              }),
-            });
-
-            if (!response.ok) {
-              const errorText = await response.text();
-              throw new Error(errorText || `HTTP ${response.status}`);
-            }
-
-            const reader = response.body!.getReader();
-            const decoder = new TextDecoder();
-            let fullContent = '';
-
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = chunk.split('\n');
-
-              for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                  try {
-                    const data = JSON.parse(line.slice(6));
-                    
-                    if (data.token) {
-                      process.stdout.write(data.token);
-                      fullContent += data.token;
-                    }
-                    
-                    if (data.error) {
-                      console.log(`\n${colors.yellow}[Error: ${data.error}]${colors.reset}`);
-                    }
-                  } catch {
-                    // Skip malformed SSE lines
-                  }
-                }
-              }
-            }
-
-            console.log(); // Newline after streaming
-            history.push({ role: 'assistant', content: fullContent });
-          } catch (err) {
-            console.log(`${colors.yellow}[Streaming failed: ${err instanceof Error ? err.message : String(err)}]${colors.reset}`);
-            console.log(`${colors.yellow}[Falling back to non-streaming...]${colors.reset}`);
-
-            // Fallback to non-streaming
-            try {
-              const response = await withTimeout(
-                safeCall(() => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }), 'Failed to get response'),
-                10000,
-                'Agent execution timed out after 10 seconds. This may indicate a missing or invalid API key.'
-              );
-              const text = (response as any)?.response || (response as any)?.text || (response as any)?.content || String(response);
-              console.log(text);
-              history.push({ role: 'assistant', content: text });
-            } catch (execErr) {
-              const msg = execErr instanceof Error ? execErr.message : String(execErr);
-              if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('auth') || msg.includes('API key')) {
-                error(`Agent execution failed: No API key configured for provider "${a.provider || 'openai'}".
-  Run: agentforge agents edit ${a.id} --provider anthropic
-  Or configure your key: agentforge settings set ${a.provider?.toUpperCase() || 'OPENAI'}_API_KEY sk-...`);
-              } else {
-                console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
-              }
-            }
+            await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'assistant', content: fullResponse }), 'Failed to save');
+          } catch {
+            // Non-fatal
           }
-        } else {
-          // Non-streaming fallback
-          try {
-            const response = await withTimeout(
-              safeCall(() => client.action('mastraIntegration:executeAgent' as any, { agentId: a.id, prompt: input, threadId }), 'Failed to get response'),
-              10000,
-              'Agent execution timed out after 10 seconds. This may indicate a missing or invalid API key.'
-            );
-            const text = (response as any)?.response || (response as any)?.text || (response as any)?.content || String(response);
-            console.log(text);
-            history.push({ role: 'assistant', content: text });
-          } catch (execErr) {
-            const msg = execErr instanceof Error ? execErr.message : String(execErr);
-            if (msg.includes('timeout') || msg.includes('timed out') || msg.includes('auth') || msg.includes('API key')) {
-              error(`Agent execution failed: No API key configured for provider "${a.provider || 'openai'}".
-  Run: agentforge agents edit ${a.id} --provider anthropic
-  Or configure your key: agentforge settings set ${a.provider?.toUpperCase() || 'OPENAI'}_API_KEY sk-...`);
-            } else {
-              console.log(`${colors.yellow}[Configure your LLM API key in .env to get responses]${colors.reset}`);
-            }
-          }
+        } catch (err) {
+          console.log(`${colors.yellow}[Chat failed: ${err instanceof Error ? err.message : String(err)}]${colors.reset}`);
+          console.log(`${colors.yellow}[Check that the daemon is running: agentforge start]${colors.reset}`);
         }
+
         console.log();
         if (isTTY) rl.prompt();
       });

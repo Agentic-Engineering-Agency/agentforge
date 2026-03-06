@@ -85,8 +85,11 @@ importers:
   packages/cli:
     dependencies:
       '@agentforge-ai/core':
-        specifier: ^0.10.1
-        version: 0.10.1(@types/express@4.17.25)
+        specifier: workspace:*
+        version: link:../core
+      '@agentforge-ai/runtime':
+        specifier: workspace:*
+        version: link:../runtime
       chalk:
         specifier: ^5.3.0
         version: 5.6.2
@@ -183,6 +186,34 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@25.2.3)(terser@5.46.0)
 
+  packages/runtime:
+    dependencies:
+      '@agentforge-ai/core':
+        specifier: workspace:*
+        version: link:../core
+      '@mastra/core':
+        specifier: ^1.5.0
+        version: 1.5.0(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76))(@standard-community/standard-openapi@0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(zod@3.25.76))(@types/json-schema@7.0.15)(openapi-types@12.1.3)(zod@3.25.76)
+      hono:
+        specifier: '>=4.12.4'
+        version: 4.12.5
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.11
+      tsup:
+        specifier: ^8.0.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@22.19.11)(terser@5.46.0)
+
   packages/web:
     dependencies:
       '@radix-ui/react-dialog':
@@ -276,9 +307,6 @@ packages:
   '@a2a-js/sdk@0.2.5':
     resolution: {integrity: sha512-VTDuRS5V0ATbJ/LkaQlisMnTAeYKXAK6scMguVBstf+KIBQ7HIuKhiXLv+G/hvejkV+THoXzoNifInAkU81P1g==}
     engines: {node: '>=18'}
-
-  '@agentforge-ai/core@0.10.1':
-    resolution: {integrity: sha512-qc2+dJAOkssHwSOfKd2Dvp2Y46urw1CC4/KEDXhDQ2H4lIiqc9iQTErD4gnc8Mb5ApGK58ncws8WuHSyJVPc/A==}
 
   '@ai-sdk/anthropic@1.2.12':
     resolution: {integrity: sha512-YSzjlko7JvuiyQFmI9RN1tNZdEiZxc+6xld/0tq/VkJaHpEzGAb1yiNxxvmYVcjvfu/PcvCxAAYXmTYQQ63IHQ==}
@@ -4397,31 +4425,6 @@ snapshots:
       uuid: 11.1.0
     transitivePeerDependencies:
       - supports-color
-
-  '@agentforge-ai/core@0.10.1(@types/express@4.17.25)':
-    dependencies:
-      '@discordjs/rest': 2.6.0
-      '@e2b/code-interpreter': 1.5.1
-      '@mastra/core': 1.5.0(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76))(@standard-community/standard-openapi@0.2.9(@standard-community/standard-json@0.3.5(@standard-schema/spec@1.1.0)(@types/json-schema@7.0.15)(quansync@0.2.11)(zod-to-json-schema@3.25.1(zod@3.25.76))(zod@3.25.76))(@standard-schema/spec@1.1.0)(openapi-types@12.1.3)(zod@3.25.76))(@types/json-schema@7.0.15)(openapi-types@12.1.3)(zod@3.25.76)
-      '@modelcontextprotocol/sdk': 1.27.1(zod@3.25.76)
-      '@slack/bolt': 4.6.0(@types/express@4.17.25)
-      '@slack/web-api': 7.14.1
-      discord.js: 14.25.1
-      dockerode: 4.0.9
-      playwright: 1.58.2
-      zod: 3.25.76
-    transitivePeerDependencies:
-      - '@cfworker/json-schema'
-      - '@hono/standard-validator'
-      - '@standard-community/standard-json'
-      - '@standard-community/standard-openapi'
-      - '@types/express'
-      - '@types/json-schema'
-      - bufferutil
-      - debug
-      - openapi-types
-      - supports-color
-      - utf-8-validate
 
   '@ai-sdk/anthropic@1.2.12(zod@3.25.76)':
     dependencies:
