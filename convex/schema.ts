@@ -293,7 +293,7 @@ export default defineSchema({
     keyName: v.string(),
     encryptedKey: v.string(), // AES-256-GCM ciphertext (base64)
     iv: v.string(), // Initialization vector for AES-256-GCM (base64)
-    tag: v.string(), // Auth tag for AES-256-GCM (base64)
+    tag: v.optional(v.string()), // Auth tag for AES-256-GCM (base64, optional for legacy XOR keys)
     version: v.optional(v.string()), // Encryption version identifier
     isActive: v.boolean(),
     userId: v.optional(v.string()),

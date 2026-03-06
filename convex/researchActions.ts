@@ -46,11 +46,11 @@ export const start = action({
 
     try {
       // Get default agent config from API keys
-      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
+      const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
         provider: "openrouter",
       });
 
-      if (!apiKeyData || !apiKeyData.apiKey) {
+      if (!apiKeyData) {
         throw new Error("No API key found for provider: openrouter");
       }
 
@@ -63,7 +63,7 @@ export const start = action({
       const report = await orchestrator.run({
         providerId: "openrouter",
         modelId: "openai/gpt-4o-mini",
-        apiKey: apiKeyData.apiKey,
+        apiKey: apiKeyData,
         url: getProviderBaseUrl("openrouter"),
       });
 

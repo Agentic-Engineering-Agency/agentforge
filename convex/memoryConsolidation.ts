@@ -71,6 +71,7 @@ export const consolidate = action({
 
     // Create a single reusable LLM agent for consolidation
     const consolidationAgent = new Agent({
+      id: "agentforge-consolidator",
       name: "agentforge-consolidator",
       instructions: CONSOLIDATION_SYSTEM_PROMPT,
       model: {
@@ -86,14 +87,13 @@ export const consolidate = action({
 
       // Build the text to summarize
       const memoryText = groupMemories
-        .map((m) => m.content)
+        .map((m: typeof allMemories[number]) => m.content)
         .join("\n---\n");
 
       try {
         // 4. Use LLM to generate a summary
         const llmResult = await consolidationAgent.generate(
-          [{ role: "user", content: memoryText }],
-          {} as any
+          [{ role: "user", content: memoryText }]
         );
         const summaryText = llmResult.text?.trim();
         if (!summaryText) continue;
@@ -112,7 +112,7 @@ export const consolidate = action({
         })) as Id<"memoryEntries">;
 
         // 6. Record the consolidation
-        const sourceIds = groupMemories.map((m) => m._id as Id<"memoryEntries">);
+        const sourceIds = groupMemories.map((m: typeof allMemories[number]) => m._id as Id<"memoryEntries">);
         await ctx.runMutation(
           internal.memoryConsolidationMutations.insertConsolidationRecord,
           {

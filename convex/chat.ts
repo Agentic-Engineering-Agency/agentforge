@@ -381,7 +381,7 @@ export const sendMessage = action({
         if (providersSeen.has(provider)) continue;
         providersSeen.add(provider);
         try {
-          const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+          const keyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, { provider });
           if (keyData) {
             keyMap[provider] = keyData;
             // Also inject into process.env as belt-and-suspenders for Mastra's env reader
