@@ -1,8 +1,16 @@
 import { v } from "convex/values";
-import { mutation, query, internalQuery, internalAction } from "./_generated/server";
-import { encryptApiKey, decryptApiKey } from "./apiKeysCrypto";
+import { mutation, query, internalQuery, internalMutation, internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
 
-// Query: List API keys
+// Helper to strip encrypted fields before returning to clients
+function stripEncryptedFields<T extends { encryptedKey: string; iv: string; tag: string }>(
+  doc: T
+): Omit<T, "encryptedKey" | "iv" | "tag"> {
+  const { encryptedKey: _ek, iv: _iv, tag: _tag, ...safeFields } = doc;
+  return safeFields;
+}
+
+// Query: List API keys (never returns encrypted fields)
 export const list = query({
   args: {
     userId: v.optional(v.string()),
@@ -15,14 +23,8 @@ export const list = query({
         .withIndex("byProvider", (q) => q.eq("provider", args.provider!))
         .collect();
 
-      if (args.userId) {
-        return keys.filter((k) => k.userId === args.userId);
-      }
-      // Strip sensitive fields before returning
-      return keys.map((k) => {
-        const { encryptedKey, iv, tag, ...safeFields } = k;
-        return safeFields;
-      });
+      const filtered = args.userId ? keys.filter((k) => k.userId === args.userId) : keys;
+      return filtered.map(stripEncryptedFields);
     }
 
     if (args.userId) {
@@ -30,36 +32,26 @@ export const list = query({
         .query("apiKeys")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
         .collect();
-      // Strip sensitive fields before returning
-      return keys.map((k) => {
-        const { encryptedKey, iv, tag, ...safeFields } = k;
-        return safeFields;
-      });
+      return keys.map(stripEncryptedFields);
     }
 
     const allKeys = await ctx.db.query("apiKeys").collect();
-    // Strip sensitive fields before returning
-    return allKeys.map((k) => {
-      const { encryptedKey, iv, tag, ...safeFields } = k;
-      return safeFields;
-    });
+    return allKeys.map(stripEncryptedFields);
   },
 });
 
-// Query: Get API key by ID
+// Query: Get API key by ID (never returns encrypted fields)
 export const get = query({
   args: { id: v.id("apiKeys") },
   handler: async (ctx, args) => {
     const doc = await ctx.db.get(args.id);
     if (!doc) return null;
-    // Strip sensitive fields before returning
-    const { encryptedKey, iv, tag, ...safeFields } = doc;
-    return safeFields;
+    return stripEncryptedFields(doc);
   },
 });
 
 // Query: Get active API key for provider (PUBLIC - does NOT return decrypted key)
-// SECURITY: This is a public query, so it only returns metadata, not the decrypted key
+// SECURITY: This is a public query — returns only safe metadata
 export const getActiveForProvider = query({
   args: {
     provider: v.string(),
@@ -76,74 +68,61 @@ export const getActiveForProvider = query({
     if (args.userId) {
       const userKey = activeKeys.find((k) => k.userId === args.userId);
       if (!userKey) return null;
-
-      // Return only safe metadata - never return encrypted fields
-      const { encryptedKey, iv, tag, ...safeFields } = userKey;
-      return safeFields;
+      return stripEncryptedFields(userKey);
     }
 
     const firstKey = activeKeys[0];
     if (!firstKey) return null;
-
-    // Return only safe metadata - never return encrypted fields
-    const { encryptedKey, iv, tag, ...safeFields } = firstKey;
-    return safeFields;
+    return stripEncryptedFields(firstKey);
   },
 });
 
-// Mutation: Create API key (encrypts before storing using AES-256-GCM)
-export const create = mutation({
+// Internal Mutation: Insert a new API key record (called from apiKeyActions.create)
+// Accepts pre-encrypted data — encryption is done in the Node.js action layer
+export const _insertKey = internalMutation({
   args: {
     provider: v.string(),
     keyName: v.string(),
-    encryptedKey: v.string(), // Plaintext key to encrypt
+    encryptedKey: v.string(),
+    iv: v.string(),
+    tag: v.string(),
+    version: v.string(),
+    isActive: v.boolean(),
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Call the internal action to encrypt the key
-    const encrypted = await ctx.runAction(internal.apiKeysCrypto.encryptApiKey, {
-      plaintext: args.encryptedKey,
-    });
-
-    const keyId = await ctx.db.insert("apiKeys", {
+    return await ctx.db.insert("apiKeys", {
       provider: args.provider,
       keyName: args.keyName,
-      encryptedKey: encrypted.ciphertext,
-      iv: encrypted.iv,
-      tag: encrypted.tag,
-      version: encrypted.version,
-      isActive: true,
+      encryptedKey: args.encryptedKey,
+      iv: args.iv,
+      tag: args.tag,
+      version: args.version,
+      isActive: args.isActive,
       userId: args.userId,
       createdAt: Date.now(),
     });
-    return keyId;
   },
 });
 
-// Mutation: Update API key (encrypts if key is being updated)
-export const update = mutation({
+// Internal Mutation: Patch an existing API key record (called from apiKeyActions.update)
+export const _patchKey = internalMutation({
   args: {
     id: v.id("apiKeys"),
     keyName: v.optional(v.string()),
-    encryptedKey: v.optional(v.string()), // Plaintext key to encrypt
+    encryptedKey: v.optional(v.string()),
+    iv: v.optional(v.string()),
+    tag: v.optional(v.string()),
+    version: v.optional(v.string()),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const { id, encryptedKey, ...rest } = args;
-    const updates: Record<string, unknown> = { ...rest };
-
-    if (encryptedKey !== undefined) {
-      // Call the internal action to encrypt the key
-      const encrypted = await ctx.runAction(internal.apiKeysCrypto.encryptApiKey, {
-        plaintext: encryptedKey,
-      });
-      updates.encryptedKey = encrypted.ciphertext;
-      updates.iv = encrypted.iv;
-      updates.tag = encrypted.tag;
-      updates.version = encrypted.version;
-    }
-
-    await ctx.db.patch(id, updates);
+    const { id, ...updates } = args;
+    // Remove undefined fields so patch only touches what changed
+    const patch = Object.fromEntries(
+      Object.entries(updates).filter(([, v]) => v !== undefined)
+    );
+    await ctx.db.patch(id, patch);
     return id;
   },
 });
@@ -153,15 +132,10 @@ export const toggleActive = mutation({
   args: { id: v.id("apiKeys") },
   handler: async (ctx, args) => {
     const key = await ctx.db.get(args.id);
-
     if (!key) {
-      throw new Error(`API key not found`);
+      throw new Error("API key not found");
     }
-
-    await ctx.db.patch(args.id, {
-      isActive: !key.isActive,
-    });
-
+    await ctx.db.patch(args.id, { isActive: !key.isActive });
     return { success: true, isActive: !key.isActive };
   },
 });
@@ -170,9 +144,7 @@ export const toggleActive = mutation({
 export const updateLastUsed = mutation({
   args: { id: v.id("apiKeys") },
   handler: async (ctx, args) => {
-    await ctx.db.patch(args.id, {
-      lastUsedAt: Date.now(),
-    });
+    await ctx.db.patch(args.id, { lastUsedAt: Date.now() });
     return args.id;
   },
 });
@@ -186,21 +158,23 @@ export const remove = mutation({
   },
 });
 
-// Internal Action: Get decrypted (raw) API key for a provider
-// Used by runtime processes that need the actual key value
-// SECURITY: This is an internalAction, not exposed to clients
+// Internal Action: Get decrypted (raw) API key for a provider + optional userId
+// Used by runtime processes that need the actual key value.
+// SECURITY: internalAction — not exposed to clients
 export const getDecryptedForProvider = internalAction({
-  args: { provider: v.string() },
+  args: {
+    provider: v.string(),
+    userId: v.optional(v.string()),
+  },
   returns: v.union(v.string(), v.null()),
   handler: async (ctx, args) => {
-    // Run an internal query to get the key
     const key = await ctx.runQuery(internal.apiKeys.getEncryptedKeyForProvider, {
       provider: args.provider,
+      userId: args.userId,
     });
 
     if (!key) return null;
 
-    // Decrypt the key using the crypto action
     return await ctx.runAction(internal.apiKeysCrypto.decryptApiKey, {
       ciphertext: key.encryptedKey,
       iv: key.iv,
@@ -209,21 +183,29 @@ export const getDecryptedForProvider = internalAction({
   },
 });
 
-// Internal Query: Get encrypted key for provider (used by getDecryptedForProvider)
-// This is internal-only, so it returns the encrypted fields
+// Internal Query: Get encrypted key record for provider (used by getDecryptedForProvider)
+// Prefers the user-specific key when userId is provided; falls back to first active key.
 export const getEncryptedKeyForProvider = internalQuery({
-  args: { provider: v.string() },
+  args: {
+    provider: v.string(),
+    userId: v.optional(v.string()),
+  },
   handler: async (ctx, args) => {
     const keys = await ctx.db
       .query("apiKeys")
       .withIndex("byProvider", (q) => q.eq("provider", args.provider))
       .collect();
-    const active = keys.find((k) => k.isActive);
-    if (!active) return null;
+    const activeKeys = keys.filter((k) => k.isActive);
+
+    const match = args.userId
+      ? (activeKeys.find((k) => k.userId === args.userId) ?? activeKeys[0])
+      : activeKeys[0];
+
+    if (!match) return null;
     return {
-      encryptedKey: active.encryptedKey,
-      iv: active.iv,
-      tag: active.tag,
+      encryptedKey: match.encryptedKey,
+      iv: match.iv,
+      tag: match.tag,
     };
   },
 });

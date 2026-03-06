@@ -10,11 +10,6 @@ function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function maskKey(key: string): string {
-  if (key.length <= 12) return key.substring(0, 4) + '****';
-  return key.substring(0, 8) + '...' + key.substring(key.length - 4);
-}
-
 function promptSecret(question: string): Promise<string> {
   return new Promise((resolve) => {
     const readline = require('readline');
@@ -80,8 +75,7 @@ export function registerKeysCommand(program: Command) {
       const items = (result as any[]) || [];
 
       if (opts.json) {
-        const safe = items.map((k: any) => ({ ...k, encryptedKey: maskKey(k.encryptedKey) }));
-        console.log(JSON.stringify(safe, null, 2));
+        console.log(JSON.stringify(items, null, 2));
         return;
       }
 
@@ -99,7 +93,6 @@ export function registerKeysCommand(program: Command) {
       table(items.map((k: any) => ({
         Provider: k.provider,
         Name: k.keyName,
-        Key: maskKey(k.encryptedKey),
         Active: k.isActive ? '✓' : '✗',
         Created: formatDate(k.createdAt),
         'Last Used': k.lastUsedAt ? formatDate(k.lastUsedAt) : 'Never',
@@ -131,10 +124,10 @@ export function registerKeysCommand(program: Command) {
       const keyName = opts.name || `${providerInfo.name} Key`;
       const client = await createClient();
       await safeCall(
-        () => client.mutation('apiKeys:create' as any, {
+        () => client.action('apiKeyActions:create' as any, {
           provider,
           keyName,
-          encryptedKey: key,
+          keyValue: key,
         }),
         'Failed to store API key'
       );
@@ -180,53 +173,32 @@ export function registerKeysCommand(program: Command) {
     .description('Test an API key by making a simple request')
     .action(async (provider) => {
       const client = await createClient();
-      const result = await safeCall(
+
+      // Check a key exists first (metadata only — no decrypted key returned)
+      const meta = await safeCall(
         () => client.query('apiKeys:getActiveForProvider' as any, { provider }),
-        'Failed to get key'
+        'Failed to get key metadata'
       );
+      if (!meta) {
+        error(`No active API key for "${provider}". Add one with: agentforge keys add ${provider}`);
+        process.exit(1);
+      }
 
-      if (!result) { error(`No active API key for "${provider}". Add one with: agentforge keys add ${provider}`); process.exit(1); }
-
-      const key = (result as any).encryptedKey;
       info(`Testing ${provider} API key...`);
 
-      try {
-        let ok = false;
-        if (provider === 'openai') {
-          const res = await fetch('https://api.openai.com/v1/models', { headers: { Authorization: `Bearer ${key}` } });
-          ok = res.ok;
-        } else if (provider === 'anthropic') {
-          const res = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'x-api-key': key, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: 'claude-3-haiku-20240307', max_tokens: 1, messages: [{ role: 'user', content: 'hi' }] }),
-          });
-          ok = res.ok;
-        } else if (provider === 'openrouter') {
-          const res = await fetch('https://openrouter.ai/api/v1/models', { headers: { Authorization: `Bearer ${key}` } });
-          ok = res.ok;
-        } else if (provider === 'google') {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${key}`);
-          ok = res.ok;
-        } else if (provider === 'groq') {
-          const res = await fetch('https://api.groq.com/openai/v1/models', { headers: { Authorization: `Bearer ${key}` } });
-          ok = res.ok;
-        } else {
-          info(`No test endpoint configured for "${provider}". Key is stored.`);
-          return;
-        }
+      const result = await safeCall(
+        () => client.action('apiKeyActions:testStoredKey' as any, { provider }),
+        'Failed to test API key'
+      ) as { ok: boolean; error?: string; latencyMs: number };
 
-        if (ok) {
-          success(`${provider} API key is valid and working.`);
-          await safeCall(
-            () => client.mutation('apiKeys:updateLastUsed' as any, { id: (result as any)._id }),
-            'Failed to update last used'
-          );
-        } else {
-          error(`${provider} API key returned an error. Check that the key is valid.`);
-        }
-      } catch (e: any) {
-        error(`Connection failed: ${e.message}`);
+      if (result.ok) {
+        success(`${provider} API key is valid and working.`);
+        await safeCall(
+          () => client.mutation('apiKeys:updateLastUsed' as any, { id: (meta as any)._id }),
+          'Failed to update last used'
+        );
+      } else {
+        error(`${provider} API key returned an error: ${result.error ?? 'unknown'}. Check that the key is valid.`);
       }
     });
 }
