@@ -807,6 +807,27 @@ function validateMessage(msg) {
   }
   return { valid: true };
 }
+function parseSseLine(line, onChunk, onError, stream, buffered) {
+  if (!line.startsWith("data: ")) return;
+  const data = line.slice(6);
+  if (data === "[DONE]") return;
+  try {
+    const parsed = JSON.parse(data);
+    const content = parsed.choices?.[0]?.delta?.content;
+    if (content) {
+      if (stream) {
+        onChunk(content);
+      } else {
+        buffered.value += content;
+      }
+    }
+    const errorMsg = parsed.error;
+    if (errorMsg && onError) {
+      onError(String(errorMsg));
+    }
+  } catch {
+  }
+}
 async function chatViaHttp(agentId, message, port, onChunk, onError, stream = true) {
   const response = await fetch(`http://localhost:${port}/v1/chat/completions`, {
     method: "POST",
@@ -828,37 +849,21 @@ async function chatViaHttp(agentId, message, port, onChunk, onError, stream = tr
   }
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
-  let buffered = "";
+  const buffered = { value: "" };
+  let sseBuffer = "";
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
-    const chunk = decoder.decode(value, { stream: true });
-    const lines = chunk.split("\n");
+    sseBuffer += decoder.decode(value, { stream: true });
+    const lines = sseBuffer.split("\n");
+    sseBuffer = lines.pop() ?? "";
     for (const line of lines) {
-      if (line.startsWith("data: ")) {
-        const data = line.slice(6);
-        if (data === "[DONE]") continue;
-        try {
-          const parsed = JSON.parse(data);
-          const content = parsed.choices?.[0]?.delta?.content;
-          if (content) {
-            if (stream) {
-              onChunk(content);
-            } else {
-              buffered += content;
-            }
-          }
-          const errorMsg = parsed.error;
-          if (errorMsg && onError) {
-            onError(String(errorMsg));
-          }
-        } catch {
-        }
-      }
+      parseSseLine(line, onChunk, onError, stream, buffered);
     }
   }
-  if (!stream && buffered) {
-    onChunk(buffered);
+  parseSseLine(sseBuffer, onChunk, onError, stream, buffered);
+  if (!stream && buffered.value) {
+    onChunk(buffered.value);
   }
 }
 function registerChatCommand(program2) {
@@ -3913,7 +3918,7 @@ function registerKeysCommand(program2) {
     const keyName = opts.name || `${providerInfo.name} Key`;
     const client = await createClient();
     await safeCall2(
-      () => client.mutation("apiKeys:create", {
+      () => client.action("apiKeys:create", {
         provider,
         keyName,
         encryptedKey: key
@@ -6635,7 +6640,7 @@ function registerStartCommand(program2) {
     dim("  Press Ctrl+C to stop");
     console.log();
     await keepAlive();
-    await Promise.all(shutdownFns.map((fn) => fn()));
+    await Promise.allSettled(shutdownFns.map((fn) => fn()));
   });
 }
 async function isPortInUse(port) {
