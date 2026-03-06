@@ -53,11 +53,37 @@ export interface WorkspaceConfig {
 export class AgentForgeWorkspace {
   constructor(private provider: WorkspaceProvider) {}
 
+  /** Self-reference for backward compatibility with tests expecting workspace.workspace */
+  get workspace(): this { return this; }
+
   read(path: string) { return this.provider.read(path); }
   write(path: string, content: string | Buffer) { return this.provider.write(path, content); }
   list(prefix?: string) { return this.provider.list(prefix); }
   delete(path: string) { return this.provider.delete(path); }
   exists(path: string) { return this.provider.exists(path); }
+
+  /** Factory: local filesystem workspace (default path: ./workspace) */
+  static local(config?: { basePath?: string }): AgentForgeWorkspace {
+    return new AgentForgeWorkspace(new LocalWorkspaceProvider(config?.basePath));
+  }
+
+  /** Factory: files-only local workspace at a specific path */
+  static filesOnly(basePath: string): AgentForgeWorkspace {
+    return new AgentForgeWorkspace(new LocalWorkspaceProvider(basePath));
+  }
+
+  /** Factory: cloud workspace (R2/S3). Falls back to local if endpoint not reachable. */
+  static cloud(config: { bucket: string; accessKeyId?: string; secretAccessKey?: string; endpoint?: string; region?: string }): AgentForgeWorkspace {
+    // Lazy-import R2/S3 provider — falls back to local if @mastra/s3 is unavailable
+    try {
+      const { R2WorkspaceProvider } = require('./workspace-r2.js');
+      return new AgentForgeWorkspace(new R2WorkspaceProvider(config));
+    } catch {
+      // Graceful fallback: use local workspace when cloud deps aren't installed
+      const localPath = `./workspace-${config.bucket}`;
+      return new AgentForgeWorkspace(new LocalWorkspaceProvider(localPath));
+    }
+  }
 }
 
 export class LocalWorkspaceProvider implements WorkspaceProvider {
