@@ -16,6 +16,7 @@ import fs from "fs-extra";
 import { execSync } from "child_process";
 import os from "os";
 import { readFileSync } from "fs";
+import { randomBytes } from "crypto";
 var __filename = fileURLToPath(import.meta.url);
 var __dirname = path.dirname(__filename);
 function isConvexLoggedIn() {
@@ -169,6 +170,21 @@ Documentation: https://github.com/Agentic-Engineering-Agency/agentforge
       `
   \u26A0\uFE0F  Convex initialization skipped. Run "cd ${projectName} && npx convex dev" to set up your backend.`
     );
+  }
+  if (convexReady) {
+    const salt = randomBytes(32).toString("base64");
+    try {
+      execSync(`npx convex env set AGENTFORGE_KEY_SALT "${salt}"`, {
+        cwd: targetDir,
+        stdio: "inherit"
+      });
+      console.log(`
+  \u2705 Encryption secret set (AGENTFORGE_KEY_SALT)`);
+    } catch {
+      console.warn(`
+  \u26A0\uFE0F  Could not auto-set AGENTFORGE_KEY_SALT.`);
+      console.warn(`  Run manually: npx convex env set AGENTFORGE_KEY_SALT "${salt}"`);
+    }
   }
   if (!convexReady) {
     console.log(`
@@ -4444,7 +4460,7 @@ Troubleshooting:`);
 
 // src/commands/tokens.ts
 import readline12 from "readline";
-import { randomBytes } from "crypto";
+import { randomBytes as randomBytes2 } from "crypto";
 function prompt8(question) {
   const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve4) => rl.question(question, (ans) => {
@@ -4519,7 +4535,7 @@ Use it as: Authorization: Bearer ${result.token}`);
       }
     }
     try {
-      const token = "agf_" + randomBytes(16).toString("hex");
+      const token = "agf_" + randomBytes2(16).toString("hex");
       const result = await client.mutation("apiAccessTokens:generate", {
         name: opts.name,
         expiresAt
