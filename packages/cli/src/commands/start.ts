@@ -135,9 +135,10 @@ export function registerStartCommand(program: Command) {
       const mastraAgents: any[] = [];
       for (const agentConfig of agents) {
         try {
+          // Mastra uses provider/model format (slash separator)
           const modelStr = agentConfig.provider && agentConfig.model
-            ? `${agentConfig.provider}:${agentConfig.model}`
-            : agentConfig.model || 'openai:gpt-4o-mini';
+            ? `${agentConfig.provider}/${agentConfig.model}`
+            : agentConfig.model || 'openai/gpt-4o-mini';
           const agent = _createStandardAgent({
             id: agentConfig.id ?? agentConfig._id,
             name: agentConfig.name ?? 'Agent',
