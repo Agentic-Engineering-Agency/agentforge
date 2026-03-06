@@ -14,7 +14,7 @@ export const webSearchTool = createTool({
   execute: async ({ query, count = 5 }) => {
     const apiKey = process.env.BRAVE_API_KEY;
     if (!apiKey) {
-      console.error("[web-search] Error:", err instanceof Error ? err.message : String(err));
+      console.error("[web-search] Error: BRAVE_API_KEY not set");
       return { results: [] };
     }
 
@@ -31,8 +31,8 @@ export const webSearchTool = createTool({
         },
       });
       if (!response.ok) {
-        console.error("[web-search] Error:", err instanceof Error ? err.message : String(err));
-      return { results: [] };
+        console.error(`[web-search] Error: HTTP ${response.status} ${response.statusText}`);
+        return { results: [] };
       }
       const data = await response.json();
       const results = (data.web?.results || []).slice(0, count).map((r: any) => ({
