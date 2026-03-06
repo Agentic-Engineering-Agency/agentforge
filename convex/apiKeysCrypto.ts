@@ -10,11 +10,15 @@ declare const process: { env: Record<string, string | undefined> };
  * Retrieves the AGENTFORGE_KEY_SALT at runtime (not module-load time).
  * This is REQUIRED for production use — called lazily inside action handlers
  * so Convex module analysis doesn't fail.
+ * Minimum length of 32 characters is enforced for adequate entropy.
  */
 function getSalt(): string {
   const salt = process.env.AGENTFORGE_KEY_SALT;
   if (!salt || salt.length === 0) {
     throw new Error("AGENTFORGE_KEY_SALT environment variable is required and must not be empty");
+  }
+  if (salt.length < 32) {
+    throw new Error("AGENTFORGE_KEY_SALT must be at least 32 characters long");
   }
   return salt;
 }
@@ -23,9 +27,9 @@ function getSalt(): string {
  * Derives a cryptographic key from the salt using HKDF-SHA256.
  * Uses empty info and salt strings as per Convex best practices.
  */
-function deriveKey(salt?: string): Buffer {
-  const effectiveSalt = salt ?? getSalt();
-  return Buffer.from(crypto.hkdfSync("sha256", Buffer.from(effectiveSalt, "utf8"), Buffer.alloc(0), "agentforge-api-key-v1", 32));
+function deriveKey(): Buffer {
+  const salt = getSalt();
+  return Buffer.from(crypto.hkdfSync("sha256", Buffer.from(salt, "utf8"), Buffer.alloc(0), "agentforge-api-key-v1", 32));
 }
 
 /**

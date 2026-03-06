@@ -19,9 +19,13 @@ export const registerTelegramWebhook = action({
     const { connectionId, webhookUrl } = args;
 
     // Get the decrypted bot token
-    const connectionData = await ctx.runQuery(internal.channelConnections.getDecryptedBotToken, {
+    const connectionData = await ctx.runAction(internal.channelConnectionsActions.getDecryptedBotToken, {
       connectionId,
     });
+
+    if (!connectionData) {
+      throw new Error("Channel connection not found or bot token missing");
+    }
 
     const { botToken, botUsername } = connectionData;
 

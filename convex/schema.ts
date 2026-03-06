@@ -696,6 +696,7 @@ export default defineSchema({
     config: v.object({
       botToken: v.optional(v.string()), // encrypted
       iv: v.optional(v.string()), // initialization vector for decryption
+      salt: v.optional(v.string()), // random PBKDF2 salt (base64-encoded)
       webhookSecret: v.optional(v.string()),
       teamId: v.optional(v.string()), // Slack
       botUsername: v.optional(v.string()),

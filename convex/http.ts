@@ -616,9 +616,13 @@ http.route({
     // Send reply via Telegram Bot API
     try {
       // Get decrypted bot token
-      const botTokenData = await ctx.runQuery(internal.channelConnections.getDecryptedBotToken, {
+      const botTokenData = await ctx.runAction(internal.channelConnectionsActions.getDecryptedBotToken, {
         connectionId: connectionId as any,
       });
+
+      if (!botTokenData) {
+        throw new Error("Bot token not found for connection");
+      }
 
       // Send message to Telegram
       const telegramApiUrl = `https://api.telegram.org/bot${botTokenData.botToken}/sendMessage`;
