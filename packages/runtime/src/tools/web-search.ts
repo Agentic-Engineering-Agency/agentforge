@@ -14,6 +14,7 @@ export const webSearchTool = createTool({
   execute: async ({ query, count = 5 }) => {
     const apiKey = process.env.BRAVE_API_KEY;
     if (!apiKey) {
+      console.error("[web-search] Error:", err instanceof Error ? err.message : String(err));
       return { results: [] };
     }
 
@@ -30,7 +31,8 @@ export const webSearchTool = createTool({
         },
       });
       if (!response.ok) {
-        return { results: [] };
+        console.error("[web-search] Error:", err instanceof Error ? err.message : String(err));
+      return { results: [] };
       }
       const data = await response.json();
       const results = (data.web?.results || []).slice(0, count).map((r: any) => ({
@@ -39,7 +41,8 @@ export const webSearchTool = createTool({
         snippet: r.description || '',
       }));
       return { results };
-    } catch {
+    } catch (err) {
+      console.error("[web-search] Error:", err instanceof Error ? err.message : String(err));
       return { results: [] };
     }
   },

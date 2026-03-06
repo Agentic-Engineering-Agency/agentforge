@@ -74,3 +74,8 @@ export function createStandardMemory(opts?: StandardMemoryOptions): Memory {
     },
   });
 }
+
+/** Returns true if initStorage() has been called. Use to guard createStandardAgent() calls. */
+export function isStorageInitialized(): boolean {
+  return _storage !== null && _vector !== null;
+}
