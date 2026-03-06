@@ -1,18 +1,99 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
-import {
-  mastraThreadsTable,
-  mastraMessagesTable,
-  mastraResourcesTable,
-  mastraWorkflowSnapshotsTable,
-  mastraScoresTable,
-  mastraVectorIndexesTable,
-  mastraVectorsTable,
-  mastraDocumentsTable,
-} from "@mastra/convex/schema";
+// ─── Mastra memory tables (inlined — no @mastra/* deps needed in generated projects) ──
+const mastraThreadsTable = defineTable({
+  id: v.optional(v.string()),
+  resourceId: v.optional(v.string()),
+  title: v.optional(v.string()),
+  metadata: v.optional(v.string()),
+  createdAt: v.string(),
+  updatedAt: v.string(),
+}).index("by_record_id", ["id"]).index("by_resource", ["resourceId"]).index("by_created", ["createdAt"]).index("by_updated", ["updatedAt"]);
+
+const mastraMessagesTable = defineTable({
+  id: v.optional(v.string()),
+  thread_id: v.optional(v.string()),
+  content: v.any(),
+  role: v.optional(v.string()),
+  type: v.optional(v.string()),
+  createdAt: v.string(),
+  resourceId: v.optional(v.string()),
+}).index("by_record_id", ["id"]).index("by_thread", ["thread_id"]).index("by_thread_created", ["thread_id", "createdAt"]).index("by_resource", ["resourceId"]);
+
+const mastraResourcesTable = defineTable({
+  id: v.optional(v.string()),
+  workingMemory: v.optional(v.string()),
+  metadata: v.optional(v.string()),
+  createdAt: v.string(),
+  updatedAt: v.string(),
+}).index("by_record_id", ["id"]).index("by_updated", ["updatedAt"]);
+
+const mastraWorkflowSnapshotsTable = defineTable({
+  id: v.optional(v.string()),
+  workflow_name: v.string(),
+  run_id: v.string(),
+  resourceId: v.optional(v.string()),
+  snapshot: v.any(),
+  createdAt: v.string(),
+  updatedAt: v.string(),
+}).index("by_record_id", ["id"]).index("by_workflow_run", ["workflow_name", "run_id"]).index("by_workflow", ["workflow_name"]).index("by_resource", ["resourceId"]).index("by_created", ["createdAt"]);
+
+const mastraScoresTable = defineTable({
+  id: v.optional(v.string()),
+  scorerId: v.optional(v.string()),
+  traceId: v.optional(v.string()),
+  spanId: v.optional(v.string()),
+  runId: v.optional(v.string()),
+  scorer: v.optional(v.any()),
+  preprocessStepResult: v.optional(v.any()),
+  extractStepResult: v.optional(v.any()),
+  analyzeStepResult: v.optional(v.any()),
+  score: v.optional(v.number()),
+  reason: v.optional(v.string()),
+  metadata: v.optional(v.any()),
+  preprocessPrompt: v.optional(v.string()),
+  extractPrompt: v.optional(v.string()),
+  generateScorePrompt: v.optional(v.string()),
+  generateReasonPrompt: v.optional(v.string()),
+  analyzePrompt: v.optional(v.string()),
+  reasonPrompt: v.optional(v.string()),
+  input: v.optional(v.any()),
+  output: v.optional(v.any()),
+  additionalContext: v.optional(v.any()),
+  requestContext: v.optional(v.any()),
+  entityType: v.optional(v.string()),
+  entity: v.optional(v.any()),
+  entityId: v.optional(v.string()),
+  source: v.optional(v.string()),
+  resourceId: v.optional(v.string()),
+  threadId: v.optional(v.string()),
+  createdAt: v.string(),
+  updatedAt: v.string(),
+}).index("by_record_id", ["id"]).index("by_scorer", ["scorerId"]).index("by_entity", ["entityId", "entityType"]).index("by_run", ["runId"]).index("by_created", ["createdAt"]);
+
+const mastraVectorIndexesTable = defineTable({
+  id: v.string(),
+  indexName: v.string(),
+  dimension: v.number(),
+  metric: v.string(),
+  createdAt: v.string(),
+}).index("by_record_id", ["id"]).index("by_name", ["indexName"]);
+
+const mastraVectorsTable = defineTable({
+  id: v.string(),
+  indexName: v.string(),
+  embedding: v.array(v.float64()),
+  metadata: v.optional(v.any()),
+}).index("by_index_id", ["indexName", "id"]).index("by_index", ["indexName"]);
+
+const mastraDocumentsTable = defineTable({
+  table: v.string(),
+  primaryKey: v.string(),
+  record: v.any(),
+}).index("by_table", ["table"]).index("by_table_primary", ["table", "primaryKey"]);
 
 export default defineSchema({
-  // --- Mastra memory tables (managed by @mastra/convex from the daemon) ---
+  // --- Mastra memory tables (inlined — managed by the AgentForge runtime daemon) ---
   // These tables store agent memory, threads, messages, and vectors
   mastra_threads: mastraThreadsTable,
   mastra_messages: mastraMessagesTable,
