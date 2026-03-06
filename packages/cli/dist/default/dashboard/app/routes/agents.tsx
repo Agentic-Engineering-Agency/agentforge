@@ -28,24 +28,14 @@ const FALLBACK_MODELS: Record<string, string[]> = {
  * Live model fetching removed in v0.12 — models are managed by the runtime daemon.
  */
 function useProviderModels(provider: string) {
+  // Static models only — live fetch removed in SPEC-022.
+  // The runtime daemon resolves provider models at startup via agentforge.config.ts.
   const [models, setModels] = useState<string[]>(FALLBACK_MODELS[provider] ?? []);
-  const [loading] = useState(false);
+  const loading = false;
 
   useEffect(() => {
     setModels(FALLBACK_MODELS[provider] ?? []);
-    if (!provider) return;
-    // Static models only — live fetch was removed in SPEC-022.
-    // The runtime daemon resolves provider models at startup via agentforge.config.ts.
-    if (false) {
-      // dead code preserved for diff readability
-      if (false) {
-          setModels(FALLBACK_MODELS[provider] ?? []);
-        }
-      })
-      .catch(() => { if (!cancelled) setModels(FALLBACK_MODELS[provider] ?? []); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [provider]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [provider]);
 
   return { models, loading };
 }
