@@ -89,7 +89,7 @@ function ChatPageComponent() {
 
   // ── Convex mutations & actions ──────────────────────────────
   const createThread = useMutation(api.threads.createThread);
-  const sendMessageAction = useAction(api.chat.sendMessage);
+  // NOTE: chat.sendMessage removed in v0.12 — messages are sent via runtime daemon HTTP API.
 
   // ── Local state ─────────────────────────────────────────────
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
@@ -206,16 +206,23 @@ function ChatPageComponent() {
         setCurrentThreadId(threadId);
       }
 
-      // Call the Convex action — this stores user message, calls LLM,
-      // and stores assistant response. The useQuery subscription above
-      // will automatically pick up both new messages in real-time.
-      await sendMessageAction({
-        agentId: currentAgentId,
-        threadId: threadId as Id<"threads">,
-        content: messageText,
-        // AGE-144: Include attached file IDs
-        fileIds: attachedFiles.map(f => f.id as Id<"files">),
+      // Send message to runtime daemon via HTTP — daemon handles LLM and stores response.
+      // The useQuery subscription above will pick up new messages in real-time.
+      const daemonUrl = (window as any).__AGENTFORGE_DAEMON_URL__ ?? "http://localhost:3001";
+      const resp = await fetch(`${daemonUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: currentAgentId,
+          threadId: threadId,
+          message: messageText,
+          fileIds: attachedFiles.map((f: { id: string }) => f.id),
+        }),
       });
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => resp.statusText);
+        throw new Error(`Daemon error: ${errText}`);
+      }
 
       // Clear attachments after sending
       setAttachedFiles([]);
