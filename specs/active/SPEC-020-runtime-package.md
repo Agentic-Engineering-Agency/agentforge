@@ -76,10 +76,19 @@ export function createStandardAgent(config: StandardAgentConfig): Agent
 export const DAEMON_MODEL = "moonshotai/kimi-k2.5" // cheap, capable default
 export const OBSERVER_MODEL = "google/gemini-2.5-flash"
 export const EMBEDDING_MODEL = "google/gemini-embedding-001"
-export const DB_URL = `file:${process.cwd()}/agentforge.db`
 
+// Memory uses ConvexStore (not LibSQL) — persists to Convex for dashboard visibility
+// Requires: CONVEX_URL + CONVEX_ADMIN_KEY in env
+export function createStorage(): ConvexStore
+export function createVector(): ConvexVector
 export function createStandardMemory(opts?: StandardMemoryOptions): Memory
 ```
+
+**Why ConvexStore instead of LibSQL:**
+- Central daemon = one shared database, not a per-project SQLite file
+- Memory (threads, messages, working memory) is visible in the real-time dashboard
+- No local file management
+- Caveat: 1 MiB max record size — avoid storing base64 attachments inline
 
 ### `AgentForgeDaemon` class
 ```typescript
@@ -134,7 +143,9 @@ Cover all 8 providers: openai, anthropic, google, mistral, deepseek, xai, openro
 
 ## References
 - Chico implementation: `/tmp/chico/src/mastra/`
-- Mastra docs: https://mastra.ai/docs
-- `@mastra/core` docs: https://mastra.ai/docs/reference/agents/create-agent
-- `@mastra/memory` docs: https://mastra.ai/docs/reference/memory/Memory
-- `@mastra/libsql` docs: https://mastra.ai/docs/reference/storage/libsql
+- Mastra agents: https://mastra.ai/docs/agents/overview
+- Mastra memory: https://mastra.ai/docs/memory/overview
+- Mastra tools reference: https://mastra.ai/reference/tools/tool
+- @mastra/convex storage: https://mastra.ai/reference/storage/convex
+- @mastra/convex vectors: https://mastra.ai/reference/vectors/convex
+- Tech reference: `docs/TECH-REFERENCE.md` (sections 3, 5, 7)
