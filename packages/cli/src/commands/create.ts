@@ -4,6 +4,7 @@ import fs from 'fs-extra';
 import { execSync } from 'node:child_process';
 import os from 'node:os';
 import { readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -192,6 +193,22 @@ Documentation: https://github.com/Agentic-Engineering-Agency/agentforge
     console.warn(
       `\n  ⚠️  Convex initialization skipped. Run "cd ${projectName} && npx convex dev" to set up your backend.`
     );
+  }
+
+  // Auto-set AGENTFORGE_KEY_SALT in the Convex deployment so API key encryption
+  // works out of the box. Without this, `agentforge keys add` fails immediately.
+  if (convexReady) {
+    const salt = randomBytes(32).toString('base64');
+    try {
+      execSync(`npx convex env set AGENTFORGE_KEY_SALT "${salt}"`, {
+        cwd: targetDir,
+        stdio: 'inherit',
+      });
+      console.log(`\n  ✅ Encryption secret set (AGENTFORGE_KEY_SALT)`);
+    } catch {
+      console.warn(`\n  ⚠️  Could not auto-set AGENTFORGE_KEY_SALT.`);
+      console.warn(`  Run manually: npx convex env set AGENTFORGE_KEY_SALT "${salt}"`);
+    }
   }
 
   if (!convexReady) {
