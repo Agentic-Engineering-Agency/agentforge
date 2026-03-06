@@ -146,7 +146,7 @@ export function registerStartCommand(program: Command) {
 
       // Wait for shutdown signal, then close all channels gracefully
       await keepAlive();
-      await Promise.all(shutdownFns.map((fn) => fn()));
+      await Promise.allSettled(shutdownFns.map((fn) => fn()));
     });
 }
 
