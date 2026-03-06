@@ -91,6 +91,7 @@ export function registerAgentsCommand(program: Command) {
 
   agents
     .command('inspect')
+    .alias('get')
     .argument('<id>', 'Agent ID')
     .description('Show detailed agent information')
     .action(async (id) => {

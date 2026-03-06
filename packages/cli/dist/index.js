@@ -659,7 +659,7 @@ function registerAgentsCommand(program2) {
     );
     success(`Agent "${name}" created with ID: ${agentId}`);
   });
-  agents.command("inspect").argument("<id>", "Agent ID").description("Show detailed agent information").action(async (id) => {
+  agents.command("inspect").alias("get").argument("<id>", "Agent ID").description("Show detailed agent information").action(async (id) => {
     const client = await createClient();
     const agent = await safeCall(
       () => client.query("agents:get", { id }),
@@ -3816,6 +3816,8 @@ function formatDate4(ts) {
   return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 function maskKey(key) {
+  if (!key) return "****";
+  if (!key) return "****";
   if (key.length <= 12) return key.substring(0, 4) + "****";
   return key.substring(0, 8) + "..." + key.substring(key.length - 4);
 }
