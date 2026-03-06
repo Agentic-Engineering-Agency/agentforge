@@ -153,15 +153,17 @@ export function registerWorkspaceCommand(program: Command) {
       try {
         info(`Creating ${storage} workspace...`);
         const workspace = createWorkspace(config);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Workspace filesystem methods vary by backend
+        const fs = (workspace as any).filesystem ?? workspace;
 
         const testPath = `agentforge-test-${Date.now()}.txt`;
         const testContent = `AgentForge workspace test at ${new Date().toISOString()}`;
 
         info(`Writing test file: ${testPath}`);
-        await workspace.write(testPath, testContent);
+        await fs.write(testPath, testContent);
 
         info(`Reading test file...`);
-        const readContent = await workspace.read(testPath);
+        const readContent = await fs.read(testPath);
 
         if (readContent === testContent) {
           success(`✓ Storage test passed!`);
@@ -169,7 +171,7 @@ export function registerWorkspaceCommand(program: Command) {
 
           // Clean up test file
           info(`Cleaning up test file...`);
-          await workspace.delete(testPath);
+          await fs.delete(testPath);
           success(`✓ Test file deleted`);
 
           info(`\n✓ ${storage.toUpperCase()} storage is working correctly.`);
