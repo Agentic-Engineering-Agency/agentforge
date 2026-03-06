@@ -10,7 +10,9 @@ function formatDate(ts: number): string {
   return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
-function maskKey(key: string): string {
+function maskKey(key: string | undefined | null): string {
+  if (!key) return "****";
+  if (!key) return "****";
   if (key.length <= 12) return key.substring(0, 4) + '****';
   return key.substring(0, 8) + '...' + key.substring(key.length - 4);
 }
