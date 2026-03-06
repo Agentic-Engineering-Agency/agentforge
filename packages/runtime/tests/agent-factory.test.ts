@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createStandardAgent } from '../src/agent/create-standard-agent.js';
 import { initStorage } from '../src/agent/shared.js';
 import { Agent } from '@mastra/core/agent';
+import { AgentForgeDaemon } from '../src/daemon/daemon.js';
 
 describe('Agent Factory', () => {
   beforeEach(() => {
@@ -105,6 +106,54 @@ describe('Agent Factory', () => {
         disableMemory: true,
       });
       expect(agent).toBeDefined();
+    });
+  });
+
+  describe('AgentForgeDaemon', () => {
+    it('loadAgents registers agents and listAgents returns them', async () => {
+      const daemon = new AgentForgeDaemon({
+        deploymentUrl: 'https://mock.convex.cloud',
+        adminAuthToken: 'mock-admin-key',
+      });
+      await daemon.loadAgents([
+        { id: 'a1', name: 'A1', instructions: 'Test agent' },
+      ]);
+      const list = daemon.listAgents();
+      expect(list).toHaveLength(1);
+      expect(list[0].id).toBe('a1');
+      expect(list[0].name).toBe('A1');
+    });
+
+    it('getAgent returns the loaded agent', async () => {
+      const daemon = new AgentForgeDaemon({
+        deploymentUrl: 'https://mock.convex.cloud',
+        adminAuthToken: 'mock-admin-key',
+      });
+      await daemon.loadAgents([{ id: 'agent-x', name: 'Agent X', instructions: 'Hello' }]);
+      const agent = daemon.getAgent('agent-x');
+      expect(agent).toBeDefined();
+      expect(agent).toBeInstanceOf(Agent);
+    });
+
+    it('listAgents returns definitions without unsafe casts', async () => {
+      const daemon = new AgentForgeDaemon({
+        deploymentUrl: 'https://mock.convex.cloud',
+        adminAuthToken: 'mock-admin-key',
+      });
+      const def = {
+        id: 'agent-y',
+        name: 'Agent Y',
+        description: 'A description',
+        instructions: 'Be helpful.',
+        model: 'openai/gpt-4o',
+      };
+      await daemon.loadAgents([def]);
+      const [result] = daemon.listAgents();
+      expect(result.id).toBe(def.id);
+      expect(result.name).toBe(def.name);
+      expect(result.description).toBe(def.description);
+      expect(result.instructions).toBe(def.instructions);
+      expect(result.model).toBe(def.model);
     });
   });
 });

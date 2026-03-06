@@ -1,10 +1,11 @@
 import type { Agent } from '@mastra/core/agent';
-import { initStorage } from '../agent/shared.js';
+import { initStorage, isStorageInitialized } from '../agent/shared.js';
 import { createStandardAgent } from '../agent/create-standard-agent.js';
 import type { ChannelAdapter, AgentDefinition, DaemonConfig } from './types.js';
 
 export class AgentForgeDaemon {
   private agents = new Map<string, Agent>();
+  private definitions = new Map<string, AgentDefinition>();
   private channels: ChannelAdapter[] = [];
 
   constructor(config: DaemonConfig = {}) {
@@ -14,6 +15,11 @@ export class AgentForgeDaemon {
   }
 
   async loadAgents(definitions: AgentDefinition[]): Promise<void> {
+    if (!isStorageInitialized()) {
+      throw new Error(
+        'Storage not initialized. Ensure the daemon constructor received valid deploymentUrl and adminAuthToken, or call initStorage() explicitly before loading agents.',
+      );
+    }
     for (const def of definitions) {
       const agent = createStandardAgent({
         id: def.id,
@@ -24,6 +30,7 @@ export class AgentForgeDaemon {
         workingMemoryTemplate: def.workingMemoryTemplate,
       });
       this.agents.set(def.id, agent);
+      this.definitions.set(def.id, def);
     }
   }
 
@@ -44,16 +51,6 @@ export class AgentForgeDaemon {
   }
 
   listAgents(): AgentDefinition[] {
-    return Array.from(this.agents.entries()).map(([id, agent]) => {
-      return {
-        id,
-        name: agent.name,
-        description: (agent as any).description,
-        instructions: typeof (agent as any).instructions === 'string' ? (agent as any).instructions : '',
-        model: typeof agent.model === 'string' ? agent.model : undefined,
-        tools: [],
-        workingMemoryTemplate: undefined,
-      };
-    });
+    return Array.from(this.definitions.values());
   }
 }

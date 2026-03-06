@@ -379,3 +379,23 @@ export function getContextLimit(modelId: string): number {
   const model = getModel(modelId);
   return model?.contextWindow ?? 100000;
 }
+
+/**
+ * Resolve a model ID to a registry entry, with optional fallback chain.
+ * Returns the requested model if found; otherwise walks `fallbacks` in order
+ * and returns the first one present in the registry.
+ * Falls back to `moonshotai/kimi-k2.5` (the daemon default) if nothing matches.
+ */
+export function resolveModel(id: string, fallbacks: string[] = []): ModelEntry {
+  const direct = getModel(id);
+  if (direct) return direct;
+
+  for (const fb of fallbacks) {
+    const entry = getModel(fb);
+    if (entry) return entry;
+  }
+
+  // Last-resort daemon default — moonshotai/kimi-k2.5 is always present in MODELS above,
+  // so this assertion is safe as long as the static MODELS array is not mutated at runtime.
+  return MODEL_MAP.get('moonshotai/kimi-k2.5')!;
+}
