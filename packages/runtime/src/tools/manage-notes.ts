@@ -1,10 +1,12 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const NOTES_PATH = join(dirname(fileURLToPath(import.meta.url)), '../../data/notes.json');
+// Resolve notes path from CWD so it works whether running from source or compiled dist.
+// Override with AGENTFORGE_NOTES_PATH env var for custom locations.
+const NOTES_PATH = process.env.AGENTFORGE_NOTES_PATH
+  ?? join(process.cwd(), 'data', 'notes.json');
 
 interface Note {
   id: string;
@@ -27,6 +29,7 @@ function loadNotes(): Note[] {
 }
 
 function saveNotes(notes: Note[]): void {
+  mkdirSync(dirname(NOTES_PATH), { recursive: true });
   writeFileSync(NOTES_PATH, JSON.stringify(notes, null, 2), 'utf-8');
 }
 

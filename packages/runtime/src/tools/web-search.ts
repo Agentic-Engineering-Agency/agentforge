@@ -1,11 +1,13 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 
+const BRAVE_MAX_QUERY_LENGTH = 400;
+
 export const webSearchTool = createTool({
   id: 'web-search',
   description: 'Search the web for current information.',
   inputSchema: z.object({
-    query: z.string(),
+    query: z.string().max(BRAVE_MAX_QUERY_LENGTH),
     count: z.number().optional(),
   }),
   outputSchema: z.object({
@@ -18,7 +20,10 @@ export const webSearchTool = createTool({
     }
 
     try {
-      const response = await fetch('https://api.search.brave.com/res/v1/web/search', {
+      const url = new URL('https://api.search.brave.com/res/v1/web/search');
+      url.searchParams.set('q', query);
+      url.searchParams.set('count', String(count));
+      const response = await fetch(url.toString(), {
         method: 'GET',
         headers: {
           'Accept': 'application/json',

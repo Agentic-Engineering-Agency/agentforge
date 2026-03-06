@@ -5,6 +5,7 @@ import type { ChannelAdapter, AgentDefinition, DaemonConfig } from './types.js';
 
 export class AgentForgeDaemon {
   private agents = new Map<string, Agent>();
+  private definitions = new Map<string, AgentDefinition>();
   private channels: ChannelAdapter[] = [];
 
   constructor(config: DaemonConfig = {}) {
@@ -24,6 +25,7 @@ export class AgentForgeDaemon {
         workingMemoryTemplate: def.workingMemoryTemplate,
       });
       this.agents.set(def.id, agent);
+      this.definitions.set(def.id, def);
     }
   }
 
@@ -44,16 +46,6 @@ export class AgentForgeDaemon {
   }
 
   listAgents(): AgentDefinition[] {
-    return Array.from(this.agents.entries()).map(([id, agent]) => {
-      return {
-        id,
-        name: agent.name,
-        description: (agent as any).description,
-        instructions: typeof (agent as any).instructions === 'string' ? (agent as any).instructions : '',
-        model: typeof agent.model === 'string' ? agent.model : undefined,
-        tools: [],
-        workingMemoryTemplate: undefined,
-      };
-    });
+    return Array.from(this.definitions.values());
   }
 }
