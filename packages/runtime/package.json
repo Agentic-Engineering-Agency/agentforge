@@ -1,0 +1,56 @@
+{
+  "name": "@agentforge-ai/runtime",
+  "version": "0.1.0",
+  "description": "Mastra persistent daemon runtime for AgentForge",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ai-sdk/moonshotai": "^2.0.0",
+    "@mastra/convex": "latest",
+    "@mastra/core": "^1.8.0",
+    "@mastra/memory": "^1.5.0",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@mozilla/readability": "^0.6.0",
+    "@types/jsdom": "^28.0.0",
+    "@types/node": "^22.0.0",
+    "jsdom": "^28.1.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0",
+    "vitest": "^3.0.0"
+  },
+  "keywords": [
+    "agentforge",
+    "runtime",
+    "mastra",
+    "ai",
+    "agents",
+    "daemon"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Agentic-Engineering-Agency/agentforge.git",
+    "directory": "packages/runtime"
+  }
+}
