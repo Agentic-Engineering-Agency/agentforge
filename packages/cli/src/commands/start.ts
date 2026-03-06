@@ -107,7 +107,7 @@ export function registerStartCommand(program: Command) {
       if (!opts.noHttp) {
         info(`Starting HTTP channel on port ${port}...`);
 
-        const httpModulePath = resolve(__dirname, '../lib/http-channel.js');
+        const httpModulePath = resolve(__dirname, './lib/http-channel.js');
 
         try {
           const { startHttpChannel } = await import(httpModulePath);
