@@ -25,13 +25,17 @@ export const executeTask = internalAction({
     const modelId = (agent as any).model || "gpt-4o-mini";
 
     try {
-      const result = await ctx.runAction(api.mastraIntegration.executeAgent, {
-        agentId: args.agentId,
-        prompt: args.task,
+      // NOTE: LLM execution moved to runtime daemon (SPEC-020).
+      // Store the task as a message; daemon processes it asynchronously.
+      const result = await ctx.runMutation(internal.messages.create, {
         threadId: args.threadId,
+        content: args.task,
+        role: "user" as const,
+        agentId: args.agentId,
       });
+      const _result = result; // daemon will respond via channel adapter
 
-      return { success: true, response: (result as any).response };
+      return { success: true, response: "Message queued for daemon processing" };
     } catch (err: unknown) {
       const error = err instanceof Error ? err.message : String(err);
       return { success: false, error };

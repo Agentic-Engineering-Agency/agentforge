@@ -388,47 +388,23 @@ export const executeJob = internalAction({
     let status: "success" | "failed" = "success";
 
     try {
-      // Import Agent class
-      const { Agent: AgentClass } = await import("./lib/agent");
-      const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
-
-      // Get the agent configuration
+      // NOTE: LLM execution moved to runtime daemon (SPEC-020).
+      // Store the cron task as a thread message; daemon processes it asynchronously.
       const agent = await ctx.runQuery(api.agents.get, { id: job.agentId });
-      if (!agent) {
-        throw new Error(`Agent not found: ${job.agentId}`);
-      }
+      if (!agent) throw new Error(`Agent not found: ${job.agentId}`);
 
-      // Get API key for the provider
-      const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
-        provider: agent.provider || "openrouter",
+      const thread = await ctx.runMutation(internal.threads.createInternal, {
+        agentId: job.agentId,
+        title: `Cron: ${job.name || args.jobId}`,
+      });
+      await ctx.runMutation(internal.messages.create, {
+        threadId: thread,
+        content: job.prompt || "Execute scheduled task.",
+        role: "user" as const,
+        agentId: job.agentId,
       });
 
-      if (!apiKeyData || !apiKeyData.apiKey) {
-        throw new Error(`No API key found for provider: ${agent.provider}`);
-      }
-
-      // Create agent instance
-      const mastraAgent = new AgentClass({
-        id: job.agentId,
-        name: agent.name,
-        instructions: agent.instructions || "You are a helpful AI assistant.",
-        model: {
-          providerId: agent.provider || "openrouter",
-          modelId: getBaseModelId(agent.provider || "openrouter", agent.model || "gpt-4o-mini"),
-          apiKey: apiKeyData.apiKey,
-          url: getProviderBaseUrl(agent.provider || "openrouter"),
-        },
-        temperature: agent.temperature,
-        maxTokens: agent.maxTokens,
-      });
-
-      // Execute the agent with the cron job prompt
-      let fullResponse = "";
-      for await (const chunk of mastraAgent.stream(job.prompt || "Execute scheduled task.")) {
-        fullResponse += chunk.content;
-      }
-
-      output = fullResponse;
+      output = "Task queued for daemon processing";
       status = "success";
     } catch (err) {
       error = err instanceof Error ? err.message : String(err);

@@ -63,18 +63,11 @@ export class ResearchOrchestrator {
     const { providerId, modelId, apiKey, url } = options;
 
     // Create base agent configuration
-    const baseConfig = {
-      id: "research-agent",
-      name: "Research Agent",
+    const baseConfig: AgentConfig = {
+      provider: providerId,
+      modelId,
+      apiKey,
       instructions: this.getResearchInstructions(),
-      model: {
-        providerId,
-        modelId,
-        apiKey,
-        url,
-      },
-      temperature: 0.7,
-      maxTokens: 2000,
     };
 
     // Step 1: Generate research questions
@@ -125,6 +118,15 @@ Be thorough but concise. Focus on the most important information.`;
     topic: string
   ): Promise<string[]> {
     const prompt = `Generate 5 research questions about: ${topic}`;
+    return await callLLM(baseConfig, baseConfig.instructions ?? "", prompt);
+  }
+
+  private async answerQuestion(
+    baseConfig: AgentConfig,
+    question: string,
+    topic: string
+  ): Promise<string> {
+    const prompt = `Answer this research question about ${topic}: ${question}`;
     return await callLLM(baseConfig, baseConfig.instructions ?? "", prompt);
   }
 
