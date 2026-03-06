@@ -393,15 +393,14 @@ export const executeJob = internalAction({
       const agent = await ctx.runQuery(api.agents.get, { id: job.agentId });
       if (!agent) throw new Error(`Agent not found: ${job.agentId}`);
 
-      const thread = await ctx.runMutation(internal.threads.createInternal, {
+      const thread = await ctx.runMutation(api.threads.createThread, {
         agentId: job.agentId,
-        title: `Cron: ${job.name || args.jobId}`,
+        name: `Cron: ${job.name || args.jobId}`,
       });
-      await ctx.runMutation(internal.messages.create, {
-        threadId: thread,
+      await ctx.runMutation(api.messages.create, {
+        threadId: thread as any,
         content: job.prompt || "Execute scheduled task.",
         role: "user" as const,
-        agentId: job.agentId,
       });
 
       output = "Task queued for daemon processing";
