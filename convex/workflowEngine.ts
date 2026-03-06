@@ -80,7 +80,7 @@ export const executeWorkflow = internalAction({
             const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
 
             // Get API key for provider
-            const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
+            const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
               provider: agent.provider || "openrouter",
             });
 

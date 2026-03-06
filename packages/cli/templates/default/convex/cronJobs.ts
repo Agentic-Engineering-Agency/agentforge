@@ -399,7 +399,7 @@ export const executeJob = internalAction({
       }
 
       // Get API key for the provider
-      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
+      const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
         provider: agent.provider || "openrouter",
       });
 
