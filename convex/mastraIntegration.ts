@@ -351,12 +351,12 @@ export const executeAgent = action({
         if (providersSeen2.has(provider)) continue;
         providersSeen2.add(provider);
         try {
-          const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+          const keyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, { provider });
           if (keyData) {
-            keyMap[provider] = keyData;
+            keyMap[provider] = keyData.apiKey;
             const providerCfg = LLM_PROVIDERS.find((p: { key: string }) => p.key === provider);
             const envVar = providerCfg?.envVar ?? `${provider.toUpperCase()}_API_KEY`;
-            process.env[envVar] = keyData;
+            process.env[envVar] = keyData.apiKey;
           }
         } catch { /* key not found */ }
       }

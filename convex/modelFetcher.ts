@@ -342,10 +342,10 @@ export const getModelsForProvider = action({
       }));
 
     try {
-      const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+      const keyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, { provider });
       if (!keyData) return staticModels;
 
-      const liveModels = await fetchModelsForProvider(provider, keyData as string);
+      const liveModels = await fetchModelsForProvider(provider, keyData.apiKey);
       if (liveModels.length === 0) return staticModels;
 
       return liveModels.map(m => ({ ...m, isFromAPI: true }));
@@ -366,7 +366,7 @@ export const refreshAllModels = action({
     const counts: Record<string, number> = {};
     for (const providerCfg of LLM_PROVIDERS) {
       try {
-        const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
+        const keyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
           provider: providerCfg.key,
         });
         if (!keyData?.apiKey) continue;

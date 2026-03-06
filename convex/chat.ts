@@ -381,13 +381,13 @@ export const sendMessage = action({
         if (providersSeen.has(provider)) continue;
         providersSeen.add(provider);
         try {
-          const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+          const keyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, { provider });
           if (keyData) {
-            keyMap[provider] = keyData;
+            keyMap[provider] = keyData.apiKey;
             // Also inject into process.env as belt-and-suspenders for Mastra's env reader
             const providerCfg = LLM_PROVIDERS.find(p => p.key === provider);
             const envVar = providerCfg?.envVar ?? `${provider.toUpperCase()}_API_KEY`;
-            process.env[envVar] = keyData;
+            process.env[envVar] = keyData.apiKey;
           }
         } catch {
           // Key not found for this provider — will fail with 401 and trigger failover

@@ -155,7 +155,7 @@ export const fetchForProvider = action({
     // Try to get the stored API key for this provider
     let apiKey: string | null = null;
     try {
-      const keyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, { provider });
+      const keyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, { provider });
       apiKey = keyData?.apiKey ?? null;
     } catch {
       // No key stored — fall through to static list

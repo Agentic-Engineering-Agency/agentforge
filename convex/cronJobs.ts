@@ -1,79 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query, action, internalMutation, internalAction } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import { api, internal } from "./_generated/api";
-
-/**
- * Parse a cron expression and return the next run timestamp (ms) after `fromMs`.
- *
- * Supports standard 5-field cron: minute hour dom month dow
- *   - `*`    — any value
- *   - `*\/N`  — every N units (step)
- *   - `N`    — exact value
- *   - `N-M`  — range
- *
- * Returns `fromMs + 60_000` (1 minute) as a safe fallback for unsupported expressions.
- */
-function getNextCronRun(cronExpression: string, fromMs: number): number {
-  const fields = cronExpression.trim().split(/\s+/);
-  if (fields.length !== 5) {
-    // Unsupported format — fall back to 1 hour
-    return fromMs + 60 * 60 * 1000;
-  }
-
-  const [minuteField, hourField, domField, monthField, dowField] = fields;
-
-  function matchesField(field: string, value: number, min: number, max: number): boolean {
-    if (field === "*") return true;
-    if (field.startsWith("*/")) {
-      const step = parseInt(field.slice(2), 10);
-      return !isNaN(step) && step > 0 && (value - min) % step === 0;
-    }
-    if (field.includes("-")) {
-      const [lo, hi] = field.split("-").map(Number);
-      return !isNaN(lo) && !isNaN(hi) && value >= lo && value <= hi;
-    }
-    const num = parseInt(field, 10);
-    return !isNaN(num) && value === num;
-  }
-
-  // Advance by 1 minute from now and search up to 1 year ahead
-  const MS_PER_MIN = 60 * 1000;
-  const MAX_MINUTES = 366 * 24 * 60; // ~1 year in minutes
-
-  // Start searching from the next whole minute
-  let candidate = new Date(Math.ceil((fromMs + 1) / MS_PER_MIN) * MS_PER_MIN);
-
-  for (let i = 0; i < MAX_MINUTES; i++) {
-    const minute = candidate.getUTCMinutes();
-    const hour = candidate.getUTCHours();
-    const dom = candidate.getUTCDate();
-    const month = candidate.getUTCMonth() + 1; // 1-12
-    const dow = candidate.getUTCDay(); // 0=Sunday
-
-    // Standard cron: when both dom and dow are restricted, treat as OR (POSIX)
-    const domMatches = matchesField(domField, dom, 1, 31);
-    const dowMatches = matchesField(dowField, dow, 0, 6);
-    const domRestricted = domField !== "*";
-    const dowRestricted = dowField !== "*";
-    const dayMatches = (domRestricted && dowRestricted)
-      ? (domMatches || dowMatches)
-      : (domMatches && dowMatches);
-
-    if (
-      matchesField(minuteField, minute, 0, 59) &&
-      matchesField(hourField, hour, 0, 23) &&
-      dayMatches &&
-      matchesField(monthField, month, 1, 12)
-    ) {
-      return candidate.getTime();
-    }
-
-    candidate = new Date(candidate.getTime() + MS_PER_MIN);
-  }
-
-  // Fallback: 1 hour from now
-  return fromMs + 60 * 60 * 1000;
-}
+import { getNextCronRun } from "./lib/cron";
 
 // Query: List cron jobs
 export const list = query({
@@ -354,7 +282,7 @@ export const executeDueJobs = internalMutation({
         await ctx.db.patch(job._id, { nextRun });
 
         // Schedule the actual job execution immediately
-        ctx.scheduler.runAfter(0, internal.cronJobs.executeJob, {
+        ctx.scheduler.runAfter(0, internal.cronJobsActions.executeJob, {
           jobId: job._id,
           runId,
         });
@@ -364,102 +292,6 @@ export const executeDueJobs = internalMutation({
     }
 
     return { executed: jobIds.length, jobs: jobIds };
-  },
-});
-
-/**
- * Internal action: Execute a single cron job.
- * This is where the actual agent execution happens.
- */
-export const executeJob = internalAction({
-  args: {
-    jobId: v.id("cronJobs"),
-    runId: v.id("cronJobRuns"),
-  },
-  handler: async (ctx, args) => {
-    // Get the cron job definition
-    const job = await ctx.runQuery(api.cronJobs.get, { id: args.jobId });
-    if (!job) {
-      throw new Error(`Cron job not found: ${args.jobId}`);
-    }
-
-    let output: string | undefined;
-    let error: string | undefined;
-    let status: "success" | "failed" = "success";
-
-    try {
-      // Import Agent class
-      const { Agent: AgentClass } = await import("./lib/agent");
-      const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
-
-      // Get the agent configuration
-      const agent = await ctx.runQuery(api.agents.get, { id: job.agentId });
-      if (!agent) {
-        throw new Error(`Agent not found: ${job.agentId}`);
-      }
-
-      // Get API key for the provider
-      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
-        provider: agent.provider || "openrouter",
-      });
-
-      if (!apiKeyData || !apiKeyData.apiKey) {
-        throw new Error(`No API key found for provider: ${agent.provider}`);
-      }
-
-      // Create agent instance
-      const mastraAgent = new AgentClass({
-        id: job.agentId,
-        name: agent.name,
-        instructions: agent.instructions || "You are a helpful AI assistant.",
-        model: {
-          providerId: agent.provider || "openrouter",
-          modelId: getBaseModelId(agent.provider || "openrouter", agent.model || "gpt-4o-mini"),
-          apiKey: apiKeyData.apiKey,
-          url: getProviderBaseUrl(agent.provider || "openrouter"),
-        },
-        temperature: agent.temperature,
-        maxTokens: agent.maxTokens,
-      });
-
-      // Execute the agent with the cron job prompt
-      let fullResponse = "";
-      for await (const chunk of mastraAgent.stream(job.prompt || "Execute scheduled task.")) {
-        fullResponse += chunk.content;
-      }
-
-      output = fullResponse;
-      status = "success";
-    } catch (err) {
-      error = err instanceof Error ? err.message : String(err);
-      status = "failed";
-      console.error(`[cron.executeJob] Job ${args.jobId} failed:`, error);
-    }
-
-    // Update the existing run record (avoids creating a duplicate row)
-    await ctx.runMutation(api.cronJobs.updateRun, {
-      runId: args.runId,
-      status,
-      ...(output && { output }),
-      ...(error && { error }),
-    });
-
-    // Calculate the next run time for this cron job
-    const now = Date.now();
-    const nextRun = getNextCronRun(job.schedule, now);
-
-    await ctx.runMutation(api.cronJobs.updateLastRun, {
-      id: args.jobId,
-      nextRun,
-    });
-
-    return {
-      success: status === "success",
-      jobId: args.jobId,
-      runId: args.runId,
-      output,
-      error,
-    };
   },
 });
 

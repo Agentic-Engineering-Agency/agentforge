@@ -46,7 +46,7 @@ export const start = action({
 
     try {
       // Get default agent config from API keys
-      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
+      const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
         provider: "openrouter",
       });
 

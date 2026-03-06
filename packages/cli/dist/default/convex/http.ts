@@ -1,3 +1,5 @@
+"use node";
+
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
@@ -313,7 +315,7 @@ http.route({
           const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
 
           // Get API key for provider
-          const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
+          const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
             provider: agent.provider || "openrouter",
           });
 
@@ -445,7 +447,7 @@ http.route({
       const { ElevenLabsTTS } = await import("./lib/tts");
 
       // Get ElevenLabs API key
-      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
+      const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
         provider: "elevenlabs",
       });
 
