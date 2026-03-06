@@ -32,7 +32,7 @@ on:
       run_cloud_tests:
         description: 'Run Cloud integration tests (requires AGENTFORGE_CLOUD_URL secret)'
         required: false
-        default: 'false'
+        default: false
         type: boolean
 
 env:
