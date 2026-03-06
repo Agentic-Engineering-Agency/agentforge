@@ -90,7 +90,7 @@ export class DiscordChannel implements ChannelAdapter {
               // Split long messages
               const chunks = splitMessage(text, 2000);
               if (chunks.length === 1) {
-                await thinkingMsg.edit(chunks[0]);
+                await thinkingMsg.edit(chunks[0] || '​'); // zero-width space if empty
               } else {
                 await thinkingMsg.delete();
                 for (const chunk of chunks) {
@@ -99,6 +99,7 @@ export class DiscordChannel implements ChannelAdapter {
               }
             }
           },
+          this.config.editIntervalMs,
         );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';

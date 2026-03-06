@@ -12,6 +12,7 @@ import type { Agent } from '@mastra/core/agent';
  * @param message - User message text
  * @param opts - Thread and resource options
  * @param onChunk - Callback with accumulated text and done flag
+ * @param editIntervalMs - How often to call onChunk during streaming (default 1500ms)
  * @returns Final response text
  */
 export async function progressiveStream(
@@ -19,6 +20,7 @@ export async function progressiveStream(
   message: string,
   opts: { threadId?: string; resourceId?: string },
   onChunk: (text: string, done: boolean) => Promise<void>,
+  editIntervalMs = 1500,
 ): Promise<string> {
   // Mastra agent.stream() expects messages array and optional execution options
   const streamOptions =
@@ -28,14 +30,13 @@ export async function progressiveStream(
   const stream = await agent.stream([{ role: 'user', content: message }], streamOptions);
   let buffer = '';
   let lastEdit = Date.now();
-  const EDIT_INTERVAL = 1500; // 1.5s default edit interval
 
   try {
     for await (const chunk of stream.fullStream) {
       if (chunk.type === 'text-delta') {
         buffer += chunk.payload.text;
         const now = Date.now();
-        if (now - lastEdit > EDIT_INTERVAL) {
+        if (now - lastEdit > editIntervalMs) {
           await onChunk(buffer, false);
           lastEdit = now;
         }
@@ -45,8 +46,9 @@ export async function progressiveStream(
     await onChunk(buffer, true);
     return buffer;
   } catch (error) {
-    // Notify caller of error via callback
-    await onChunk(buffer, false);
+    // On stream error: finalize with whatever we accumulated so the caller
+    // can display partial content instead of leaving "Thinking..." stuck.
+    await onChunk(buffer, true);
     throw error;
   }
 }
@@ -62,8 +64,8 @@ export async function progressiveStream(
 export function splitMessage(text: string, maxLength: number): string[] {
   const chunks: string[] = [];
 
-  // Handle empty string
-  if (!text) return [];
+  // Handle empty string: return one empty chunk so callers always have at least one element
+  if (!text) return [''];
 
   // If text fits in one chunk, return it (trim trailing whitespace)
   if (text.length <= maxLength) {
