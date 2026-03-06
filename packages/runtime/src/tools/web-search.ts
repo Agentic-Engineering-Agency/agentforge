@@ -18,7 +18,10 @@ export const webSearchTool = createTool({
     }
 
     try {
-      const response = await fetch('https://api.search.brave.com/res/v1/web/search', {
+      const searchUrl = new URL('https://api.search.brave.com/res/v1/web/search');
+      searchUrl.searchParams.set('q', query);
+      searchUrl.searchParams.set('count', String(count));
+      const response = await fetch(searchUrl.toString(), {
         method: 'GET',
         headers: {
           'Accept': 'application/json',

@@ -45,11 +45,12 @@ export class AgentForgeDaemon {
 
   listAgents(): AgentDefinition[] {
     return Array.from(this.agents.entries()).map(([id, agent]) => {
+      const a = agent as Agent & { description?: string; instructions?: string | (() => string) };
       return {
         id,
         name: agent.name,
-        description: (agent as any).description,
-        instructions: typeof (agent as any).instructions === 'string' ? (agent as any).instructions : '',
+        description: a.description,
+        instructions: typeof a.instructions === 'string' ? a.instructions : '',
         model: typeof agent.model === 'string' ? agent.model : undefined,
         tools: [],
         workingMemoryTemplate: undefined,

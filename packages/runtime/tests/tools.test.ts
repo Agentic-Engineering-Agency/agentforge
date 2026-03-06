@@ -28,14 +28,20 @@ describe('Tools', () => {
 
     it('returns object with results array when API key is set', async () => {
       // Mock fetch to avoid real API calls
-      global.fetch = vi.fn().mockResolvedValue({
+      const mockFetch = vi.fn().mockResolvedValue({
         ok: true,
         json: async () => ({ web: { results: [] } }),
       }) as any;
+      global.fetch = mockFetch;
 
-      const result = await webSearchTool.execute({ query: 'test', count: 5 });
+      const result = await webSearchTool.execute({ query: 'test query', count: 5 });
       expect(result).toHaveProperty('results');
       expect(Array.isArray(result.results)).toBe(true);
+
+      // Verify the URL includes the query parameter
+      const calledUrl = mockFetch.mock.calls[0][0] as string;
+      expect(calledUrl).toContain('q=test+query');
+      expect(calledUrl).toContain('count=5');
     });
 
     it('returns message when API key not set', async () => {
