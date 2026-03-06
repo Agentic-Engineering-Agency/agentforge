@@ -1,6 +1,6 @@
 import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +27,10 @@ function loadNotes(): Note[] {
 }
 
 function saveNotes(notes: Note[]): void {
+  const dir = dirname(NOTES_PATH);
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
   writeFileSync(NOTES_PATH, JSON.stringify(notes, null, 2), 'utf-8');
 }
 

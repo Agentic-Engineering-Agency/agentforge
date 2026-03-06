@@ -3,7 +3,7 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, useEffect, ChangeEvent, FormEvent } from 'react';
 import { Bot, Plus, Edit, Trash2, Search, Settings, Zap, X, ChevronDown, ChevronUp, HardDrive, Container } from 'lucide-react';
 import { LLM_PROVIDERS, getModelsByProvider } from '../../../../convex/llmProviders';
-import { useAction, useQuery, useMutation } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '../../../../convex/_generated/api';
 import * as Switch from '@radix-ui/react-switch';
 import * as Select from '@radix-ui/react-select';
@@ -48,43 +48,13 @@ function AgentsPageLayout() {
 }
 
 function useProviderModels(provider: string) {
-  const fetchModels = useAction(api.modelFetcher.getModelsForProvider);
   const staticModels = getModelsByProvider(provider);
   const [models, setModels] = useState(staticModels);
-  const [loading, setLoading] = useState(false);
+  const loading = false;
 
   useEffect(() => {
     if (!provider) return;
-    // Immediately reset to static models for this provider (avoids showing stale data)
     setModels(getModelsByProvider(provider));
-    setLoading(true);
-    let cancelled = false;
-
-    fetchModels({ provider })
-      .then(live => {
-        if (cancelled) return;
-        // Merge: start with static entry for full LLMModel shape, override with live data
-        const merged = live.length > 0
-          ? live.map(m => {
-              const staticEntry = getModelsByProvider(m.provider).find(s => s.id === m.id);
-              return {
-                pricingTier: 'standard' as const,
-                ...staticEntry,
-                id: m.id,
-                displayName: m.displayName,
-                provider: m.provider,
-                contextWindow: m.contextWindow,
-                capabilities: m.capabilities as import('../../../../convex/llmProviders').ModelCapability[],
-                isGA: m.isGA,
-              };
-            })
-          : getModelsByProvider(provider);
-        setModels(merged as import('../../../../convex/llmProviders').LLMModel[]);
-      })
-      .catch(() => { if (!cancelled) setModels(getModelsByProvider(provider)); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-
-    return () => { cancelled = true; };
   }, [provider]);
 
   return { models, loading };

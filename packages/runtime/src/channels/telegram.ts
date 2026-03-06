@@ -69,7 +69,7 @@ export class TelegramChannel implements ChannelAdapter {
         await progressiveStream(
           agent,
           content,
-          { threadId, resourceId: threadId, editIntervalMs: this.config.editIntervalMs ?? 2000 },
+          { threadId, resourceId: threadId },
           async (text, done) => {
             if (!done && text.length > 0) {
               try {
