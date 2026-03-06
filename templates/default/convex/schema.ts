@@ -1,7 +1,38 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  mastraThreadsTable,
+  mastraMessagesTable,
+  mastraResourcesTable,
+  mastraWorkflowSnapshotsTable,
+  mastraScoresTable,
+  mastraVectorIndexesTable,
+  mastraVectorsTable,
+  mastraDocumentsTable,
+} from "@mastra/convex/schema";
 
 export default defineSchema({
+  // --- Mastra memory tables (managed by @mastra/convex from the daemon) ---
+  // These tables store agent memory, threads, messages, and vectors
+  mastra_threads: mastraThreadsTable,
+  mastra_messages: mastraMessagesTable,
+  mastra_resources: mastraResourcesTable,
+  mastra_workflow_snapshots: mastraWorkflowSnapshotsTable,
+  mastra_scorers: mastraScoresTable,
+  mastra_vector_indexes: mastraVectorIndexesTable,
+  mastra_vectors: mastraVectorsTable,
+  mastra_documents: mastraDocumentsTable,
+
+  // --- AgentForge application tables ---
+  // API access tokens for external API authentication
+  apiAccessTokens: defineTable({
+    name: v.string(),
+    token: v.string(),
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()),
+    isActive: v.boolean(),
+  }).index("byToken", ["token"]),
+
   // Core agent definitions
   agents: defineTable({
     id: v.string(),
@@ -146,6 +177,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     userId: v.optional(v.string()),
     settings: v.optional(v.any()),
+    agentIds: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
     isDefault: v.optional(v.boolean()),
@@ -255,12 +287,14 @@ export default defineSchema({
     .index("byIsEnabled", ["isEnabled"])
     .index("byProjectId", ["projectId"]),
 
-  // API keys and credentials (encrypted)
+  // API keys and credentials (encrypted with AES-256-GCM)
   apiKeys: defineTable({
     provider: v.string(), // "openai", "openrouter", "anthropic", etc.
     keyName: v.string(),
-    encryptedKey: v.string(),
-    iv: v.string(), // Initialization vector for AES-256-GCM encryption
+    encryptedKey: v.string(), // AES-256-GCM ciphertext (base64)
+    iv: v.string(), // Initialization vector for AES-256-GCM (base64)
+    tag: v.string(), // Auth tag for AES-256-GCM (base64)
+    version: v.optional(v.string()), // Encryption version identifier
     isActive: v.boolean(),
     userId: v.optional(v.string()),
     createdAt: v.number(),
@@ -315,13 +349,25 @@ export default defineSchema({
     userId: v.optional(v.string()),
     timestamp: v.number(),
     projectId: v.optional(v.id("projects")),
+    // Token usage tracking for observability
+    agentId: v.optional(v.string()),
+    sessionId: v.optional(v.string()),
+    threadId: v.optional(v.id("threads")),
+    inputTokens: v.optional(v.float64()),
+    outputTokens: v.optional(v.float64()),
+    totalTokens: v.optional(v.float64()),
+    costUsd: v.optional(v.float64()),
+    model: v.optional(v.string()),
+    provider: v.optional(v.string()),
   })
     .index("byLevel", ["level"])
     .index("bySource", ["source"])
     .index("byTimestamp", ["timestamp"])
     .index("byUserId", ["userId"])
     .index("byProjectId", ["projectId"])
-    .index("byProjectAndTimestamp", ["projectId", "timestamp"]),
+    .index("byProjectAndTimestamp", ["projectId", "timestamp"])
+    .index("byAgentId", ["agentId"])
+    .index("bySessionId", ["sessionId"]),
 
   // Channels for multi-platform support
   channels: defineTable({
@@ -602,7 +648,8 @@ export default defineSchema({
     tags: v.array(v.string()),
     downloads: v.number(),
     featured: v.boolean(),
-    skillMdContent: v.string(),
+    skillMdContent: v.optional(v.string()),
+    references: v.optional(v.array(v.object({ name: v.string(), content: v.string() }))),
     readmeContent: v.optional(v.string()),
     repositoryUrl: v.optional(v.string()),
     createdAt: v.number(),

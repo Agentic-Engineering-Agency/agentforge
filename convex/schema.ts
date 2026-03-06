@@ -1,7 +1,29 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import {
+  mastraThreadsTable,
+  mastraMessagesTable,
+  mastraResourcesTable,
+  mastraWorkflowSnapshotsTable,
+  mastraScoresTable,
+  mastraVectorIndexesTable,
+  mastraVectorsTable,
+  mastraDocumentsTable,
+} from "@mastra/convex/schema";
 
 export default defineSchema({
+  // --- Mastra memory tables (managed by @mastra/convex from the daemon) ---
+  // These tables store agent memory, threads, messages, and vectors
+  mastra_threads: mastraThreadsTable,
+  mastra_messages: mastraMessagesTable,
+  mastra_resources: mastraResourcesTable,
+  mastra_workflow_snapshots: mastraWorkflowSnapshotsTable,
+  mastra_scorers: mastraScoresTable,
+  mastra_vector_indexes: mastraVectorIndexesTable,
+  mastra_vectors: mastraVectorsTable,
+  mastra_documents: mastraDocumentsTable,
+
+  // --- AgentForge application tables ---
   // API access tokens for external API authentication
   apiAccessTokens: defineTable({
     name: v.string(),
@@ -155,6 +177,7 @@ export default defineSchema({
     description: v.optional(v.string()),
     userId: v.optional(v.string()),
     settings: v.optional(v.any()),
+    agentIds: v.optional(v.array(v.string())),
     createdAt: v.number(),
     updatedAt: v.number(),
     isDefault: v.optional(v.boolean()),
@@ -191,8 +214,6 @@ export default defineSchema({
     documentation: v.optional(v.string()),
     code: v.string(), // The actual skill code
     schema: v.optional(v.any()), // JSON schema for skill parameters
-    skillMdContent: v.optional(v.string()), // Full SKILL.md content for injection
-    references: v.optional(v.array(v.object({ name: v.string(), content: v.string() }))), // Reference files
     isInstalled: v.boolean(),
     isEnabled: v.boolean(),
     userId: v.optional(v.string()),
@@ -266,12 +287,14 @@ export default defineSchema({
     .index("byIsEnabled", ["isEnabled"])
     .index("byProjectId", ["projectId"]),
 
-  // API keys and credentials (encrypted)
+  // API keys and credentials (encrypted with AES-256-GCM)
   apiKeys: defineTable({
     provider: v.string(), // "openai", "openrouter", "anthropic", etc.
     keyName: v.string(),
-    encryptedKey: v.string(),
-    iv: v.string(), // Initialization vector for AES-256-GCM encryption
+    encryptedKey: v.string(), // AES-256-GCM ciphertext (base64)
+    iv: v.string(), // Initialization vector for AES-256-GCM (base64)
+    tag: v.string(), // Auth tag for AES-256-GCM (base64)
+    version: v.optional(v.string()), // Encryption version identifier
     isActive: v.boolean(),
     userId: v.optional(v.string()),
     createdAt: v.number(),
