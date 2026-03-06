@@ -6,7 +6,7 @@ import { progressiveStream, splitMessage, generateThreadId } from './shared.js';
 export interface TelegramChannelConfig {
   defaultAgentId: string;
   allowedChatIds?: number[]; // Whitelist (empty = allow all)
-  editIntervalMs?: number; // Default 1000 (Telegram edits faster)
+  editIntervalMs?: number; // Default 2000 (safer for Telegram ~1 edit/sec limit)
 }
 
 export class TelegramChannel implements ChannelAdapter {
@@ -69,7 +69,7 @@ export class TelegramChannel implements ChannelAdapter {
         await progressiveStream(
           agent,
           content,
-          { threadId, resourceId: threadId },
+          { threadId, resourceId: threadId, editIntervalMs: this.config.editIntervalMs ?? 2000 },
           async (text, done) => {
             if (!done && text.length > 0) {
               try {
