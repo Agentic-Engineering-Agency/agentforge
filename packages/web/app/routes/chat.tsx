@@ -102,11 +102,21 @@ export const Route = createFileRoute("/chat")({ component: ChatPageComponent });
 function ChatPageComponent() {
   // ── Convex queries ──────────────────────────────────────────
   const agents = useQuery(api.agents.listActive, {}) ?? [];
-  const threads = useQuery(api.chatMutations.listThreads, {}) ?? [];
+  const threads = useQuery(api.threads.listThreads, {}) ?? [];
 
   // ── Convex mutations & actions ──────────────────────────────
-  const createThread = useMutation(api.chatMutations.createThread);
-  const sendMessageAction = useAction(api.chat.sendMessage);
+  const createThread = useMutation(api.threads.createThread);
+  // NOTE: chat.sendMessage removed in SPEC-022 — messages are sent via runtime daemon HTTP API
+  // sendMessage is now a direct HTTP POST to the daemon's /api/chat endpoint
+  const sendMessageAction = async ({ threadId, agentId, content }: { threadId: string; agentId: string; content: string }) => {
+    const res = await fetch("/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadId, agentId, message: content }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  };
 
   // ── Local state ─────────────────────────────────────────────
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
@@ -128,7 +138,7 @@ function ChatPageComponent() {
   // This is the real-time subscription — messages update automatically
   // when new ones are inserted by the Convex action.
   const messages = useQuery(
-    api.chatMutations.getThreadMessages,
+    api.threads.getThreadMessages,
     currentThreadId ? { threadId: currentThreadId as any } : "skip"
   ) ?? [];
 

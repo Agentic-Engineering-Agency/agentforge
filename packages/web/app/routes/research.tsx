@@ -22,7 +22,7 @@ interface ResearchJob {
 }
 
 function ResearchPage() {
-  const startResearchAction = useAction(api.researchActions.start);
+  const startResearchAction = useAction(api.research.start);
   const [topic, setTopic] = useState('');
   const [depth, setDepth] = useState<ResearchDepth>('medium');
   const [agentCount, setAgentCount] = useState(5);
