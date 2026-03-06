@@ -293,7 +293,7 @@ export default defineSchema({
     keyName: v.string(),
     encryptedKey: v.string(), // AES-256-GCM ciphertext (base64)
     iv: v.string(), // Initialization vector for AES-256-GCM (base64)
-    tag: v.optional(v.string()), // Auth tag for AES-256-GCM (base64, optional for legacy XOR keys)
+    tag: v.optional(v.string()), // Auth tag for AES-256-GCM (base64)
     version: v.optional(v.string()), // Encryption version identifier
     isActive: v.boolean(),
     userId: v.optional(v.string()),
@@ -696,6 +696,7 @@ export default defineSchema({
     config: v.object({
       botToken: v.optional(v.string()), // encrypted
       iv: v.optional(v.string()), // initialization vector for decryption
+      salt: v.optional(v.string()), // random PBKDF2 salt (added v0.12.0)
       webhookSecret: v.optional(v.string()),
       teamId: v.optional(v.string()), // Slack
       botUsername: v.optional(v.string()),

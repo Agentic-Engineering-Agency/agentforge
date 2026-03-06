@@ -20,46 +20,6 @@ import type { GenericId as Id } from "convex/values";
  * ```
  */
 export declare const api: {
-  a2aTasks: {
-    createTask: FunctionReference<
-      "mutation",
-      "public",
-      {
-        callbackUrl?: string;
-        constraints?: {
-          maxCost?: number;
-          maxTokens?: number;
-          timeoutMs?: number;
-        };
-        context?: any;
-        fromAgentId: string;
-        instruction: string;
-        projectId?: any;
-        taskId: string;
-        toAgentId: string;
-      },
-      any
-    >;
-    getTask: FunctionReference<"query", "public", { taskId: string }, any>;
-    updateTask: FunctionReference<
-      "mutation",
-      "public",
-      {
-        artifacts?: Array<{
-          content: string;
-          mimeType?: string;
-          name?: string;
-          type: "text" | "code" | "file" | "data";
-        }>;
-        durationMs?: number;
-        output?: string;
-        status: "running" | "success" | "error" | "timeout";
-        taskId: string;
-        usage?: { cost: number; inputTokens: number; outputTokens: number };
-      },
-      any
-    >;
-  };
   agents: {
     create: FunctionReference<
       "mutation",
@@ -196,7 +156,7 @@ export declare const api: {
   };
   apiKeys: {
     create: FunctionReference<
-      "action",
+      "mutation",
       "public",
       {
         encryptedKey: string;
@@ -227,7 +187,7 @@ export declare const api: {
       any
     >;
     update: FunctionReference<
-      "action",
+      "mutation",
       "public",
       {
         encryptedKey?: string;
@@ -288,64 +248,6 @@ export declare const api: {
       "mutation",
       "public",
       { id: Id<"channelConnections">; status: string },
-      any
-    >;
-  };
-  chat: {
-    sendMessage: FunctionReference<
-      "action",
-      "public",
-      {
-        agentId: string;
-        content: string;
-        fileIds?: Array<string>;
-        threadId: Id<"threads">;
-        userId?: string;
-      },
-      any
-    >;
-    startNewChat: FunctionReference<
-      "action",
-      "public",
-      {
-        agentId: string;
-        content: string;
-        fileIds?: Array<string>;
-        threadName?: string;
-        userId?: string;
-      },
-      any
-    >;
-  };
-  chatMutations: {
-    addAssistantMessage: FunctionReference<
-      "mutation",
-      "public",
-      { content: string; metadata?: any; threadId: Id<"threads"> },
-      any
-    >;
-    addUserMessage: FunctionReference<
-      "mutation",
-      "public",
-      { content: string; threadId: Id<"threads"> },
-      any
-    >;
-    createThread: FunctionReference<
-      "mutation",
-      "public",
-      { agentId: string; name?: string; userId?: string },
-      any
-    >;
-    getThreadMessages: FunctionReference<
-      "query",
-      "public",
-      { threadId: Id<"threads"> },
-      any
-    >;
-    listThreads: FunctionReference<
-      "query",
-      "public",
-      { agentId?: string; userId?: string },
       any
     >;
   };
@@ -689,37 +591,6 @@ export declare const api: {
       handle: FunctionReference<"mutation", "public", any, any>;
     };
   };
-  mastraIntegration: {
-    executeAgent: FunctionReference<
-      "action",
-      "public",
-      {
-        agentId: string;
-        prompt: string;
-        stream?: boolean;
-        threadId?: Id<"threads">;
-        userId?: string;
-      },
-      any
-    >;
-    executeWorkflow: FunctionReference<
-      "action",
-      "public",
-      { input?: any; userId?: string; workflowId: Id<"workflowDefinitions"> },
-      any
-    >;
-    streamAgent: FunctionReference<
-      "action",
-      "public",
-      {
-        agentId: string;
-        prompt: string;
-        threadId: Id<"threads">;
-        userId?: string;
-      },
-      any
-    >;
-  };
   mcpConnectionActions: {
     testConnection: FunctionReference<
       "action",
@@ -793,142 +664,6 @@ export declare const api: {
       any
     >;
   };
-  memory: {
-    add: FunctionReference<
-      "mutation",
-      "public",
-      {
-        agentId: string;
-        content: string;
-        embedding?: Array<number>;
-        importance?: number;
-        metadata?: any;
-        projectId?: Id<"projects">;
-        threadId?: Id<"threads">;
-        type: "conversation" | "fact" | "summary" | "episodic";
-        userId?: string;
-      },
-      any
-    >;
-    bulkAdd: FunctionReference<
-      "mutation",
-      "public",
-      {
-        entries: Array<{
-          agentId: string;
-          content: string;
-          embedding?: Array<number>;
-          expiresAt?: number;
-          importance?: number;
-          metadata?: any;
-          projectId?: Id<"projects">;
-          threadId?: Id<"threads">;
-          type: "conversation" | "fact" | "summary" | "episodic";
-          userId?: string;
-        }>;
-      },
-      any
-    >;
-    deleteExpired: FunctionReference<
-      "mutation",
-      "public",
-      { agentId: string; batchSize?: number; now: number },
-      any
-    >;
-    get: FunctionReference<"query", "public", { id: Id<"memoryEntries"> }, any>;
-    getStats: FunctionReference<
-      "query",
-      "public",
-      { agentId: string; projectId?: Id<"projects"> },
-      any
-    >;
-    listByAgent: FunctionReference<
-      "query",
-      "public",
-      {
-        agentId: string;
-        paginationOpts: {
-          cursor: string | null;
-          endCursor?: string | null;
-          id?: number;
-          maximumBytesRead?: number;
-          maximumRowsRead?: number;
-          numItems: number;
-        };
-        projectId?: Id<"projects">;
-        type?: "conversation" | "fact" | "summary" | "episodic";
-      },
-      any
-    >;
-    listByThread: FunctionReference<
-      "query",
-      "public",
-      {
-        paginationOpts: {
-          cursor: string | null;
-          endCursor?: string | null;
-          id?: number;
-          maximumBytesRead?: number;
-          maximumRowsRead?: number;
-          numItems: number;
-        };
-        threadId: Id<"threads">;
-      },
-      any
-    >;
-    listRecent: FunctionReference<
-      "query",
-      "public",
-      { agentId: string; limit?: number; projectId?: Id<"projects"> },
-      any
-    >;
-    recordAccess: FunctionReference<
-      "mutation",
-      "public",
-      { id: Id<"memoryEntries"> },
-      any
-    >;
-    remove: FunctionReference<
-      "mutation",
-      "public",
-      { id: Id<"memoryEntries"> },
-      any
-    >;
-    update: FunctionReference<
-      "mutation",
-      "public",
-      {
-        content?: string;
-        embedding?: Array<number>;
-        id: Id<"memoryEntries">;
-        importance?: number;
-        metadata?: any;
-      },
-      any
-    >;
-  };
-  memoryConsolidation: {
-    consolidate: FunctionReference<
-      "action",
-      "public",
-      { agentId: string; projectId?: Id<"projects">; shortTermTTL?: number },
-      any
-    >;
-  };
-  memoryConsolidationMutations: {
-    cleanupExpired: FunctionReference<
-      "mutation",
-      "public",
-      { agentId: string },
-      any
-    >;
-    getConsolidationHistory: FunctionReference<
-      "query",
-      "public",
-      { agentId: string; projectId?: Id<"projects"> },
-      any
-    >;
-  };
   messages: {
     add: FunctionReference<
       "mutation",
@@ -986,46 +721,6 @@ export declare const api: {
       "mutation",
       "public",
       { id: Id<"messages"> },
-      any
-    >;
-  };
-  modelFetcher: {
-    getModelsForProvider: FunctionReference<
-      "action",
-      "public",
-      { provider: string },
-      Array<{
-        capabilities: Array<string>;
-        contextWindow: number;
-        displayName: string;
-        id: string;
-        isFromAPI: boolean;
-        isGA: boolean;
-        provider: string;
-      }>
-    >;
-    refreshAllModels: FunctionReference<"action", "public", {}, any>;
-  };
-  models: {
-    fetchAll: FunctionReference<"action", "public", {}, any>;
-    fetchForProvider: FunctionReference<
-      "action",
-      "public",
-      { provider: string },
-      any
-    >;
-  };
-  modelsActions: {
-    fetchAndCacheModels: FunctionReference<
-      "action",
-      "public",
-      { providers?: Array<string> },
-      any
-    >;
-    fetchModels: FunctionReference<
-      "action",
-      "public",
-      { apiKey?: string; provider: string },
       any
     >;
   };
@@ -1158,49 +853,6 @@ export declare const api: {
         results?: string;
         status?: "pending" | "running" | "completed" | "failed";
         synthesis?: string;
-      },
-      any
-    >;
-  };
-  researchActions: {
-    start: FunctionReference<
-      "action",
-      "public",
-      {
-        depth: "shallow" | "medium" | "deep";
-        projectId?: Id<"projects">;
-        topic: string;
-        userId?: string;
-      },
-      any
-    >;
-  };
-  researchMutations: {
-    create: FunctionReference<
-      "mutation",
-      "public",
-      {
-        agentCount: number;
-        depth: "shallow" | "medium" | "deep";
-        projectId?: Id<"projects">;
-        topic: string;
-        userId?: string;
-      },
-      any
-    >;
-    get: FunctionReference<
-      "query",
-      "public",
-      { jobId: Id<"researchJobs"> },
-      any
-    >;
-    list: FunctionReference<
-      "query",
-      "public",
-      {
-        projectId?: Id<"projects">;
-        status?: "pending" | "running" | "completed" | "failed";
-        userId?: string;
       },
       any
     >;
@@ -1389,20 +1041,6 @@ export declare const api: {
         schema?: any;
         version?: string;
       },
-      any
-    >;
-  };
-  telegramWebhook: {
-    registerTelegramWebhook: FunctionReference<
-      "action",
-      "public",
-      { connectionId: Id<"channelConnections">; webhookUrl: string },
-      any
-    >;
-    verifyTelegramBot: FunctionReference<
-      "action",
-      "public",
-      { botToken: string },
       any
     >;
   };
@@ -1715,20 +1353,6 @@ export declare const internal: {
     >;
   };
   apiKeys: {
-    createInternal: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        encryptedKey: string;
-        iv: string;
-        keyName: string;
-        provider: string;
-        tag: string;
-        userId?: string;
-        version: "aes-gcm-v1";
-      },
-      any
-    >;
     getDecryptedForProvider: FunctionReference<
       "action",
       "internal",
@@ -1739,20 +1363,6 @@ export declare const internal: {
       "query",
       "internal",
       { provider: string },
-      any
-    >;
-    updateInternal: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        encryptedKey?: string;
-        id: Id<"apiKeys">;
-        isActive?: boolean;
-        iv?: string;
-        keyName?: string;
-        tag?: string;
-        version?: "aes-gcm-v1";
-      },
       any
     >;
   };
@@ -1824,32 +1434,6 @@ export declare const internal: {
       seedMarketplace: FunctionReference<"mutation", "internal", {}, any>;
     };
   };
-  memoryConsolidationMutations: {
-    bulkRemoveMemories: FunctionReference<
-      "mutation",
-      "internal",
-      { ids: Array<Id<"memoryEntries">> },
-      any
-    >;
-    insertConsolidationRecord: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        agentId: string;
-        projectId?: Id<"projects">;
-        resultMemoryId: Id<"memoryEntries">;
-        sourceMemoryIds: Array<Id<"memoryEntries">>;
-        strategy: "summarize" | "merge" | "deduplicate";
-      },
-      any
-    >;
-    listConversationMemoriesForConsolidation: FunctionReference<
-      "query",
-      "internal",
-      { agentId: string; createdBefore: number; projectId?: Id<"projects"> },
-      any
-    >;
-  };
   migrations: {
     addProjectScoping: {
       backfillProjectIds: FunctionReference<"mutation", "internal", {}, any>;
@@ -1857,43 +1441,6 @@ export declare const internal: {
     };
     migrateProjectScoping: FunctionReference<"mutation", "internal", {}, any>;
     validateProjectScoping: FunctionReference<"mutation", "internal", {}, any>;
-  };
-  researchMutations: {
-    createInternal: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        agentCount: number;
-        depth: "shallow" | "medium" | "deep";
-        projectId?: Id<"projects">;
-        topic: string;
-        userId?: string;
-      },
-      any
-    >;
-    update: FunctionReference<
-      "mutation",
-      "internal",
-      {
-        completedAt?: number;
-        error?: string;
-        findings?: Array<{
-          answer: string;
-          question: string;
-          questionId: string;
-        }>;
-        jobId: Id<"researchJobs">;
-        questions?: Array<{
-          id: string;
-          question: string;
-          status: "pending" | "running" | "completed" | "failed";
-        }>;
-        results?: string;
-        status?: "pending" | "running" | "completed" | "failed";
-        synthesis?: string;
-      },
-      any
-    >;
   };
   vault: {
     retrieveSecret: FunctionReference<

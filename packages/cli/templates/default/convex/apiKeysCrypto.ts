@@ -10,19 +10,20 @@ declare const process: { env: Record<string, string | undefined> };
  * DEFAULT_SALT is derived from AGENTFORGE_KEY_SALT environment variable.
  * This is REQUIRED for production use - do not use empty salt.
  */
-const DEFAULT_SALT = (() => {
+function getSalt(): string {
   const salt = process.env.AGENTFORGE_KEY_SALT;
-  if (!salt || salt.length === 0) {
-    throw new Error("AGENTFORGE_KEY_SALT environment variable is required and must not be empty");
+  if (!salt || salt.length < 32) {
+    throw new Error("AGENTFORGE_KEY_SALT must be at least 32 characters for cryptographic security");
   }
   return salt;
-})();
+}
 
 /**
  * Derives a cryptographic key from the salt using HKDF-SHA256.
  * Uses empty info and salt strings as per Convex best practices.
  */
 function deriveKey(salt: string): Buffer {
+  if (!salt || salt.length < 32) throw new Error("Salt must be at least 32 characters");
   return crypto.hkdfSync("sha256", Buffer.from(salt, "utf8"), Buffer.alloc(0), "agentforge-api-key-v1", 32);
 }
 
@@ -40,7 +41,7 @@ export const encryptApiKey = internalAction({
     version: v.literal("aes-gcm-v1"),
   }),
   handler: async (_, { plaintext }) => {
-    const key = deriveKey(DEFAULT_SALT);
+    const key = deriveKey(getSalt());
     const iv = crypto.randomBytes(12); // 96-bit IV for GCM
     const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
 
@@ -68,7 +69,7 @@ export const decryptApiKey = internalAction({
   },
   returns: v.string(),
   handler: async (_, { ciphertext, iv, tag }) => {
-    const key = deriveKey(DEFAULT_SALT);
+    const key = deriveKey(getSalt());
     const decipher = crypto.createDecipheriv(
       "aes-256-gcm",
       key,

@@ -313,11 +313,11 @@ http.route({
           const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
 
           // Get API key for provider
-          const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
+          const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
             provider: agent.provider || "openrouter",
           });
 
-          if (!apiKeyData) {
+          if (!apiKeyData || !apiKeyData.apiKey) {
             throw new Error(`No API key found for provider: ${agent.provider}`);
           }
 
@@ -329,7 +329,7 @@ http.route({
             model: {
               providerId: agent.provider || "openrouter",
               modelId: getBaseModelId(agent.provider || "openrouter", agent.model || "gpt-4o-mini"),
-              apiKey: apiKeyData,
+              apiKey: apiKeyData.apiKey,
               url: getProviderBaseUrl(agent.provider || "openrouter"),
             },
             temperature: agent.temperature,
@@ -445,11 +445,11 @@ http.route({
       const { ElevenLabsTTS } = await import("./lib/tts");
 
       // Get ElevenLabs API key
-      const apiKeyData = await ctx.runAction(internal.apiKeys.getDecryptedForProvider, {
+      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
         provider: "elevenlabs",
       });
 
-      if (!apiKeyData) {
+      if (!apiKeyData || !apiKeyData.apiKey) {
         return new Response(
           JSON.stringify({ error: "ElevenLabs API key not configured" }),
           {
@@ -461,7 +461,7 @@ http.route({
 
       // Create TTS engine and synthesize
       const tts = new ElevenLabsTTS({
-        apiKey: apiKeyData,
+        apiKey: apiKeyData.apiKey,
         voiceId: typeof voiceId === "string" ? voiceId : undefined,
       });
 
