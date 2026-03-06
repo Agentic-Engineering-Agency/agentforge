@@ -102,17 +102,23 @@ export const list = query({
     userId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    let connections = ctx.db.query("channelConnections");
+    let results;
 
     if (args.agentId) {
-      connections = connections.withIndex("byAgent", (q) => q.eq("agentId", args.agentId!));
+      results = await ctx.db.query("channelConnections")
+        .withIndex("byAgent", (q) => q.eq("agentId", args.agentId!))
+        .collect();
     } else if (args.channel) {
-      connections = connections.withIndex("byChannel", (q) => q.eq("channel", args.channel!));
+      results = await ctx.db.query("channelConnections")
+        .withIndex("byChannel", (q) => q.eq("channel", args.channel!))
+        .collect();
     } else if (args.userId) {
-      connections = connections.withIndex("byUserId", (q) => q.eq("userId", args.userId!));
+      results = await ctx.db.query("channelConnections")
+        .withIndex("byUserId", (q) => q.eq("userId", args.userId!))
+        .collect();
+    } else {
+      results = await ctx.db.query("channelConnections").collect();
     }
-
-    const results = await connections.collect();
 
     // Return without sensitive data
     return results.map((c) => ({
