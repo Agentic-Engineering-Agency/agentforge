@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getModel, getModelsByProvider, getActiveModels, getContextLimit } from '../src/models/registry.js';
+import { getModel, getModelsByProvider, getActiveModels, getContextLimit, resolveModel } from '../src/models/registry.js';
 
 describe('Model Registry', () => {
   describe('getModel', () => {
@@ -54,6 +54,28 @@ describe('Model Registry', () => {
     it('returns default 100000 for unknown model', () => {
       const limit = getContextLimit('unknown/model');
       expect(limit).toBe(100000);
+    });
+  });
+
+  describe('resolveModel (failover)', () => {
+    it('returns the requested model when it exists', () => {
+      const model = resolveModel('openai/gpt-5.1');
+      expect(model.id).toBe('openai/gpt-5.1');
+    });
+
+    it('returns first valid fallback when primary is unknown', () => {
+      const model = resolveModel('unknown/model', ['anthropic/claude-sonnet-4-6', 'openai/gpt-4o']);
+      expect(model.id).toBe('anthropic/claude-sonnet-4-6');
+    });
+
+    it('skips unknown fallbacks and returns first valid one', () => {
+      const model = resolveModel('unknown/model', ['also/unknown', 'openai/gpt-4o']);
+      expect(model.id).toBe('openai/gpt-4o');
+    });
+
+    it('returns daemon default when all IDs are unknown', () => {
+      const model = resolveModel('unknown/a', ['unknown/b']);
+      expect(model.id).toBe('moonshotai/kimi-k2.5');
     });
   });
 

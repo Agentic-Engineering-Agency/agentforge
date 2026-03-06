@@ -5,6 +5,7 @@ export {
   getStorage,
   getVector,
   createStandardMemory,
+  isStorageInitialized,
   DAEMON_MODEL,
   OBSERVER_MODEL,
   EMBEDDING_MODEL,
@@ -18,6 +19,7 @@ export {
   getModelsByProvider,
   getActiveModels,
   getContextLimit,
+  resolveModel,
   type ModelEntry,
 } from './models/registry.js';
 
