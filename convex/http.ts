@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 
 const http = httpRouter();
 
@@ -72,7 +72,7 @@ http.route({
     }
 
     const file = await ctx.runQuery(api.files.getDownloadUrl, {
-      id: fileId as Parameters<typeof api.files.getDownloadUrl>[0]["id"],
+      id: fileId as any,
     });
 
     return new Response(null, {
@@ -85,142 +85,143 @@ http.route({
   }),
 });
 
-// OPTIONS preflight for /a2a/task
-http.route({
-  path: "/a2a/task",
-  method: "OPTIONS",
-  handler: httpAction(async (_ctx, request) => {
-    const origin = request.headers.get("Origin");
-    return new Response(null, {
-      status: 204,
-      headers: corsHeaders(origin),
-    });
-  }),
-});
-
-// POST /a2a/task — create a delegated A2A task
-http.route({
-  path: "/a2a/task",
-  method: "POST",
-  handler: httpAction(async (ctx, request) => {
-    const origin = request.headers.get("Origin");
-    const authHeader = request.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401,
-        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-      });
-    }
-
-    let body: Record<string, unknown>;
-    try {
-      body = await request.json();
-    } catch {
-      return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
-        status: 400,
-        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-      });
-    }
-
-    const { from, to, instruction, context, constraints, callbackUrl, projectId } = body as {
-      from?: unknown;
-      to?: unknown;
-      instruction?: unknown;
-      context?: unknown;
-      constraints?: unknown;
-      callbackUrl?: unknown;
-      projectId?: unknown;
-    };
-
-    if (typeof from !== "string" || typeof to !== "string" || typeof instruction !== "string") {
-      return new Response(
-        JSON.stringify({ error: "Missing required fields: from, to, instruction" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    if (instruction.length > 10000) {
-      return new Response(
-        JSON.stringify({ error: "instruction exceeds maximum length of 10000 characters" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const agentIdPattern = /^[a-zA-Z0-9_-]{1,128}$/;
-    if (!agentIdPattern.test(from)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid from agent ID format" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-        }
-      );
-    }
-    if (!agentIdPattern.test(to)) {
-      return new Response(
-        JSON.stringify({ error: "Invalid to agent ID format" }),
-        {
-          status: 400,
-          headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    const taskId = crypto.randomUUID();
-
-    await ctx.runMutation(api.a2aTasks.createTask, {
-      taskId,
-      fromAgentId: from,
-      toAgentId: to,
-      instruction,
-      context: context ?? undefined,
-      constraints: constraints as Parameters<typeof api.a2aTasks.createTask>[0]["constraints"] ?? undefined,
-      callbackUrl: typeof callbackUrl === "string" ? callbackUrl : undefined,
-      projectId: projectId ?? undefined,
-    });
-
-    return new Response(JSON.stringify({ taskId, status: "pending" }), {
-      status: 202,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-    });
-  }),
-});
-
-// GET /a2a/task — check task status by ?id=<taskId>
-http.route({
-  path: "/a2a/task",
-  method: "GET",
-  handler: httpAction(async (ctx, request) => {
-    const origin = request.headers.get("Origin");
-    const url = new URL(request.url);
-    const taskId = url.searchParams.get("id");
-    if (!taskId) {
-      return new Response(JSON.stringify({ error: "Missing query param: id" }), {
-        status: 400,
-        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-      });
-    }
-
-    const task = await ctx.runQuery(api.a2aTasks.getTask, { taskId });
-    if (!task) {
-      return new Response(JSON.stringify({ error: "Task not found" }), {
-        status: 404,
-        headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-      });
-    }
-
-    return new Response(JSON.stringify(task), {
-      status: 200,
-      headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
-    });
-  }),
-});
+// TODO: A2A routes - requires a2aTasks.ts
+// // OPTIONS preflight for /a2a/task
+// http.route({
+//   path: "/a2a/task",
+//   method: "OPTIONS",
+//   handler: httpAction(async (_ctx, request) => {
+//     const origin = request.headers.get("Origin");
+//     return new Response(null, {
+//       status: 204,
+//       headers: corsHeaders(origin),
+//     });
+//   }),
+// });
+//
+// // POST /a2a/task — create a delegated A2A task
+// http.route({
+//   path: "/a2a/task",
+//   method: "POST",
+//   handler: httpAction(async (ctx, request) => {
+//     const origin = request.headers.get("Origin");
+//     const authHeader = request.headers.get("Authorization");
+//     if (!authHeader) {
+//       return new Response(JSON.stringify({ error: "Unauthorized" }), {
+//         status: 401,
+//         headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//       });
+//     }
+//
+//     let body: Record<string, unknown>;
+//     try {
+//       body = await request.json();
+//     } catch {
+//       return new Response(JSON.stringify({ error: "Invalid JSON body" }), {
+//         status: 400,
+//         headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//       });
+//     }
+//
+//     const { from, to, instruction, context, constraints, callbackUrl, projectId } = body as {
+//       from?: unknown;
+//       to?: unknown;
+//       instruction?: unknown;
+//       context?: unknown;
+//       constraints?: unknown;
+//       callbackUrl?: unknown;
+//       projectId?: unknown;
+//     };
+//
+//     if (typeof from !== "string" || typeof to !== "string" || typeof instruction !== "string") {
+//       return new Response(
+//         JSON.stringify({ error: "Missing required fields: from, to, instruction" }),
+//         {
+//           status: 400,
+//           headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//         }
+//       );
+//     }
+//
+//     if (instruction.length > 10000) {
+//       return new Response(
+//         JSON.stringify({ error: "instruction exceeds maximum length of 10000 characters" }),
+//         {
+//           status: 400,
+//           headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//         }
+//       );
+//     }
+//
+//     const agentIdPattern = /^[a-zA-Z0-9_-]{1,128}$/;
+//     if (!agentIdPattern.test(from)) {
+//       return new Response(
+//         JSON.stringify({ error: "Invalid from agent ID format" }),
+//         {
+//           status: 400,
+//           headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//         }
+//       );
+//     }
+//     if (!agentIdPattern.test(to)) {
+//       return new Response(
+//         JSON.stringify({ error: "Invalid to agent ID format" }),
+//         {
+//           status: 400,
+//           headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//         }
+//       );
+//     }
+//
+//     const taskId = crypto.randomUUID();
+//
+//     await ctx.runMutation(api.a2aTasks.createTask, {
+//       taskId,
+//       fromAgentId: from,
+//       toAgentId: to,
+//       instruction,
+//       context: context ?? undefined,
+//       constraints: constraints as Parameters<typeof api.a2aTasks.createTask>[0]["constraints"] ?? undefined,
+//       callbackUrl: typeof callbackUrl === "string" ? callbackUrl : undefined,
+//       projectId: projectId ?? undefined,
+//     });
+//
+//     return new Response(JSON.stringify({ taskId, status: "pending" }), {
+//       status: 202,
+//       headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//     });
+//   }),
+// });
+//
+// // GET /a2a/task — check task status by ?id=<taskId>
+// http.route({
+//   path: "/a2a/task",
+//   method: "GET",
+//   handler: httpAction(async (ctx, request) => {
+//     const origin = request.headers.get("Origin");
+//     const url = new URL(request.url);
+//     const taskId = url.searchParams.get("id");
+//     if (!taskId) {
+//       return new Response(JSON.stringify({ error: "Missing query param: id" }), {
+//         status: 400,
+//         headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//       });
+//     }
+//
+//     const task = await ctx.runQuery(api.a2aTasks.getTask, { taskId });
+//     if (!task) {
+//       return new Response(JSON.stringify({ error: "Task not found" }), {
+//         status: 404,
+//         headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//       });
+//     }
+//
+//     return new Response(JSON.stringify(task), {
+//       status: 200,
+//       headers: { ...corsHeaders(origin), "Content-Type": "application/json" },
+//     });
+//   }),
+// });
 
 // OPTIONS preflight for /api/stream
 http.route({
@@ -285,15 +286,14 @@ http.route({
           // Create or get thread
           let currentThreadId = threadId as string | undefined;
           if (!currentThreadId) {
-            currentThreadId = await ctx.runMutation(api.threads.create, {
+            currentThreadId = await ctx.runMutation(api.threads.createThread, {
               agentId,
-              userId: typeof userId === "string" ? userId : undefined,
             });
           }
 
           // Add user message to thread
           await ctx.runMutation(api.messages.add, {
-            threadId: currentThreadId,
+            threadId: currentThreadId as any,
             role: "user",
             content: message,
           });
@@ -302,7 +302,7 @@ http.route({
           const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
           await ctx.runMutation(api.sessions.create, {
             sessionId,
-            threadId: currentThreadId,
+            threadId: currentThreadId as any,
             agentId,
             userId: typeof userId === "string" ? userId : undefined,
             channel: "api",
@@ -313,7 +313,7 @@ http.route({
           const { getBaseModelId, getProviderBaseUrl } = await import("./lib/agent");
 
           // Get API key for provider
-          const apiKeyData = await ctx.runQuery(api.apiKeys.getDecryptedForProvider, {
+          const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
             provider: agent.provider || "openrouter",
           });
 
@@ -350,7 +350,7 @@ http.route({
 
           // Add assistant message to thread
           await ctx.runMutation(api.messages.add, {
-            threadId: currentThreadId,
+            threadId: currentThreadId as any,
             role: "assistant",
             content: fullResponse,
           });
@@ -445,7 +445,7 @@ http.route({
       const { ElevenLabsTTS } = await import("./lib/tts");
 
       // Get ElevenLabs API key
-      const apiKeyData = await ctx.runQuery(api.apiKeys.getDecryptedForProvider, {
+      const apiKeyData = await ctx.runQuery(internal.apiKeys.getDecryptedForProvider, {
         provider: "elevenlabs",
       });
 
@@ -511,7 +511,9 @@ http.route({
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const origin = request.headers.get("Origin");
-    const { connectionId } = request.params;
+    const url = new URL(request.url);
+    const parts = url.pathname.split('/');
+    const connectionId = parts[parts.length - 1];
 
     // Get connection data
     const connection = await ctx.runQuery(api.channelConnections.getById, {
@@ -583,20 +585,24 @@ http.route({
     let actualThreadId;
 
     // Try to find existing thread by agentId and userId
-    const threads = await ctx.runQuery(api.threads.list, {
-      agentId: connection.agentId,
-      userId: `telegram-${chatId}`,
-    });
+    const threads = await ctx.runQuery(api.threads.listThreads, {});
 
-    if (threads && threads.length > 0) {
-      actualThreadId = threads[0]._id;
+    const filtered = threads.filter((t: any) =>
+      t.agentId === connection.agentId && t.userId === `telegram-${chatId}`
+    );
+
+    if (filtered && filtered.length > 0) {
+      actualThreadId = filtered[0]._id;
     } else {
       // Create new thread for this Telegram chat
-      actualThreadId = await ctx.runMutation(api.threads.create, {
+      const newThreadId = await ctx.runMutation(api.threads.createThread, {
         agentId: connection.agentId,
-        userId: `telegram-${chatId}`,
         name: senderName ? `Telegram: ${senderName}` : `Telegram Chat ${chatId}`,
       });
+      if (!newThreadId) {
+        throw new Error('Failed to create thread');
+      }
+      actualThreadId = newThreadId;
     }
 
     // Execute agent
@@ -610,7 +616,7 @@ http.route({
     // Send reply via Telegram Bot API
     try {
       // Get decrypted bot token
-      const botTokenData = await ctx.runQuery(api.channelConnections.getDecryptedBotToken, {
+      const botTokenData = await ctx.runQuery(internal.channelConnections.getDecryptedBotToken, {
         connectionId: connectionId as any,
       });
 
