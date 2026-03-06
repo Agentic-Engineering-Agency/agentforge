@@ -1,6 +1,6 @@
 import { Bot, type Context } from 'grammy';
 import type { Agent } from '@mastra/core/agent';
-import type { ChannelAdapter } from '../daemon/types.js';
+import type { ChannelAdapter, DaemonAccess } from '../daemon/types.js';
 import { progressiveStream, splitMessage, generateThreadId } from './shared.js';
 
 export interface TelegramChannelConfig {
@@ -14,7 +14,7 @@ export class TelegramChannel implements ChannelAdapter {
   private bot: Bot;
   private config: TelegramChannelConfig;
   private agents = new Map<string, Agent>();
-  private daemon: any = null;
+  private daemon: DaemonAccess | null = null;
 
   constructor(token: string, config: TelegramChannelConfig) {
     this.config = config;
@@ -69,7 +69,7 @@ export class TelegramChannel implements ChannelAdapter {
         await progressiveStream(
           agent,
           content,
-          { threadId, resourceId: threadId },
+          { threadId, resourceId: threadId, editIntervalMs: this.config.editIntervalMs ?? 2000 },
           async (text, done) => {
             if (!done && text.length > 0) {
               try {
@@ -117,7 +117,7 @@ export class TelegramChannel implements ChannelAdapter {
     });
   }
 
-  async start(agents: Map<string, Agent>, daemon: any): Promise<void> {
+  async start(agents: Map<string, Agent>, daemon: DaemonAccess): Promise<void> {
     this.agents = agents;
     this.daemon = daemon;
 

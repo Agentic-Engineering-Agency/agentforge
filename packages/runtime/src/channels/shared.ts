@@ -10,14 +10,14 @@ import type { Agent } from '@mastra/core/agent';
  *
  * @param agent - Mastra agent instance
  * @param message - User message text
- * @param opts - Thread and resource options
+ * @param opts - Thread and resource options, plus optional edit interval override
  * @param onChunk - Callback with accumulated text and done flag
  * @returns Final response text
  */
 export async function progressiveStream(
   agent: Agent,
   message: string,
-  opts: { threadId?: string; resourceId?: string },
+  opts: { threadId?: string; resourceId?: string; editIntervalMs?: number },
   onChunk: (text: string, done: boolean) => Promise<void>,
 ): Promise<string> {
   // Mastra agent.stream() expects messages array and optional execution options
@@ -28,7 +28,7 @@ export async function progressiveStream(
   const stream = await agent.stream([{ role: 'user', content: message }], streamOptions);
   let buffer = '';
   let lastEdit = Date.now();
-  const EDIT_INTERVAL = 1500; // 1.5s default edit interval
+  const EDIT_INTERVAL = opts.editIntervalMs ?? 1500;
 
   try {
     for await (const chunk of stream.fullStream) {

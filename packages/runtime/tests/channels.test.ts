@@ -4,6 +4,7 @@ import {
   formatSSEChunk,
   generateThreadId,
 } from '../src/channels/shared.js';
+import { SlackChannelConfigSchema } from '../src/channels/slack.js';
 
 describe('Channel Shared Utilities', () => {
   describe('splitMessage', () => {
@@ -164,5 +165,75 @@ describe('Channel Shared Utilities', () => {
       // Unicode may be escaped, which is fine
       expect(chunk.length).toBeGreaterThan(0);
     });
+  });
+});
+
+describe('SlackChannelConfigSchema', () => {
+  const validConfig = {
+    defaultAgentId: 'my-agent',
+    botToken: 'xoxb-123456789-abcdefghij',
+    signingSecret: 'abc123signingsecret',
+  };
+
+  it('accepts valid config', () => {
+    expect(() => SlackChannelConfigSchema.parse(validConfig)).not.toThrow();
+  });
+
+  it('rejects botToken without xoxb- prefix', () => {
+    expect(() =>
+      SlackChannelConfigSchema.parse({ ...validConfig, botToken: 'invalid-token' }),
+    ).toThrow(/xoxb-/);
+  });
+
+  it('rejects botToken with wrong prefix (xoxp-)', () => {
+    expect(() =>
+      SlackChannelConfigSchema.parse({ ...validConfig, botToken: 'xoxp-user-token' }),
+    ).toThrow(/xoxb-/);
+  });
+
+  it('rejects appToken without xapp- prefix when provided', () => {
+    expect(() =>
+      SlackChannelConfigSchema.parse({ ...validConfig, appToken: 'xoxb-wrong-prefix' }),
+    ).toThrow(/xapp-/);
+  });
+
+  it('accepts valid appToken with xapp- prefix', () => {
+    expect(() =>
+      SlackChannelConfigSchema.parse({ ...validConfig, appToken: 'xapp-1-token' }),
+    ).not.toThrow();
+  });
+
+  it('rejects missing signingSecret', () => {
+    const { signingSecret: _, ...rest } = validConfig;
+    expect(() => SlackChannelConfigSchema.parse(rest)).toThrow(/required/i);
+  });
+
+  it('rejects empty signingSecret', () => {
+    expect(() =>
+      SlackChannelConfigSchema.parse({ ...validConfig, signingSecret: '' }),
+    ).toThrow(/required/i);
+  });
+
+  it('rejects missing defaultAgentId', () => {
+    const { defaultAgentId: _, ...rest } = validConfig;
+    expect(() => SlackChannelConfigSchema.parse(rest)).toThrow();
+  });
+
+  it('accepts editIntervalMs within range', () => {
+    expect(() =>
+      SlackChannelConfigSchema.parse({ ...validConfig, editIntervalMs: 2000 }),
+    ).not.toThrow();
+  });
+
+  it('rejects editIntervalMs below minimum (< 100)', () => {
+    expect(() =>
+      SlackChannelConfigSchema.parse({ ...validConfig, editIntervalMs: 50 }),
+    ).toThrow();
+  });
+
+  it('accepts optional allowedChannelIds', () => {
+    expect(() =>
+      SlackChannelConfigSchema.parse({ ...validConfig, allowedChannelIds: ['C123', 'C456'] }),
+    ).not.toThrow();
   });
 });

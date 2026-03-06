@@ -2,13 +2,8 @@ import { Hono } from 'hono';
 import { streamText } from 'hono/streaming';
 import * as crypto from 'node:crypto';
 import type { Agent } from '@mastra/core/agent';
-import type { ChannelAdapter, AgentDefinition } from '../daemon/types.js';
+import type { ChannelAdapter, DaemonAccess } from '../daemon/types.js';
 import { formatSSEChunk } from './shared.js';
-
-interface DaemonAccess {
-  listAgents(): AgentDefinition[];
-  getAgent(id: string): Agent | undefined;
-}
 
 export interface HttpChannelConfig {
   port?: number;

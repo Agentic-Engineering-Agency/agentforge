@@ -1,6 +1,6 @@
 import { Client, GatewayIntentBits, ChannelType, type Message } from 'discord.js';
 import type { Agent } from '@mastra/core/agent';
-import type { ChannelAdapter } from '../daemon/types.js';
+import type { ChannelAdapter, DaemonAccess } from '../daemon/types.js';
 import { progressiveStream, splitMessage, generateThreadId } from './shared.js';
 
 export interface DiscordChannelConfig {
@@ -15,7 +15,7 @@ export class DiscordChannel implements ChannelAdapter {
   private client: Client;
   private config: DiscordChannelConfig;
   private agents = new Map<string, Agent>();
-  private daemon: any = null;
+  private daemon: DaemonAccess | null = null;
   private token: string;
 
   constructor(token: string, config: DiscordChannelConfig) {
@@ -82,7 +82,7 @@ export class DiscordChannel implements ChannelAdapter {
         await progressiveStream(
           agent,
           content,
-          { threadId, resourceId: threadId },
+          { threadId, resourceId: threadId, editIntervalMs: this.config.editIntervalMs },
           async (text, done) => {
             if (!done && text.length > 0) {
               await thinkingMsg.edit(text.slice(0, 2000)); // Discord limit
@@ -108,7 +108,7 @@ export class DiscordChannel implements ChannelAdapter {
     });
   }
 
-  async start(agents: Map<string, Agent>, daemon: any): Promise<void> {
+  async start(agents: Map<string, Agent>, daemon: DaemonAccess): Promise<void> {
     this.agents = agents;
     this.daemon = daemon;
 
