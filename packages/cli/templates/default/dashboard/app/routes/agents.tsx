@@ -9,33 +9,55 @@ export const Route = createFileRoute('/agents')({ component: AgentsPage });
 
 const providers = ['openai', 'anthropic', 'google', 'xai', 'mistral', 'deepseek', 'openrouter', 'groq', 'together', 'perplexity'];
 
-// Static fallback models — used when no API key is configured or the live fetch fails
+// Static fallback models — used when daemon is offline or provider has no public API
 const FALLBACK_MODELS: Record<string, string[]> = {
-  openai: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'o3', 'o4-mini'],
-  anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-  google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
-  xai: ['grok-3', 'grok-3-mini', 'grok-2'],
-  mistral: ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
-  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+  openai:     ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o4-mini'],
+  anthropic:  ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  google:     ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'],
+  xai:        ['grok-3', 'grok-3-mini', 'grok-2'],
+  mistral:    ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
+  deepseek:   ['deepseek-chat', 'deepseek-reasoner'],
   openrouter: ['openrouter/auto', 'openai/gpt-4o', 'anthropic/claude-sonnet-4-6', 'google/gemini-2.5-flash'],
-  groq: ['llama-3.3-70b-versatile', 'deepseek-r1-distill-llama-70b', 'qwen-qwq-32b'],
-  together: ['meta-llama/Llama-4-Scout-17B-16E-Instruct', 'deepseek-ai/DeepSeek-R1', 'Qwen/Qwen2.5-72B-Instruct-Turbo'],
+  groq:       ['llama-3.3-70b-versatile', 'deepseek-r1-distill-llama-70b', 'qwen-qwq-32b'],
+  together:   ['meta-llama/Llama-4-Scout-17B-16E-Instruct', 'deepseek-ai/DeepSeek-R1', 'Qwen/Qwen2.5-72B-Instruct-Turbo'],
   perplexity: ['sonar-pro', 'sonar', 'sonar-reasoning-pro'],
 };
 
 /**
- * Returns static model list for a provider.
- * Live model fetching removed in v0.12 — models are managed by the runtime daemon.
+ * Fetches available models for a provider from the running daemon's /api/models endpoint.
+ * Falls back to FALLBACK_MODELS if the daemon is offline or returns an error.
+ * Results are memoised per provider for the lifetime of the component mount.
  */
 function useProviderModels(provider: string) {
-  // Static models only — live fetch removed in SPEC-022.
-  // The runtime daemon resolves provider models at startup via agentforge.config.ts.
   const [models, setModels] = useState<string[]>(FALLBACK_MODELS[provider] ?? []);
-  const loading = false;
+  const [loading, setLoading] = useState(false);
+  const daemonUrl: string = (window as any).__AGENTFORGE_DAEMON_URL__ ?? 'http://localhost:3001';
 
   useEffect(() => {
+    if (!provider) return;
+    let cancelled = false;
+    setLoading(true);
+    // Immediately show fallback while fetching
     setModels(FALLBACK_MODELS[provider] ?? []);
-  }, [provider]);
+
+    fetch(`${daemonUrl}/api/models?provider=${encodeURIComponent(provider)}`, {
+      signal: AbortSignal.timeout(4000),
+    })
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then((data: { models: string[] }) => {
+        if (!cancelled && Array.isArray(data.models) && data.models.length > 0) {
+          setModels(data.models);
+        }
+      })
+      .catch(() => {
+        // Daemon offline or error — keep fallback, no toast needed
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => { cancelled = true; };
+  }, [provider, daemonUrl]);
 
   return { models, loading };
 }

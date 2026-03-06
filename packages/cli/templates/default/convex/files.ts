@@ -43,7 +43,7 @@ export const get = query({
   },
 });
 
-// Mutation: Create file metadata (file stored in Cloudflare R2)
+// Mutation: Create file metadata (file stored in Convex storage or Cloudflare R2)
 export const create = mutation({
   args: {
     name: v.string(),
@@ -51,6 +51,7 @@ export const create = mutation({
     mimeType: v.string(),
     size: v.number(),
     url: v.string(),
+    storageId: v.optional(v.string()),
     folderId: v.optional(v.id("folders")),
     projectId: v.optional(v.id("projects")),
     userId: v.optional(v.string()),

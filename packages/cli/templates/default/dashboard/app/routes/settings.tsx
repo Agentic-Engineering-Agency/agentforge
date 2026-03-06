@@ -83,9 +83,9 @@ function SettingsPage() {
   const toggleApiKey = useMutation(api.apiKeys.toggleActive);
   const storeVaultSecret = useMutation(api.vault.store);
   const removeVaultSecret = useMutation(api.vault.remove);
-  // NOTE: Live model fetching removed in v0.12 — models are managed by the runtime daemon.
-  // The daemon reads providers from agentforge.config.ts on startup.
-  const [liveModels, setLiveModels] = useState<Record<string, string>>({});
+  // All available models fetched from daemon /api/models (flat list for default-model picker)
+  const [allModels, setAllModels] = useState<{ provider: string; model: string }[]>([]);
+  const daemonUrl: string = (window as any).__AGENTFORGE_DAEMON_URL__ ?? 'http://localhost:3001';
 
   const [tab, setTab] = useState<'providers' | 'vault' | 'general'>('providers');
   const [addingProvider, setAddingProvider] = useState<typeof AI_PROVIDERS[0] | null>(null);
@@ -103,22 +103,35 @@ function SettingsPage() {
     return acc;
   }, {} as Record<string, any[]>);
 
-  // Fetch live model names for providers that have a key configured
+  // Fetch all available models from daemon for the General → Default Model dropdown
   useEffect(() => {
-    const providersWithKeys = AI_PROVIDERS.filter(p => (keysByProvider[p.id] || []).length > 0);
-    for (const provider of providersWithKeys) {
-      if (liveModels[provider.id]) continue; // already fetched
-      // NOTE: Live model fetch removed in v0.12 — models handled by runtime daemon.
-      Promise.resolve([])
-        .then((models: any[]) => {
-          if (models && models.length > 0) {
-            const top = models.slice(0, 3).map((m: any) => m.displayName || m.id.split('/').slice(1).join('/')).join(', ');
-            setLiveModels(prev => ({ ...prev, [provider.id]: top }));
-          }
-        })
-        .catch(() => {}); // silently fall back to static description
-    }
-  }, [apiKeys]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetch(`${daemonUrl}/api/models`, { signal: AbortSignal.timeout(4000) })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((data: { providers: Record<string, string[]> }) => {
+        const flat: { provider: string; model: string }[] = [];
+        for (const [prov, models] of Object.entries(data.providers ?? {})) {
+          for (const m of models) flat.push({ provider: prov, model: m });
+        }
+        if (flat.length > 0) setAllModels(flat);
+      })
+      .catch(() => {
+        // Daemon offline — use fallback static list
+        const FALLBACK: Record<string, string[]> = {
+          openai: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini'],
+          anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+          google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
+          xai: ['grok-3', 'grok-3-mini'],
+          openrouter: ['openrouter/auto'],
+        };
+        const flat: { provider: string; model: string }[] = [];
+        for (const [prov, models] of Object.entries(FALLBACK)) {
+          for (const m of models) flat.push({ provider: prov, model: m });
+        }
+        setAllModels(flat);
+      });
+  }, [daemonUrl]);
+
+  // (Live provider model descriptions removed — daemon handles model discovery)
 
   const handleAddKey = async () => {
     if (!addingProvider || !newKeyValue.trim()) return;
@@ -190,7 +203,7 @@ function SettingsPage() {
                         <div className={`w-3 h-3 rounded-full ${provider.color}`} />
                         <div>
                           <h3 className="font-semibold text-foreground">{provider.name}</h3>
-                          <p className="text-xs text-muted-foreground">{liveModels[provider.id] || provider.description}</p>
+                          <p className="text-xs text-muted-foreground">{provider.description}</p>
                         </div>
                       </div>
                       <a href={provider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
@@ -301,11 +314,14 @@ function SettingsPage() {
                 <div>
                   <label className="block text-sm font-medium mb-1">Default Model</label>
                   <select className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm">
-                    <option value="gpt-4.1-mini">gpt-4.1-mini (OpenAI)</option>
-                    <option value="claude-sonnet-4-6">claude-sonnet-4-6 (Anthropic)</option>
-                    <option value="claude-haiku-4-5">claude-haiku-4-5 (Anthropic)</option>
-                    <option value="gemini-2.5-flash">gemini-2.5-flash (Google)</option>
-                    <option value="openrouter/auto">auto (OpenRouter)</option>
+                    {allModels.map(({ provider, model }) => (
+                      <option key={`${provider}/${model}`} value={model}>
+                        {model} ({provider})
+                      </option>
+                    ))}
+                    {allModels.length === 0 && (
+                      <option value="" disabled>Loading models…</option>
+                    )}
                   </select>
                   <p className="text-xs text-muted-foreground mt-1">Used when creating new agents without specifying a model.</p>
                 </div>

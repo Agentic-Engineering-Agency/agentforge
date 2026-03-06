@@ -228,7 +228,8 @@ export default defineSchema({
     originalName: v.string(),
     mimeType: v.string(),
     size: v.number(),
-    url: v.string(), // Cloudflare R2 URL
+    url: v.string(), // Cloudflare R2 URL or Convex storage URL
+    storageId: v.optional(v.string()), // Convex storage ID from generateUploadUrl flow
     folderId: v.optional(v.id("folders")),
     projectId: v.optional(v.id("projects")),
     userId: v.optional(v.string()),
