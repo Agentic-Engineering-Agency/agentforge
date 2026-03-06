@@ -131,6 +131,8 @@ export class ResearchOrchestrator {
    * Step 1: Generate research questions based on the topic.
    */
   private async _plannerStep(agentConfig: ResearchAgentConfig): Promise<ResearchQuestion[]> {
+    const modelStr = this._setupProviderEnv(agentConfig);
+
     const planner = new MastraAgent({
       id: 'research-planner',
       name: 'Research Planner',
@@ -144,12 +146,7 @@ Return ONLY a JSON array of objects with this exact format:
   {"id": "q2", "question": "..."},
   ...
 ]`,
-      model: {
-        providerId: agentConfig.providerId,
-        modelId: agentConfig.modelId,
-        apiKey: agentConfig.apiKey,
-        ...(agentConfig.url && { url: agentConfig.url }),
-      },
+      model: modelStr,
     });
 
     const response = await planner.generate([
@@ -188,6 +185,8 @@ Return ONLY a JSON array of objects with this exact format:
     questions: ResearchQuestion[],
     agentConfig: ResearchAgentConfig
   ): Promise<ResearchFinding[]> {
+    const modelStr = this._setupProviderEnv(agentConfig);
+
     const researchAgents = questions.map((q, i) => ({
       id: q.id,
       question: q.question,
@@ -203,12 +202,7 @@ Focus on:
 - Multiple perspectives where relevant
 
 Cite any sources mentioned in your response.`,
-        model: {
-          providerId: agentConfig.providerId,
-          modelId: agentConfig.modelId,
-          apiKey: agentConfig.apiKey,
-          ...(agentConfig.url && { url: agentConfig.url }),
-        },
+        model: modelStr,
       }),
     }));
 
@@ -249,6 +243,8 @@ Cite any sources mentioned in your response.`,
     findings: ResearchFinding[],
     agentConfig: ResearchAgentConfig
   ): Promise<string> {
+    const modelStr = this._setupProviderEnv(agentConfig);
+
     const synthesizer = new MastraAgent({
       id: 'research-synthesizer',
       name: 'Research Synthesizer',
@@ -262,12 +258,7 @@ Your report should:
 5. Conclude with actionable insights
 
 Use markdown formatting for readability.`,
-      model: {
-        providerId: agentConfig.providerId,
-        modelId: agentConfig.modelId,
-        apiKey: agentConfig.apiKey,
-        ...(agentConfig.url && { url: agentConfig.url }),
-      },
+      model: modelStr,
     });
 
     const findingsText = findings
@@ -285,6 +276,21 @@ Use markdown formatting for readability.`,
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+  /**
+   * Set up provider environment variable and return the model string for Mastra v1.8.
+   *
+   * Mastra v1.8 requires:
+   * 1. API key set in process.env as PROVIDER_API_KEY
+   * 2. Model passed as "provider/model" string
+   */
+  private _setupProviderEnv(agentConfig: ResearchAgentConfig): string {
+    const envKey = `${agentConfig.providerId.toUpperCase()}_API_KEY`;
+    if (!process.env[envKey]) {
+      process.env[envKey] = agentConfig.apiKey;
+    }
+    return `${agentConfig.providerId}/${agentConfig.modelId}`;
+  }
 
   private _getAgentCount(depth: ResearchDepth): number {
     switch (depth) {
