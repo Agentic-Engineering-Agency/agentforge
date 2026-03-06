@@ -17,7 +17,8 @@
     "test:e2e:coverage": "cd tests/e2e && npx vitest run --config vitest.config.ts --coverage",
     "lint": "pnpm -r lint",
     "clean": "pnpm -r clean",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "sync-templates": "bash scripts/sync-templates.sh"
   },
   "engines": {
     "node": ">=18.0.0",
