@@ -41,13 +41,16 @@ export class HttpChannel implements ChannelAdapter {
         return c.json({ error: 'Missing Authorization header' }, 401);
       }
       const [type, token] = auth.split(' ');
-      if (type !== 'Bearer') {
+      if (type !== 'Bearer' || !token) {
         return c.json({ error: 'Invalid API key' }, 401);
       }
-      const tokenBuf = Buffer.from(token ?? '');
-      const keyBuf = Buffer.from(apiKey);
-      const valid =
-        tokenBuf.length === keyBuf.length && crypto.timingSafeEqual(tokenBuf, keyBuf);
+      // Hash both values to equal-length digests before comparing so that
+      // crypto.timingSafeEqual runs unconditionally (no length-leaking short-circuit).
+      // Previously, the length check short-circuited before timingSafeEqual and leaked
+      // expected key length via timing differences.
+      const tokenHash = crypto.createHash('sha256').update(token).digest();
+      const keyHash = crypto.createHash('sha256').update(apiKey).digest();
+      const valid = crypto.timingSafeEqual(tokenHash, keyHash);
       if (!valid) {
         return c.json({ error: 'Invalid API key' }, 401);
       }
