@@ -21,7 +21,11 @@ export async function progressiveStream(
   onChunk: (text: string, done: boolean) => Promise<void>,
 ): Promise<string> {
   // Mastra agent.stream() expects messages array and optional execution options
-  const stream = await agent.stream([{ role: 'user', content: message }]);
+  const streamOptions =
+    opts.threadId && opts.resourceId
+      ? { memory: { thread: opts.threadId, resource: opts.resourceId } }
+      : undefined;
+  const stream = await agent.stream([{ role: 'user', content: message }], streamOptions);
   let buffer = '';
   let lastEdit = Date.now();
   const EDIT_INTERVAL = 1500; // 1.5s default edit interval
