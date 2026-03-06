@@ -36,13 +36,11 @@ describe('AGE-174: Dynamic Model List', () => {
 
 // ─── AGE-175: Workspace ────────────────────────────────────────────────────────
 describe('AGE-175: Mastra Workspace', () => {
-  it('AgentForgeWorkspace.local() config has correct filesystem type', async () => {
-    // Verify workspace factory exists and has correct structure
+  it('AgentForgeWorkspace exists and is defined', async () => {
+    // Verify workspace module exists (static factory methods removed in SPEC-023)
     const { AgentForgeWorkspace } = await import('@agentforge-ai/core/workspace');
     expect(AgentForgeWorkspace).toBeDefined();
-    expect(typeof AgentForgeWorkspace.local).toBe('function');
-    expect(typeof AgentForgeWorkspace.cloud).toBe('function');
-    expect(typeof AgentForgeWorkspace.filesOnly).toBe('function');
+    expect(typeof AgentForgeWorkspace).toBe('function'); // class constructor
   });
 
   it('workspace init creates required directories', async () => {
