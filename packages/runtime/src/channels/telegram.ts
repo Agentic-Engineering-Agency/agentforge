@@ -62,7 +62,7 @@ export class TelegramChannel implements ChannelAdapter {
       const threadId = generateThreadId('telegram', chatId.toString());
 
       // Send "thinking" message
-      const thinkingMsg = await ctx.reply('💭 Thinking...');
+      const thinkingMsg = await ctx.reply('💭 Pensando...');
 
       try {
         // Progressive streaming
@@ -99,6 +99,7 @@ export class TelegramChannel implements ChannelAdapter {
               }
             }
           },
+          this.config.editIntervalMs ?? 1000,
         );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';

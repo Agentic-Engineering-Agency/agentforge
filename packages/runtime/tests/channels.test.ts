@@ -1,9 +1,12 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import {
   splitMessage,
   formatSSEChunk,
   generateThreadId,
 } from '../src/channels/shared.js';
+import { HttpChannel } from '../src/channels/http.js';
+import { AgentForgeDaemon } from '../src/daemon/daemon.js';
+import { initStorage } from '../src/agent/shared.js';
 
 describe('Channel Shared Utilities', () => {
   describe('splitMessage', () => {
@@ -136,8 +139,146 @@ describe('Channel Shared Utilities', () => {
     });
   });
 
-  describe('edge cases', () => {
-    it('splitMessage handles single word longer than limit', () => {
+});
+
+describe('HTTP Channel Integration', () => {
+  let daemon: AgentForgeDaemon;
+  let channel: HttpChannel;
+  const testPort = 3456; // Use non-conflicting port
+
+  beforeAll(async () => {
+    // Initialize storage with mock credentials for tests
+    initStorage('https://mock.convex.cloud', 'mock-admin-key');
+    // Set required API key for embedding model
+    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'test-key';
+
+    // Create daemon with a test agent
+    daemon = new AgentForgeDaemon();
+    await daemon.loadAgents([
+      {
+        id: 'test-agent',
+        name: 'Test Agent',
+        instructions: 'You are a helpful test assistant. Keep responses brief.',
+      },
+    ]);
+
+    // Create and start HTTP channel
+    channel = new HttpChannel({ port: testPort, apiKey: 'test-key' });
+    daemon.addChannel(channel);
+    await channel.start(new Map(), daemon);
+
+    // Give server time to start
+    await new Promise(resolve => setTimeout(resolve, 100));
+  });
+
+  afterAll(async () => {
+    if (channel) {
+      await channel.stop();
+    }
+  });
+
+  describe('GET /health', () => {
+    it('returns 200 status', async () => {
+      const response = await fetch(`http://localhost:${testPort}/health`, {
+        headers: { Authorization: 'Bearer test-key' },
+      });
+      expect(response.status).toBe(200);
+    });
+
+    it('returns correct structure with agents list', async () => {
+      const response = await fetch(`http://localhost:${testPort}/health`, {
+        headers: { Authorization: 'Bearer test-key' },
+      });
+      const data = await response.json() as { status: string; version: string; agents: string[] };
+      expect(data).toHaveProperty('status', 'ok');
+      expect(data).toHaveProperty('version');
+      expect(data).toHaveProperty('agents');
+      expect(Array.isArray(data.agents)).toBe(true);
+      expect(data.agents).toContain('test-agent');
+    });
+
+    it('requires valid API key', async () => {
+      const response = await fetch(`http://localhost:${testPort}/health`, {
+        headers: { Authorization: 'Bearer wrong-key' },
+      });
+      expect(response.status).toBe(401);
+    });
+
+    it('returns 401 without auth header', async () => {
+      const response = await fetch(`http://localhost:${testPort}/health`);
+      expect(response.status).toBe(401);
+    });
+  });
+
+  describe('GET /v1/agents', () => {
+    it('returns list of loaded agents', async () => {
+      const response = await fetch(`http://localhost:${testPort}/v1/agents`, {
+        headers: { Authorization: 'Bearer test-key' },
+      });
+      const data = await response.json() as { object: string; data: Array<{ id: string; name: string }> };
+      expect(data.object).toBe('list');
+      expect(Array.isArray(data.data)).toBe(true);
+      expect(data.data.length).toBeGreaterThan(0);
+      expect(data.data[0]).toHaveProperty('id');
+      expect(data.data[0]).toHaveProperty('name');
+    });
+
+    it('includes test-agent in list', async () => {
+      const response = await fetch(`http://localhost:${testPort}/v1/agents`, {
+        headers: { Authorization: 'Bearer test-key' },
+      });
+      const data = await response.json() as { data: Array<{ id: string }> };
+      const testAgent = data.data.find((a: { id: string }) => a.id === 'test-agent');
+      expect(testAgent).toBeDefined();
+    });
+  });
+
+  describe('POST /v1/chat/completions', () => {
+    it('returns error without model', async () => {
+      const response = await fetch(`http://localhost:${testPort}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-key',
+        },
+        body: JSON.stringify({ messages: [{ role: 'user', content: 'hello' }] }),
+      });
+      expect(response.status).toBe(400);
+    });
+
+    it('returns error for empty messages', async () => {
+      const response = await fetch(`http://localhost:${testPort}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-key',
+        },
+        body: JSON.stringify({ model: 'test-agent', messages: [] }),
+      });
+      expect(response.status).toBe(400);
+    });
+
+    it('returns 404 for non-existent agent', async () => {
+      const response = await fetch(`http://localhost:${testPort}/v1/chat/completions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer test-key',
+        },
+        body: JSON.stringify({
+          model: 'non-existent',
+          messages: [{ role: 'user', content: 'hello' }],
+          stream: false,
+        }),
+      });
+      expect(response.status).toBe(404);
+    });
+  });
+});
+
+describe('Channel Shared Utilities Edge Cases', () => {
+  describe('splitMessage edge cases', () => {
+    it('handles single word longer than limit', () => {
       const text = 'a'.repeat(5000);
       const chunks = splitMessage(text, 200);
       expect(chunks.length).toBeGreaterThan(0);
@@ -146,7 +287,7 @@ describe('Channel Shared Utilities', () => {
       });
     });
 
-    it('splitMessage handles mixed content with code and text', () => {
+    it('handles mixed content with code and text', () => {
       const text = 'Regular text\n```typescript\nconst code = "here";\n```\nMore text\n```typescript\nconst more = "code";\n```\nFinal text';
       const chunks = splitMessage(text, 100);
       // All code blocks should be intact
@@ -157,8 +298,10 @@ describe('Channel Shared Utilities', () => {
         expect(found).toBe(true);
       });
     });
+  });
 
-    it('formatSSEChunk handles unicode content', () => {
+  describe('formatSSEChunk edge cases', () => {
+    it('handles unicode content', () => {
       const chunk = formatSSEChunk('Hello 🌍 世界');
       expect(chunk).toContain('Hello');
       // Unicode may be escaped, which is fine
@@ -166,3 +309,4 @@ describe('Channel Shared Utilities', () => {
     });
   });
 });
+

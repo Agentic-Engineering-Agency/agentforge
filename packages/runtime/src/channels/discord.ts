@@ -75,7 +75,7 @@ export class DiscordChannel implements ChannelAdapter {
       const threadId = generateThreadId('discord', message.author.id);
 
       // Send "thinking" message
-      const thinkingMsg = await message.reply('💭 Thinking...');
+      const thinkingMsg = await message.reply('💭 Pensando...');
 
       try {
         // Progressive streaming
@@ -99,6 +99,7 @@ export class DiscordChannel implements ChannelAdapter {
               }
             }
           },
+          this.config.editIntervalMs ?? 1500,
         );
       } catch (error) {
         const errorMsg = error instanceof Error ? error.message : 'Unknown error';

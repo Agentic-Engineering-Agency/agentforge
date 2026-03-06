@@ -56,9 +56,12 @@ export class HttpChannel implements ChannelAdapter {
 
     // Health check
     this.app.get('/health', (c) => {
+      const daemon = this.daemon;
+      const agents = daemon ? daemon.listAgents().map(a => a.id) : [];
       return c.json({
         status: 'ok',
         version: '0.1.0',
+        agents,
         timestamp: new Date().toISOString(),
       });
     });
