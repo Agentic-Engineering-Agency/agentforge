@@ -53,6 +53,8 @@
     }
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^1.0.0",
+    "@ai-sdk/google": "^1.0.0",
     "@mastra/convex": "^1.0.5"
   }
 }
