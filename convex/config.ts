@@ -50,7 +50,7 @@ export const getConfig = query({
       const globalSetting = await ctx.db
         .query("settings")
         .withIndex("byUserIdAndKey", (q) =>
-          q.eq("userId", args.userId).eq("key", "globalConfig")
+          q.eq("userId", args.userId ?? "").eq("key", "globalConfig")
         )
         .first();
 
@@ -60,12 +60,15 @@ export const getConfig = query({
     }
 
     // Build agent config from database agent
+    // Map failoverModels from { provider, model }[] to string[]
     const agentConfig: AgentConfig = {
       model: agent.model,
       temperature: agent.temperature,
       maxTokens: agent.maxTokens,
       instructions: agent.instructions,
-      failoverModels: agent.failoverModels,
+      failoverModels: agent.failoverModels?.map((f: any) =>
+        typeof f === "string" ? f : `${f.provider}/${f.model}`
+      ),
     };
 
     // Resolve configuration using the cascade
