@@ -1,14 +1,13 @@
 import { Hono } from 'hono';
 import { streamText } from 'hono/streaming';
+import * as crypto from 'node:crypto';
 import type { Agent } from '@mastra/core/agent';
-import type { ChannelAdapter } from '../daemon/types.js';
+import type { ChannelAdapter, AgentDefinition } from '../daemon/types.js';
 import { formatSSEChunk } from './shared.js';
 
-// Type for daemon stored in Hono context
-interface HonoEnv {
-  Variables: {
-    daemon: any;
-  };
+interface DaemonAccess {
+  listAgents(): AgentDefinition[];
+  getAgent(id: string): Agent | undefined;
 }
 
 export interface HttpChannelConfig {
@@ -18,29 +17,38 @@ export interface HttpChannelConfig {
 
 export class HttpChannel implements ChannelAdapter {
   name = 'http';
-  private app: Hono<HonoEnv>;
-  private server?: any;
+  private app: Hono;
+  private server?: unknown;
   private port: number;
   private apiKey?: string;
+  private daemon: DaemonAccess | null = null;
 
   constructor(config: HttpChannelConfig = {}) {
     this.port = config.port ?? 3001;
     this.apiKey = config.apiKey ?? process.env.AGENTFORGE_API_KEY;
-    this.app = new Hono<HonoEnv>();
+    this.app = new Hono();
     this.setupRoutes();
   }
 
   private setupRoutes(): void {
     // Auth middleware
     this.app.use('*', async (c, next) => {
-      if (!this.apiKey) return next();
+      const apiKey = this.apiKey;
+      if (!apiKey) return next();
 
       const auth = c.req.header('Authorization');
       if (!auth) {
         return c.json({ error: 'Missing Authorization header' }, 401);
       }
       const [type, token] = auth.split(' ');
-      if (type !== 'Bearer' || token !== this.apiKey) {
+      if (type !== 'Bearer') {
+        return c.json({ error: 'Invalid API key' }, 401);
+      }
+      const tokenBuf = Buffer.from(token ?? '');
+      const keyBuf = Buffer.from(apiKey);
+      const valid =
+        tokenBuf.length === keyBuf.length && crypto.timingSafeEqual(tokenBuf, keyBuf);
+      if (!valid) {
         return c.json({ error: 'Invalid API key' }, 401);
       }
       return next();
@@ -57,11 +65,12 @@ export class HttpChannel implements ChannelAdapter {
 
     // List agents
     this.app.get('/v1/agents', (c) => {
-      const daemon = c.get('daemon');
+      const daemon = this.daemon;
+      if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
       const agents = daemon.listAgents();
       return c.json({
         object: 'list',
-        data: agents.map((a: any) => ({
+        data: agents.map((a) => ({
           id: a.id,
           name: a.name,
           description: a.description,
@@ -89,7 +98,9 @@ export class HttpChannel implements ChannelAdapter {
 
     // Chat completions - OpenAI compatible
     this.app.post('/v1/chat/completions', async (c) => {
-      const daemon = c.get('daemon');
+      const daemon = this.daemon;
+      if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
+
       const body = await c.req.json();
       const {
         model,
@@ -100,6 +111,13 @@ export class HttpChannel implements ChannelAdapter {
         messages: Array<{ role: string; content: string }>;
         stream?: boolean;
       };
+
+      if (!model) {
+        return c.json({ error: { message: "'model' field is required", type: 'invalid_request_error' } }, 400);
+      }
+      if (!messages || messages.length === 0) {
+        return c.json({ error: { message: "'messages' must not be empty", type: 'invalid_request_error' } }, 400);
+      }
 
       // Get agent by model ID (agent ID)
       const agent = daemon.getAgent(model);
@@ -157,16 +175,12 @@ export class HttpChannel implements ChannelAdapter {
     });
   }
 
-  async start(agents: Map<string, Agent>, daemon: any): Promise<void> {
-    // Store daemon reference for route handlers
-    this.app.use('*', async (c, next) => {
-      c.set('daemon', daemon);
-      await next();
-    });
+  async start(_agents: Map<string, Agent>, daemon: DaemonAccess): Promise<void> {
+    this.daemon = daemon;
 
     // Try Bun first, then fallback to Node.js
-    const BunServe = typeof (globalThis as any).Bun?.serve === 'function'
-      ? (globalThis as any).Bun.serve
+    const BunServe = typeof (globalThis as { Bun?: { serve?: unknown } }).Bun?.serve === 'function'
+      ? (globalThis as { Bun?: { serve?: (...args: unknown[]) => unknown } }).Bun!.serve!
       : null;
 
     if (BunServe) {
@@ -188,10 +202,11 @@ export class HttpChannel implements ChannelAdapter {
 
   async stop(): Promise<void> {
     if (this.server) {
-      if (typeof this.server.stop === 'function') {
-        this.server.stop();
-      } else if (typeof this.server.close === 'function') {
-        this.server.close();
+      const srv = this.server as { stop?: () => void; close?: () => void };
+      if (typeof srv.stop === 'function') {
+        srv.stop();
+      } else if (typeof srv.close === 'function') {
+        srv.close();
       }
       this.server = undefined;
     }
