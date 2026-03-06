@@ -8,9 +8,9 @@
 import { Command } from 'commander';
 import { createClient, safeCall } from '../lib/convex-client.js';
 import { header, success, error, info, dim, colors } from '../lib/display.js';
-import { spawn } from 'node:child_process';
 import fs from 'fs-extra';
 import path from 'node:path';
+import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
@@ -25,14 +25,14 @@ export function registerStartCommand(program: Command) {
     .option('--discord', 'Enable Discord channel (requires DISCORD_BOT_TOKEN)')
     .option('--telegram', 'Enable Telegram channel (requires TELEGRAM_BOT_TOKEN)')
     .option('--no-http', 'Disable HTTP channel')
-    .option('--agent <id>', 'Load specific agent only (repeatable)', [])
+    .option('--agent <id>', 'Load specific agent only (repeatable)', (val: string, prev: string[]) => [...prev, val], [] as string[])
     .option('--dev', 'Dev mode: verbose logging, no process.exit on error')
     .action(async (opts) => {
       header('AgentForge Daemon');
 
       const cwd = process.cwd();
       const port = parseInt(opts.port, 10);
-      const agentsFilter = Array.isArray(opts.agent) ? opts.agent : [opts.agent].filter(Boolean);
+      const agentsFilter: string[] = opts.agent;
 
       // Check if this is an AgentForge project
       const pkgPath = path.join(cwd, 'package.json');
@@ -100,6 +100,9 @@ export function registerStartCommand(program: Command) {
         process.exit(1);
       }
 
+      // Collect shutdown callbacks for all started channels
+      const shutdownFns: Array<() => Promise<void>> = [];
+
       // Start HTTP channel with daemon
       if (!opts.noHttp) {
         info(`Starting HTTP channel on port ${port}...`);
@@ -108,7 +111,8 @@ export function registerStartCommand(program: Command) {
 
         try {
           const { startHttpChannel } = await import(httpModulePath);
-          await startHttpChannel(port, agents, convexUrl, opts.dev);
+          const close = await startHttpChannel(port, agents, convexUrl, opts.dev);
+          shutdownFns.push(close);
         } catch (err) {
           error(`Failed to start HTTP channel: ${err instanceof Error ? err.message : String(err)}`);
           if (!opts.dev) process.exit(1);
@@ -140,8 +144,9 @@ export function registerStartCommand(program: Command) {
       dim('  Press Ctrl+C to stop');
       console.log();
 
-      // Keep process alive
+      // Wait for shutdown signal, then close all channels gracefully
       await keepAlive();
+      await Promise.all(shutdownFns.map((fn) => fn()));
     });
 }
 
@@ -150,14 +155,11 @@ export function registerStartCommand(program: Command) {
  */
 async function isPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
-    const server = require('net').createServer();
+    const server = net.createServer();
 
-    server.once('error', (err: any) => {
-      if (err.code === 'EADDRINUSE') {
-        resolve(true);
-      } else {
-        resolve(false);
-      }
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      // EADDRINUSE = port taken; EACCES = permission denied — both mean unusable
+      resolve(err.code === 'EADDRINUSE' || err.code === 'EACCES');
     });
 
     server.once('listening', () => {
@@ -170,10 +172,16 @@ async function isPortInUse(port: number): Promise<boolean> {
 }
 
 /**
- * Keep the process alive
+ * Keep the process alive until SIGINT or SIGTERM.
  */
 async function keepAlive(): Promise<void> {
-  return new Promise(() => {
-    // Keep process alive indefinitely
+  return new Promise((resolve) => {
+    const shutdown = () => {
+      console.log();
+      info('Shutting down AgentForge daemon...');
+      resolve();
+    };
+    process.once('SIGINT', shutdown);
+    process.once('SIGTERM', shutdown);
   });
 }

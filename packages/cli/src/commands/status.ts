@@ -207,7 +207,7 @@ export function registerStatusCommand(program: Command) {
     .action(async (opts) => {
       const client = await createClient();
       const args: Record<string, any> = {
-        paginationOpts: { cursor: null, numItems: parseInt(opts.lines) }
+        paginationOpts: { cursor: null, numItems: parseInt(opts.lines, 10) }
       };
       if (opts.agent) args.agentId = opts.agent;
 

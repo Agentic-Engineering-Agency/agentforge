@@ -15,12 +15,15 @@ interface HttpChannelOptions {
   dev?: boolean;
 }
 
+/** Maximum allowed request body size (1 MB). */
+const MAX_BODY_BYTES = 1 * 1024 * 1024;
+
 export async function startHttpChannel(
   port: number,
   agents: any[],
   convexUrl: string,
   dev = false
-): Promise<void> {
+): Promise<() => Promise<void>> {
   const agentMap = new Map<string, any>();
   for (const agent of agents) {
     agentMap.set(agent.id, agent);
@@ -61,11 +64,33 @@ export async function startHttpChannel(
       }
 
       let body = '';
-      req.on('data', (chunk) => {
+      let bodyBytes = 0;
+      let limitExceeded = false;
+      req.on('data', (chunk: Buffer) => {
+        if (limitExceeded) return;
+        bodyBytes += chunk.length;
+        if (bodyBytes > MAX_BODY_BYTES) {
+          limitExceeded = true;
+          if (!res.headersSent) {
+            res.writeHead(413, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Request body too large' }));
+          }
+          req.destroy();
+          return;
+        }
         body += chunk.toString();
       });
 
+      // Swallow errors after req.destroy() (e.g. after body size limit exceeded).
+      // Log unexpected errors in dev mode for easier debugging.
+      req.on('error', (err: NodeJS.ErrnoException) => {
+        if (dev && err.code !== 'ECONNRESET') {
+          console.error(`[HttpChannel] Request error: ${err.message}`);
+        }
+      });
+
       req.on('end', async () => {
+        if (res.headersSent) return;
         try {
           const requestData = JSON.parse(body) as ChatCompletionRequest;
 
@@ -155,10 +180,11 @@ export async function startHttpChannel(
     }
   });
 
-  // Handle graceful shutdown
-  return new Promise((resolve) => {
-    server.on('close', resolve);
-  });
+  // Return a function to gracefully close the server
+  return () =>
+    new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
 }
 
 interface ChatCompletionMessage {
