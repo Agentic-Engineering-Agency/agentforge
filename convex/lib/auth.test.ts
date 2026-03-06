@@ -3,6 +3,7 @@ import {
   requireAuth,
   requireToken,
   requireTokenOrAuth,
+  requireActionAuth,
 } from "./auth";
 import { MutationCtx, QueryCtx } from "../_generated/server";
 import { ConvexError } from "convex/values";
@@ -101,6 +102,32 @@ describe("convex/lib/auth", () => {
       );
     });
 
+    test("throws when token is expired", async () => {
+      const ctx = createMockContext({
+        db: {
+          query: () => ({
+            withIndex: () => ({
+              first: async () => ({
+                _id: "id123",
+                token: "test-token",
+                name: "Test Token",
+                isActive: true,
+                createdAt: Date.now() - 10000,
+                expiresAt: Date.now() - 1000, // expired 1 second ago
+              }),
+            }),
+          }),
+        },
+      }) as MutationCtx;
+
+      await expect(requireToken(ctx, "expired-token")).rejects.toThrow(
+        ConvexError
+      );
+      await expect(requireToken(ctx, "expired-token")).rejects.toThrow(
+        "Invalid token"
+      );
+    });
+
     test("does not throw when token is active", async () => {
       const ctx = createMockContext({
         db: {
@@ -188,6 +215,43 @@ describe("convex/lib/auth", () => {
       await expect(requireTokenOrAuth(ctx, undefined)).rejects.toThrow(
         "Unauthorized"
       );
+    });
+  });
+
+  describe("requireActionAuth", () => {
+    test("passes when identity is present", async () => {
+      await expect(
+        requireActionAuth(
+          { tokenIdentifier: "user-id" },
+          undefined,
+          async () => null
+        )
+      ).resolves.toBeUndefined();
+    });
+
+    test("throws when identity missing and no token", async () => {
+      await expect(
+        requireActionAuth(null, undefined, async () => null)
+      ).rejects.toThrow(ConvexError);
+      await expect(
+        requireActionAuth(null, undefined, async () => null)
+      ).rejects.toThrow("Unauthorized");
+    });
+
+    test("throws when token resolves to null (invalid)", async () => {
+      await expect(
+        requireActionAuth(null, "bad-token", async () => null)
+      ).rejects.toThrow(ConvexError);
+      await expect(
+        requireActionAuth(null, "bad-token", async () => null)
+      ).rejects.toThrow("Invalid token");
+    });
+
+    test("passes when no identity but token is valid", async () => {
+      const tokenDoc = { _id: "id1", token: "good-token", isActive: true, name: "T", createdAt: 0 };
+      await expect(
+        requireActionAuth(null, "good-token", async () => tokenDoc)
+      ).resolves.toBeUndefined();
     });
   });
 });

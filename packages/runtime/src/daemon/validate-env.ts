@@ -71,13 +71,13 @@ export function validateEnv(config: ChannelConfig): void {
   const warnings: string[] = [];
 
   // Check required variables
-  for (const [varName, config] of Object.entries(REQUIRED_VARS)) {
+  for (const [varName, varConfig] of Object.entries(REQUIRED_VARS)) {
     const value = process.env[varName];
 
     if (!value) {
-      errors.push(`${varName}: ${config.description}`);
-    } else if (config.validate && !config.validate(value)) {
-      errors.push(`${varName}: validation failed - ${config.description}`);
+      errors.push(`${varName}: ${varConfig.description}`);
+    } else if (varConfig.validate && !varConfig.validate(value)) {
+      errors.push(`${varName}: validation failed - ${varConfig.description}`);
     }
   }
 

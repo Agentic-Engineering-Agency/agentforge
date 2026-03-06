@@ -14,6 +14,7 @@ export const DEFAULT_RATE_LIMIT_CONFIG = {
   requestsPerMinute: 60,
   requestsPerHour: 1000,
   burstSize: 10,
+  burstWindowMs: 1000, // 1-second window for burst detection
 } as const;
 
 /**
@@ -23,6 +24,7 @@ export interface RateLimitConfig {
   requestsPerMinute: number;
   requestsPerHour: number;
   burstSize: number;
+  burstWindowMs: number;
 }
 
 /**
@@ -74,24 +76,26 @@ export class RateLimiter {
     const now = Date.now();
     const data = this.requests.get(token) || { timestamps: [] };
 
-    // Prune old timestamps outside our time windows
-    const minuteAgo = now - 60 * 1000;
+    // Prune timestamps outside the longest time window (hourly)
     const hourAgo = now - 60 * 60 * 1000;
+    data.timestamps = data.timestamps.filter((ts) => ts > hourAgo);
 
-    data.timestamps = data.timestamps.filter(
-      (ts) => ts > hourAgo // Keep only recent hour
-    );
+    const minuteAgo = now - 60 * 1000;
+    const burstWindowStart = now - this.config.burstWindowMs;
 
-    // Check limits
+    const recentHour = data.timestamps.length;
     const recentMinute = data.timestamps.filter((ts) => ts > minuteAgo).length;
+    const recentBurst = data.timestamps.filter((ts) => ts > burstWindowStart).length;
 
-    if (data.timestamps.length >= this.config.requestsPerHour) {
+    // Check hour limit first (longest window)
+    if (recentHour >= this.config.requestsPerHour) {
       throw new RateLimitError(
         `Rate limit exceeded: ${this.config.requestsPerHour} requests per hour`,
         this.calculateRetryAfter(data.timestamps, this.config.requestsPerHour, 60 * 60 * 1000)
       );
     }
 
+    // Check per-minute limit
     if (recentMinute >= this.config.requestsPerMinute) {
       throw new RateLimitError(
         `Rate limit exceeded: ${this.config.requestsPerMinute} requests per minute`,
@@ -103,10 +107,15 @@ export class RateLimiter {
       );
     }
 
-    if (data.timestamps.length >= this.config.burstSize) {
+    // Check burst limit (short window — protects against rapid-fire requests)
+    if (recentBurst >= this.config.burstSize) {
       throw new RateLimitError(
-        `Rate limit exceeded: ${this.config.burstSize} burst requests`,
-        this.calculateRetryAfter(data.timestamps, this.config.burstSize, 1000)
+        `Rate limit exceeded: ${this.config.burstSize} requests per ${this.config.burstWindowMs}ms`,
+        this.calculateRetryAfter(
+          data.timestamps.filter((ts) => ts > burstWindowStart),
+          this.config.burstSize,
+          this.config.burstWindowMs
+        )
       );
     }
 

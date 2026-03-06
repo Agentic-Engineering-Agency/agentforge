@@ -22,6 +22,7 @@ describe("RateLimiter", () => {
         requestsPerMinute: 30,
         requestsPerHour: 500,
         burstSize: 5,
+        burstWindowMs: 500,
       });
       expect(limiter).toBeInstanceOf(RateLimiter);
     });
@@ -162,6 +163,30 @@ describe("RateLimiter", () => {
           expect(error.retryAfter).toBeDefined();
         }
       }
+    });
+  });
+
+  describe("burst window", () => {
+    test("allows requests after burst window expires", () => {
+      const limiter = new RateLimiter({
+        burstSize: 2,
+        burstWindowMs: 500,
+        requestsPerMinute: 100,
+        requestsPerHour: 1000,
+      });
+
+      // Use up burst in the current window
+      limiter.checkLimit("token-1");
+      limiter.checkLimit("token-1");
+
+      // Should be blocked within the burst window
+      expect(() => limiter.checkLimit("token-1")).toThrow(RateLimitError);
+
+      // Advance time past the burst window
+      vi.advanceTimersByTime(600);
+
+      // Should be allowed again (old timestamps pruned from burst window)
+      expect(() => limiter.checkLimit("token-1")).not.toThrow();
     });
   });
 });

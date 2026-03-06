@@ -1,6 +1,7 @@
 import { v } from "convex/values";
-import { mutation, query, internalQuery, internalAction } from "./_generated/server";
-import { encryptApiKey, decryptApiKey } from "./apiKeysCrypto";
+import { action, mutation, query, internalQuery, internalMutation, internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
+import { requireTokenOrAuth, requireActionAuth } from "./lib/auth";
 
 // Query: List API keys
 export const list = query({
@@ -91,67 +92,127 @@ export const getActiveForProvider = query({
   },
 });
 
-// Mutation: Create API key (encrypts before storing using AES-256-GCM)
-export const create = mutation({
+// Internal mutation: Insert a new API key record (called from create action)
+export const _insertKey = internalMutation({
+  args: {
+    provider: v.string(),
+    keyName: v.string(),
+    encryptedKey: v.string(),
+    iv: v.string(),
+    tag: v.string(),
+    version: v.string(),
+    userId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.db.insert("apiKeys", {
+      ...args,
+      isActive: true,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+// Internal mutation: Patch API key fields (called from update action)
+export const _patchKey = internalMutation({
+  args: {
+    id: v.id("apiKeys"),
+    keyName: v.optional(v.string()),
+    encryptedKey: v.optional(v.string()),
+    iv: v.optional(v.string()),
+    tag: v.optional(v.string()),
+    version: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    const { id, ...updates } = args;
+    await ctx.db.patch(id, updates);
+    return id;
+  },
+});
+
+// Action: Create API key (encrypts before storing using AES-256-GCM)
+// Actions (not mutations) can call internalActions for encryption.
+export const create = action({
   args: {
     provider: v.string(),
     keyName: v.string(),
     encryptedKey: v.string(), // Plaintext key to encrypt
     userId: v.optional(v.string()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    // Call the internal action to encrypt the key
+    await requireActionAuth(
+      await ctx.auth.getUserIdentity(),
+      args.token,
+      (t) => ctx.runQuery(internal.apiAccessTokens.findActiveToken, { token: t })
+    );
+
     const encrypted = await ctx.runAction(internal.apiKeysCrypto.encryptApiKey, {
       plaintext: args.encryptedKey,
     });
 
-    const keyId = await ctx.db.insert("apiKeys", {
+    return await ctx.runMutation(internal.apiKeys._insertKey, {
       provider: args.provider,
       keyName: args.keyName,
       encryptedKey: encrypted.ciphertext,
       iv: encrypted.iv,
       tag: encrypted.tag,
       version: encrypted.version,
-      isActive: true,
       userId: args.userId,
-      createdAt: Date.now(),
     });
-    return keyId;
   },
 });
 
-// Mutation: Update API key (encrypts if key is being updated)
-export const update = mutation({
+// Action: Update API key (encrypts if key is being updated)
+// Actions (not mutations) can call internalActions for encryption.
+export const update = action({
   args: {
     id: v.id("apiKeys"),
     keyName: v.optional(v.string()),
     encryptedKey: v.optional(v.string()), // Plaintext key to encrypt
     isActive: v.optional(v.boolean()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const { id, encryptedKey, ...rest } = args;
-    const updates: Record<string, unknown> = { ...rest };
+    await requireActionAuth(
+      await ctx.auth.getUserIdentity(),
+      args.token,
+      (t) => ctx.runQuery(internal.apiAccessTokens.findActiveToken, { token: t })
+    );
 
-    if (encryptedKey !== undefined) {
-      // Call the internal action to encrypt the key
+    const { id, encryptedKey: plaintext, isActive, keyName } = args;
+    const patchData: {
+      keyName?: string;
+      isActive?: boolean;
+      encryptedKey?: string;
+      iv?: string;
+      tag?: string;
+      version?: string;
+    } = {};
+    if (keyName !== undefined) patchData.keyName = keyName;
+    if (isActive !== undefined) patchData.isActive = isActive;
+
+    if (plaintext !== undefined) {
       const encrypted = await ctx.runAction(internal.apiKeysCrypto.encryptApiKey, {
-        plaintext: encryptedKey,
+        plaintext,
       });
-      updates.encryptedKey = encrypted.ciphertext;
-      updates.iv = encrypted.iv;
-      updates.tag = encrypted.tag;
-      updates.version = encrypted.version;
+      patchData.encryptedKey = encrypted.ciphertext;
+      patchData.iv = encrypted.iv;
+      patchData.tag = encrypted.tag;
+      patchData.version = encrypted.version;
     }
 
-    await ctx.db.patch(id, updates);
-    return id;
+    return await ctx.runMutation(internal.apiKeys._patchKey, { id, ...patchData });
   },
 });
 
 // Mutation: Toggle API key active status
 export const toggleActive = mutation({
-  args: { id: v.id("apiKeys") },
+  args: { id: v.id("apiKeys"), token: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
     const key = await ctx.db.get(args.id);
 
     if (!key) {
@@ -179,8 +240,11 @@ export const updateLastUsed = mutation({
 
 // Mutation: Delete API key
 export const remove = mutation({
-  args: { id: v.id("apiKeys") },
+  args: { id: v.id("apiKeys"), token: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
     await ctx.db.delete(args.id);
     return { success: true };
   },
