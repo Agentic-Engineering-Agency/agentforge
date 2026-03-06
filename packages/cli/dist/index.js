@@ -6547,7 +6547,8 @@ import path16 from "path";
 import net from "net";
 import { fileURLToPath as fileURLToPath3 } from "url";
 import { dirname, resolve as resolve2 } from "path";
-import { createStandardAgent, initStorage } from "@agentforge-ai/runtime";
+var _createStandardAgent;
+var _initStorage;
 var __filename3 = fileURLToPath3(import.meta.url);
 var __dirname3 = dirname(__filename3);
 function registerStartCommand(program2) {
@@ -6601,6 +6602,15 @@ function registerStartCommand(program2) {
       process.exit(1);
     }
     success(`Loaded ${agents.length} agent config(s): ${agents.map((a) => a.name).join(", ")}`);
+    try {
+      const runtime = await import("@agentforge-ai/runtime");
+      _createStandardAgent = runtime.createStandardAgent;
+      _initStorage = runtime.initStorage;
+    } catch (err) {
+      error(`Failed to load @agentforge-ai/runtime: ${err instanceof Error ? err.message : String(err)}`);
+      info("Make sure @agentforge-ai/runtime is installed: pnpm add @agentforge-ai/runtime");
+      process.exit(1);
+    }
     const envLocalPath = path16.join(cwd, ".env.local");
     if (fs15.existsSync(envLocalPath)) {
       const envContent = fs15.readFileSync(envLocalPath, "utf-8");
@@ -6618,7 +6628,7 @@ function registerStartCommand(program2) {
     const adminKey = process.env.CONVEX_DEPLOY_KEY;
     if (convexUrl && adminKey) {
       try {
-        initStorage(convexUrl, adminKey);
+        _initStorage(convexUrl, adminKey);
         if (opts.dev) info("Convex memory storage initialized.");
       } catch (_) {
       }
@@ -6627,7 +6637,7 @@ function registerStartCommand(program2) {
     for (const agentConfig of agents) {
       try {
         const modelStr = agentConfig.provider && agentConfig.model ? `${agentConfig.provider}:${agentConfig.model}` : agentConfig.model || "openai:gpt-4o-mini";
-        const agent = createStandardAgent({
+        const agent = _createStandardAgent({
           id: agentConfig.id ?? agentConfig._id,
           name: agentConfig.name ?? "Agent",
           instructions: agentConfig.instructions ?? "You are a helpful assistant.",

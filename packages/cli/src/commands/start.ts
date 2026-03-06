@@ -13,7 +13,9 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
-import { createStandardAgent, initStorage, type StandardAgentConfig } from '@agentforge-ai/runtime';
+// Lazy-loaded to avoid pulling in heavy runtime deps (jsdom, etc.) at CLI startup
+let _createStandardAgent: typeof import('@agentforge-ai/runtime').createStandardAgent;
+let _initStorage: typeof import('@agentforge-ai/runtime').initStorage;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -93,6 +95,17 @@ export function registerStartCommand(program: Command) {
 
       success(`Loaded ${agents.length} agent config(s): ${agents.map((a: any) => a.name).join(', ')}`);
 
+      // Lazy-load runtime to avoid top-level jsdom/node require issues
+      try {
+        const runtime = await import('@agentforge-ai/runtime');
+        _createStandardAgent = runtime.createStandardAgent;
+        _initStorage = runtime.initStorage;
+      } catch (err) {
+        error(`Failed to load @agentforge-ai/runtime: ${err instanceof Error ? err.message : String(err)}`);
+        info('Make sure @agentforge-ai/runtime is installed: pnpm add @agentforge-ai/runtime');
+        process.exit(1);
+      }
+
       // Load .env.local for provider API keys
       const envLocalPath = path.join(cwd, '.env.local');
       if (fs.existsSync(envLocalPath)) {
@@ -113,7 +126,7 @@ export function registerStartCommand(program: Command) {
       const adminKey = process.env.CONVEX_DEPLOY_KEY;
       if (convexUrl && adminKey) {
         try {
-          initStorage(convexUrl, adminKey);
+          _initStorage(convexUrl, adminKey);
           if (opts.dev) info('Convex memory storage initialized.');
         } catch (_) { /* memory will be disabled */ }
       }
@@ -125,13 +138,13 @@ export function registerStartCommand(program: Command) {
           const modelStr = agentConfig.provider && agentConfig.model
             ? `${agentConfig.provider}:${agentConfig.model}`
             : agentConfig.model || 'openai:gpt-4o-mini';
-          const agent = createStandardAgent({
+          const agent = _createStandardAgent({
             id: agentConfig.id ?? agentConfig._id,
             name: agentConfig.name ?? 'Agent',
             instructions: agentConfig.instructions ?? 'You are a helpful assistant.',
             model: modelStr,
             disableMemory: !adminKey, // disable memory if no admin key
-          } as StandardAgentConfig);
+          });
           // Attach metadata from Convex record for /api/agents
           (agent as any).id = agentConfig.id ?? agentConfig._id;
           (agent as any).model = modelStr;
