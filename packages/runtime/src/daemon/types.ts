@@ -1,8 +1,9 @@
 import type { Agent } from '@mastra/core/agent';
 
+// Forward declaration to avoid circular reference
 export interface ChannelAdapter {
   name: string;
-  start(agents: Map<string, Agent>, daemon: AgentForgeDaemon): Promise<void>;
+  start(agents: Map<string, Agent>, daemon: any): Promise<void>;
   stop(): Promise<void>;
 }
 
@@ -21,5 +22,3 @@ export interface DaemonConfig {
   adminAuthToken?: string;
   defaultModel?: string;
 }
-
-import type { AgentForgeDaemon } from './daemon.js';
