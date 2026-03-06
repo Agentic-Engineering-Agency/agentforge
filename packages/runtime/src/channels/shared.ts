@@ -17,7 +17,7 @@ import type { Agent } from '@mastra/core/agent';
 export async function progressiveStream(
   agent: Agent,
   message: string,
-  opts: { threadId?: string; resourceId?: string },
+  opts: { threadId?: string; resourceId?: string; editIntervalMs?: number },
   onChunk: (text: string, done: boolean) => Promise<void>,
 ): Promise<string> {
   // Mastra agent.stream() expects messages array and optional execution options
