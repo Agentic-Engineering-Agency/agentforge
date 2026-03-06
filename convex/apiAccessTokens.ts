@@ -24,14 +24,19 @@ export const generate = mutation({
   args: {
     name: v.string(),
     expiresAt: v.optional(v.number()),
+    token: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
+    // Require authentication (user identity required for token generation)
+    await requireAuth(ctx);
+
+    const { token: authHeader, ...tokenData } = args;
     const token = generateToken();
     const id = await ctx.db.insert("apiAccessTokens", {
-      name: args.name,
+      name: tokenData.name,
       token,
       createdAt: Date.now(),
-      expiresAt: args.expiresAt,
+      expiresAt: tokenData.expiresAt,
       isActive: true,
     });
     return { id, token };
@@ -40,16 +45,22 @@ export const generate = mutation({
 
 // Mutation: revoke an API access token
 export const revoke = mutation({
-  args: { id: v.id("apiAccessTokens") },
+  args: { id: v.id("apiAccessTokens"), token: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
     await ctx.db.patch(args.id, { isActive: false });
   },
 });
 
 // Mutation: remove an API access token
 export const remove = mutation({
-  args: { id: v.id("apiAccessTokens") },
+  args: { id: v.id("apiAccessTokens"), token: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
     await ctx.db.delete(args.id);
     return { success: true };
   },

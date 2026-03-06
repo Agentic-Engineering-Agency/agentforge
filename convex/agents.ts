@@ -1,6 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
 import { api } from "./_generated/api";
+import { requireAuth, requireTokenOrAuth } from "./lib/auth";
 
 // Query: Get all agents
 export const list = query({
@@ -96,9 +97,13 @@ export const create = mutation({
     ),
   },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
+    const { token, ...agentData } = args;
     const now = Date.now();
     const agentId = await ctx.db.insert("agents", {
-      ...args,
+      ...agentData,
       isActive: true,
       createdAt: now,
       updatedAt: now,
@@ -137,7 +142,10 @@ export const update = mutation({
     ),
   },
   handler: async (ctx, args) => {
-    const { id, ...updates } = args;
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
+    const { id, token, ...updates } = args;
     const agent = await ctx.db
       .query("agents")
       .withIndex("byAgentId", (q) => q.eq("id", id))
@@ -158,8 +166,11 @@ export const update = mutation({
 
 // Mutation: Delete an agent
 export const remove = mutation({
-  args: { id: v.string() },
+  args: { id: v.string(), token: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
     const agent = await ctx.db
       .query("agents")
       .withIndex("byAgentId", (q) => q.eq("id", args.id!))
@@ -176,8 +187,11 @@ export const remove = mutation({
 
 // Mutation: Toggle agent active status
 export const toggleActive = mutation({
-  args: { id: v.string() },
+  args: { id: v.string(), token: v.optional(v.string()) },
   handler: async (ctx, args) => {
+    // Require authentication (either user identity or API token)
+    await requireTokenOrAuth(ctx, args.token);
+
     const agent = await ctx.db
       .query("agents")
       .withIndex("byAgentId", (q) => q.eq("id", args.id!))

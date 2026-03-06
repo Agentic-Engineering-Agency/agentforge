@@ -36,3 +36,62 @@ We use [Prettier](https://prettier.io/) for code formatting and [ESLint](https:/
 ## License
 
 By contributing, you agree that your contributions will be licensed under its Apache 2.0 License.
+
+## Security Guidelines
+
+### Secret Rotation
+
+AgentForge uses several environment variables for security. Regular rotation is recommended for production deployments.
+
+#### AGENTFORGE_KEY_SALT Rotation
+
+The `AGENTFORGE_KEY_SALT` is used to encrypt API keys stored in Convex. To rotate:
+
+1. **Generate a new salt** (32+ characters, cryptographically random):
+   ```bash
+   openssl rand -base64 32
+   ```
+
+2. **Back up your Convex data** (export from dashboard or CLI)
+
+3. **Re-encrypt all API keys** with the new salt:
+   - Update `AGENTFORGE_KEY_SALT` in your environment
+   - For each API key in your database, re-run the encryption process
+   - The XOR-based encryption in the current implementation requires the salt to stay the same for existing encrypted keys
+
+4. **Important**: Due to the current XOR encryption implementation, **salt rotation requires decrypting and re-encrypting all keys**. Future versions will use AES-256-GCM with key rotation support.
+
+#### AGENTFORGE_API_KEY Rotation
+
+The `AGENTFORGE_API_KEY` is used for HTTP channel authentication:
+
+1. **Generate a new token**:
+   ```bash
+   agentforge tokens generate --name "rotated-token"
+   ```
+
+2. **Update clients** to use the new token
+
+3. **Revoke old tokens**:
+   ```bash
+   agentforge tokens revoke <old-token-id>
+   ```
+
+#### Channel Bot Tokens
+
+For Discord and Telegram bot tokens:
+
+1. Generate new tokens in the respective developer portals
+2. Update `DISCORD_BOT_TOKEN` or `TELEGRAM_BOT_TOKEN` environment variables
+3. Restart the AgentForge daemon
+4. Invalidate old tokens in the developer portals
+
+### Security Best Practices
+
+- Never commit `.env` files or secrets to version control
+- Use strong, unique salts (32+ characters)
+- Rotate secrets quarterly or after any suspected breach
+- Use read-only database credentials where possible
+- Enable rate limiting on public endpoints
+- Sanitize all user input before processing
+
