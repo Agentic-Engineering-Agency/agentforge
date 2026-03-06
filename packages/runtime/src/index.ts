@@ -30,3 +30,14 @@ export { manageNotesTool } from './tools/manage-notes.js';
 // Daemon
 export { AgentForgeDaemon } from './daemon/daemon.js';
 export type { ChannelAdapter, AgentDefinition, DaemonConfig } from './daemon/types.js';
+
+// Channel adapters
+export { HttpChannel, type HttpChannelConfig } from './channels/http.js';
+export { DiscordChannel, type DiscordChannelConfig } from './channels/discord.js';
+export { TelegramChannel, type TelegramChannelConfig } from './channels/telegram.js';
+export {
+  progressiveStream,
+  splitMessage,
+  formatSSEChunk,
+  generateThreadId,
+} from './channels/shared.js';
