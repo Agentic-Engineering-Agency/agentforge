@@ -1,21 +1,32 @@
-// Daemon exports
-export { validateEnv, EnvValidationError } from "./daemon";
-export type { ChannelConfig } from "./daemon";
-
-// Security exports
+// Agent factory
+export { createStandardAgent, type StandardAgentConfig } from './agent/create-standard-agent.js';
 export {
-  RateLimiter,
-  RateLimitError,
-  DEFAULT_RATE_LIMIT_CONFIG,
-} from "./security";
-export type { RateLimitConfig } from "./security";
+  initStorage,
+  getStorage,
+  getVector,
+  createStandardMemory,
+  DAEMON_MODEL,
+  OBSERVER_MODEL,
+  EMBEDDING_MODEL,
+  DEFAULT_TOKEN_LIMIT,
+  type StandardMemoryOptions,
+} from './agent/shared.js';
 
+// Model registry
 export {
-  sanitizeInput,
-  sanitizeDiscordInput,
-  sanitizeTelegramInput,
-  sanitizeHttpInput,
-  InputValidationError,
-  DEFAULT_MAX_LENGTH,
-} from "./security";
-export type { SanitizeOptions } from "./security";
+  getModel,
+  getModelsByProvider,
+  getActiveModels,
+  getContextLimit,
+  type ModelEntry,
+} from './models/registry.js';
+
+// Tools
+export { datetimeTool } from './tools/datetime.js';
+export { webSearchTool } from './tools/web-search.js';
+export { readUrlTool } from './tools/read-url.js';
+export { manageNotesTool } from './tools/manage-notes.js';
+
+// Daemon
+export { AgentForgeDaemon } from './daemon/daemon.js';
+export type { ChannelAdapter, AgentDefinition, DaemonConfig } from './daemon/types.js';

@@ -1,11 +1,13 @@
 {
   "functions": "convex",
-  "node": {
-    "externalPackages": []
-  },
   "generateCommonJSApi": true,
   "codegen": {
     "staticApi": true,
     "staticDataModel": true
-  }
+  },
+  "nodeExternalPackages": [
+    "@mastra/core",
+    "@mastra/memory",
+    "@mastra/convex"
+  ]
 }
