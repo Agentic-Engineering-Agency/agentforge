@@ -102,11 +102,11 @@ export const Route = createFileRoute("/chat")({ component: ChatPageComponent });
 function ChatPageComponent() {
   // ── Convex queries ──────────────────────────────────────────
   const agents = useQuery(api.agents.listActive, {}) ?? [];
-  const threads = useQuery(api.chatMutations.listThreads, {}) ?? [];
+  const threads = useQuery(api.threads.listThreads, {}) ?? [];
 
   // ── Convex mutations & actions ──────────────────────────────
-  const createThread = useMutation(api.chatMutations.createThread);
-  const sendMessageAction = useAction(api.chat.sendMessage);
+  const createThread = useMutation(api.threads.createThread);
+  const sendMessageAction = useAction(api.agents.run);
 
   // ── Local state ─────────────────────────────────────────────
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
@@ -128,7 +128,7 @@ function ChatPageComponent() {
   // This is the real-time subscription — messages update automatically
   // when new ones are inserted by the Convex action.
   const messages = useQuery(
-    api.chatMutations.getThreadMessages,
+    api.threads.getThreadMessages,
     currentThreadId ? { threadId: currentThreadId as any } : "skip"
   ) ?? [];
 
@@ -233,7 +233,7 @@ function ChatPageComponent() {
       await sendMessageAction({
         agentId: currentAgentId,
         threadId: threadId as any,
-        content: messageText,
+        prompt: messageText,
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
