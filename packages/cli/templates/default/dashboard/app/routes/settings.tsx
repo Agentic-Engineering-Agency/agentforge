@@ -78,7 +78,7 @@ const AI_PROVIDERS = [
 function SettingsPage() {
   const apiKeys = useQuery(api.apiKeys.list, {}) ?? [];
   const vaultSecrets = useQuery(api.vault.list, {}) ?? [];
-  const createApiKey = useMutation(api.apiKeys.create);
+  const createApiKey = useAction(api.apiKeys.create);
   const removeApiKey = useMutation(api.apiKeys.remove);
   const toggleApiKey = useMutation(api.apiKeys.toggleActive);
   const storeVaultSecret = useMutation(api.vault.store);

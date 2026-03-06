@@ -131,7 +131,7 @@ export function registerKeysCommand(program: Command) {
       const keyName = opts.name || `${providerInfo.name} Key`;
       const client = await createClient();
       await safeCall(
-        () => client.mutation('apiKeys:create' as any, {
+        () => client.action('apiKeys:create' as any, {
           provider,
           keyName,
           encryptedKey: key,
