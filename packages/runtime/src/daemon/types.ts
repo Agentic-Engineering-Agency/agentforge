@@ -1,4 +1,5 @@
 import type { Agent } from '@mastra/core/agent';
+import type { Workspace } from '@mastra/core/workspace';
 
 // Forward declaration to avoid circular reference
 export interface ChannelAdapter {
@@ -14,7 +15,9 @@ export interface AgentDefinition {
   instructions: string;
   model?: string;
   tools?: string[];
+  workspace?: Workspace;
   workingMemoryTemplate?: string;
+  disableMemory?: boolean;
 }
 
 export interface DaemonConfig {
@@ -22,3 +25,12 @@ export interface DaemonConfig {
   adminAuthToken?: string;
   defaultModel?: string;
 }
+
+export interface WorkflowExecutionResult {
+  runId: string;
+  status: 'success' | 'failed';
+  output?: string;
+  error?: string;
+}
+
+export type WorkflowRunExecutor = (runId: string) => Promise<WorkflowExecutionResult>;

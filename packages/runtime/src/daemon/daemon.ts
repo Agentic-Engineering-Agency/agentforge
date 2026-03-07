@@ -1,12 +1,19 @@
 import type { Agent } from '@mastra/core/agent';
 import { initStorage, isStorageInitialized } from '../agent/shared.js';
 import { createStandardAgent } from '../agent/create-standard-agent.js';
-import type { ChannelAdapter, AgentDefinition, DaemonConfig } from './types.js';
+import type {
+  ChannelAdapter,
+  AgentDefinition,
+  DaemonConfig,
+  WorkflowExecutionResult,
+  WorkflowRunExecutor,
+} from './types.js';
 
 export class AgentForgeDaemon {
   private agents = new Map<string, Agent>();
   private definitions = new Map<string, AgentDefinition>();
   private channels: ChannelAdapter[] = [];
+  private workflowExecutor?: WorkflowRunExecutor;
 
   constructor(config: DaemonConfig = {}) {
     if (config.deploymentUrl && config.adminAuthToken) {
@@ -15,7 +22,7 @@ export class AgentForgeDaemon {
   }
 
   async loadAgents(definitions: AgentDefinition[]): Promise<void> {
-    if (!isStorageInitialized()) {
+    if (!isStorageInitialized() && definitions.some((definition) => !definition.disableMemory)) {
       throw new Error(
         'Storage not initialized. Ensure the daemon constructor received valid deploymentUrl and adminAuthToken, or call initStorage() explicitly before loading agents.',
       );
@@ -27,7 +34,9 @@ export class AgentForgeDaemon {
         description: def.description,
         instructions: def.instructions,
         model: def.model,
+        workspace: def.workspace,
         workingMemoryTemplate: def.workingMemoryTemplate,
+        disableMemory: def.disableMemory,
       });
       this.agents.set(def.id, agent);
       this.definitions.set(def.id, def);
@@ -50,7 +59,22 @@ export class AgentForgeDaemon {
     return this.agents.get(id);
   }
 
+  listAgentIds(): string[] {
+    return Array.from(this.agents.keys());
+  }
+
   listAgents(): AgentDefinition[] {
     return Array.from(this.definitions.values());
+  }
+
+  setWorkflowExecutor(executor: WorkflowRunExecutor): void {
+    this.workflowExecutor = executor;
+  }
+
+  async executeWorkflowRun(runId: string): Promise<WorkflowExecutionResult> {
+    if (!this.workflowExecutor) {
+      throw new Error('Workflow executor not configured on daemon.');
+    }
+    return this.workflowExecutor(runId);
   }
 }

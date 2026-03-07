@@ -7,7 +7,9 @@ import { formatSSEChunk } from './shared.js';
 
 interface DaemonAccess {
   listAgents(): AgentDefinition[];
+  listAgentIds(): string[];
   getAgent(id: string): Agent | undefined;
+  executeWorkflowRun(runId: string): Promise<{ runId: string; status: 'success' | 'failed'; output?: string; error?: string }>;
 }
 
 export interface HttpChannelConfig {
@@ -59,10 +61,13 @@ export class HttpChannel implements ChannelAdapter {
 
     // Health check
     this.app.get('/health', (c) => {
+      const daemon = this.daemon;
       return c.json({
         status: 'ok',
         version: '0.1.0',
         timestamp: new Date().toISOString(),
+        agents: daemon?.listAgents().length ?? 0,
+        agentIds: daemon?.listAgentIds() ?? [],
       });
     });
 
@@ -175,6 +180,29 @@ export class HttpChannel implements ChannelAdapter {
           await stream.write('data: [DONE]\n\n');
         }
       });
+    });
+
+    this.app.post('/v1/workflows/runs/:id/execute', async (c) => {
+      const daemon = this.daemon;
+      if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
+
+      const runId = c.req.param('id');
+      if (!runId) {
+        return c.json({ error: 'Workflow run ID is required' }, 400);
+      }
+
+      try {
+        const result = await daemon.executeWorkflowRun(runId);
+        const status = result.status === 'success' ? 200 : 500;
+        return c.json(result, status);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown workflow execution error';
+        return c.json({
+          runId,
+          status: 'failed',
+          error: message,
+        }, 500);
+      }
     });
   }
 

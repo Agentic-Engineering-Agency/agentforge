@@ -1,847 +1,423 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import React, { useState } from 'react';
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
-import type { Id } from "../../../../convex/_generated/dataModel";
+import { useState, useEffect } from 'react';
+import { useQuery, useMutation, useAction } from 'convex/react';
+import { api } from '@convex/_generated/api';
+import { Key, Plus, Trash2, Check, X, Shield, AlertTriangle, ExternalLink, Settings } from 'lucide-react';
 
-import * as Tabs from '@radix-ui/react-tabs';
-import * as Dialog from '@radix-ui/react-dialog';
-import * as Select from '@radix-ui/react-select';
-import * as Switch from '@radix-ui/react-switch';
-import { Settings, Key, Palette, Shield, Download, Upload, AlertTriangle, X, Plus, Trash2, ChevronDown, Lock, Eye, EyeOff, Clock, Activity, ShieldCheck, Copy, CheckCircle, KeyRound } from 'lucide-react';
-
-// Mock data and types
-const AVAILABLE_PROVIDERS = ["OpenAI", "Anthropic", "OpenRouter", "Google", "xAI"];
-
-type ApiKey = { id: string; provider: string; maskedKey: string; createdAt: string };
-type ProviderSetting = { id: string; name: string; enabled: boolean };
-
-// API Access Token type (from Convex)
-type ApiAccessToken = {
-  _id: Id<"apiAccessTokens">;
-  name: string;
-  token: string;
-  createdAt: number;
-  expiresAt?: number;
-  isActive: boolean;
-};
-
-// --- Main Component --- //
 export const Route = createFileRoute('/settings')({ component: SettingsPage });
 
+// ─── AI Provider Definitions ─────────────────────────────────────
+const AI_PROVIDERS = [
+  {
+    id: 'openai',
+    name: 'OpenAI',
+    description: 'GPT-4o, GPT-4.1 Mini, DALL-E, Whisper',
+    prefix: 'sk-',
+    docsUrl: 'https://platform.openai.com/api-keys',
+    color: 'bg-green-500',
+  },
+  {
+    id: 'anthropic',
+    name: 'Anthropic',
+    description: 'Claude Sonnet 4.5, Claude Haiku 4.5, Claude Opus 4',
+    prefix: 'sk-ant-',
+    docsUrl: 'https://console.anthropic.com/settings/keys',
+    color: 'bg-orange-500',
+  },
+  {
+    id: 'openrouter',
+    name: 'OpenRouter',
+    description: 'Multi-model routing — access 200+ models through one API',
+    prefix: 'sk-or-',
+    docsUrl: 'https://openrouter.ai/keys',
+    color: 'bg-purple-500',
+  },
+  {
+    id: 'google',
+    name: 'Google AI',
+    description: 'Gemini 2.5 Flash, Gemini 2.5 Pro, Gemini 2.0 Flash',
+    prefix: 'AIza',
+    docsUrl: 'https://aistudio.google.com/apikey',
+    color: 'bg-blue-500',
+  },
+  {
+    id: 'xai',
+    name: 'xAI',
+    description: 'Grok 3, Grok 3 Mini, Grok 2',
+    prefix: 'xai-',
+    docsUrl: 'https://console.x.ai/',
+    color: 'bg-gray-500',
+  },
+  {
+    id: 'groq',
+    name: 'Groq',
+    description: 'Ultra-fast inference — Llama 3.3, DeepSeek-R1, Qwen',
+    prefix: 'gsk_',
+    docsUrl: 'https://console.groq.com/keys',
+    color: 'bg-red-500',
+  },
+  {
+    id: 'together',
+    name: 'Together AI',
+    description: 'Llama 4, DeepSeek-R1, Qwen 2.5 — open-source models',
+    prefix: '',
+    docsUrl: 'https://api.together.xyz/settings/api-keys',
+    color: 'bg-indigo-500',
+  },
+  {
+    id: 'perplexity',
+    name: 'Perplexity',
+    description: 'Sonar Pro, Sonar — real-time web-grounded search',
+    prefix: 'pplx-',
+    docsUrl: 'https://www.perplexity.ai/settings/api',
+    color: 'bg-teal-500',
+  },
+];
+
 function SettingsPage() {
-  // const settings = useQuery(api.settings.get);
-  // const updateSettings = useMutation(api.settings.update);
-  // const apiKeys = useQuery(api.apiKeys.list) || [];
-  // const addApiKey = useMutation(api.apiKeys.create);
-  // const deleteApiKey = useMutation(api.apiKeys.delete);
-  // const providerSettings = useQuery(api.providers.list) || [];
-  // const updateProvider = useMutation(api.providers.update);
+  const apiKeys = useQuery(api.apiKeys.list, {}) ?? [];
+  const vaultSecrets = useQuery(api.vault.list, {}) ?? [];
+  const createApiKey = useAction(api.apiKeys.create);
+  const removeApiKey = useMutation(api.apiKeys.remove);
+  const toggleApiKey = useMutation(api.apiKeys.toggleActive);
+  const storeVaultSecret = useMutation(api.vault.store);
+  const removeVaultSecret = useMutation(api.vault.remove);
+  // All available models fetched from daemon /api/models (flat list for default-model picker)
+  const [allModels, setAllModels] = useState<{ provider: string; model: string }[]>([]);
+  const daemonUrl: string = (window as any).__AGENTFORGE_DAEMON_URL__ ?? 'http://localhost:3001';
 
-  // Local state for UI development
-  const [generalSettings, setGeneralSettings] = useState({ appName: 'AgentForge', defaultModel: 'gpt-4.1-mini', defaultProvider: 'OpenAI' });
-  const [apiKeys, setApiKeys] = useState<ApiKey[]>([
-    { id: '1', provider: 'OpenAI', maskedKey: 'sk-******************1234', createdAt: new Date().toISOString() },
-    { id: '2', provider: 'Google', maskedKey: 'go-******************5678', createdAt: new Date().toISOString() },
-  ]);
-  const [providerSettings, setProviderSettings] = useState<ProviderSetting[]>([
-    { id: '1', name: 'OpenAI', enabled: true },
-    { id: '2', name: 'Anthropic', enabled: false },
-    { id: '3', name: 'OpenRouter', enabled: true },
-    { id: '4', name: 'Google', enabled: true },
-    { id: '5', name: 'xAI', enabled: false },
-  ]);
-  const [appearance, setAppearance] = useState({ theme: 'dark' });
-  const [defaultProvider, setDefaultProvider] = useState('OpenAI');
+  const [tab, setTab] = useState<'providers' | 'vault' | 'general'>('providers');
+  const [addingProvider, setAddingProvider] = useState<typeof AI_PROVIDERS[0] | null>(null);
+  const [newKeyName, setNewKeyName] = useState('');
+  const [newKeyValue, setNewKeyValue] = useState('');
 
-  const handleAddApiKey = (provider: string, key: string) => {
-    const newKey: ApiKey = {
-      id: (apiKeys.length + 1).toString(),
-      provider,
-      maskedKey: `${key.substring(0, 5)}******************${key.substring(key.length - 4)}`,
-      createdAt: new Date().toISOString(),
-    };
-    // addApiKey({ provider, key });
-    setApiKeys([...apiKeys, newKey]);
+  const [addingVaultSecret, setAddingVaultSecret] = useState(false);
+  const [vaultForm, setVaultForm] = useState({ name: '', category: 'api_key', provider: '', value: '' });
+  const [defaultModel, setDefaultModel] = useState('');
+  const [confirmingDeleteKeyId, setConfirmingDeleteKeyId] = useState<string | null>(null);
+  const [confirmingDeleteSecretId, setConfirmingDeleteSecretId] = useState<string | null>(null);
+
+  const keysByProvider = apiKeys.reduce((acc: Record<string, any[]>, key: any) => {
+    if (!acc[key.provider]) acc[key.provider] = [];
+    acc[key.provider].push(key);
+    return acc;
+  }, {} as Record<string, any[]>);
+
+  // Fetch all available models from daemon for the General → Default Model dropdown
+  useEffect(() => {
+    fetch(`${daemonUrl}/api/models`, { signal: AbortSignal.timeout(4000) })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then((data: { providers: Record<string, string[]> }) => {
+        const flat: { provider: string; model: string }[] = [];
+        for (const [prov, models] of Object.entries(data.providers ?? {})) {
+          for (const m of models) flat.push({ provider: prov, model: m });
+        }
+        if (flat.length > 0) setAllModels(flat);
+      })
+      .catch(() => {
+        // Daemon offline — use fallback static list
+        const FALLBACK: Record<string, string[]> = {
+          openai: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini'],
+          anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+          google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
+          xai: ['grok-3', 'grok-3-mini'],
+          openrouter: ['openrouter/auto'],
+        };
+        const flat: { provider: string; model: string }[] = [];
+        for (const [prov, models] of Object.entries(FALLBACK)) {
+          for (const m of models) flat.push({ provider: prov, model: m });
+        }
+        setAllModels(flat);
+      });
+  }, [daemonUrl]);
+
+  // (Live provider model descriptions removed — daemon handles model discovery)
+
+  const handleAddKey = async () => {
+    if (!addingProvider || !newKeyValue.trim()) return;
+    await createApiKey({
+      provider: addingProvider.id,
+      keyName: newKeyName || `${addingProvider.name} Key`,
+      encryptedKey: newKeyValue,
+    });
+    setAddingProvider(null);
+    setNewKeyName('');
+    setNewKeyValue('');
   };
 
-  const handleDeleteApiKey = (id: string) => {
-    // deleteApiKey({ id });
-    setApiKeys(apiKeys.filter(key => key.id !== id));
+  const handleDeleteKey = async (id: string) => {
+    if (confirmingDeleteKeyId === id) {
+      await removeApiKey({ id });
+      setConfirmingDeleteKeyId(null);
+    } else {
+      setConfirmingDeleteKeyId(id);
+    }
   };
 
-  const handleProviderToggle = (id: string, enabled: boolean) => {
-    // updateProvider({ id, enabled });
-    setProviderSettings(providerSettings.map(p => p.id === id ? { ...p, enabled } : p));
+  const handleAddVaultSecret = async () => {
+    if (!vaultForm.name || !vaultForm.value) return;
+    await storeVaultSecret(vaultForm);
+    setAddingVaultSecret(false);
+    setVaultForm({ name: '', category: 'api_key', provider: '', value: '' });
   };
-
-  const handleSetDefaultProvider = (name: string) => {
-    // updateSettings({ defaultProvider: name });
-    setDefaultProvider(name);
-  }
 
   return (
     <DashboardLayout>
-      <div className="p-8 bg-background text-foreground">
-        <div className="flex items-center mb-6">
-          <Settings className="w-8 h-8 mr-4 text-primary" />
-          <div>
-            <h1 className="text-3xl font-bold">Configuration</h1>
-            <p className="text-muted-foreground">Manage your application settings and preferences.</p>
-          </div>
-        </div>
-
-        <Tabs.Root defaultValue="general" className="w-full">
-          <Tabs.List className="flex border-b border-border mb-6">
-            <TabTrigger value="general" icon={<Settings />}>General</TabTrigger>
-            <TabTrigger value="apiKeys" icon={<Key />}>API Keys</TabTrigger>
-            <TabTrigger value="providers" icon={<Shield />}>Providers</TabTrigger>
-            <TabTrigger value="appearance" icon={<Palette />}>Appearance</TabTrigger>
-            <TabTrigger value="vault" icon={<Lock />}>Vault</TabTrigger>
-            <TabTrigger value="tokens" icon={<KeyRound />}>Tokens</TabTrigger>
-            <TabTrigger value="advanced" icon={<AlertTriangle />}>Advanced</TabTrigger>
-          </Tabs.List>
-
-          <Tabs.Content value="general"><GeneralTab settings={generalSettings} setSettings={setGeneralSettings} /></Tabs.Content>
-          <Tabs.Content value="apiKeys"><ApiKeysTab keys={apiKeys} onAdd={handleAddApiKey} onDelete={handleDeleteApiKey} /></Tabs.Content>
-          <Tabs.Content value="providers"><ProvidersTab providers={providerSettings} defaultProvider={defaultProvider} onToggle={handleProviderToggle} onSetDefault={handleSetDefaultProvider} /></Tabs.Content>
-          <Tabs.Content value="vault"><VaultTab /></Tabs.Content>
-          <Tabs.Content value="tokens"><TokensTab /></Tabs.Content>
-          <Tabs.Content value="appearance"><AppearanceTab appearance={appearance} setAppearance={setAppearance} /></Tabs.Content>
-          <Tabs.Content value="advanced"><AdvancedTab /></Tabs.Content>
-        </Tabs.Root>
-      </div>
-    </DashboardLayout>
-  );
-}
-
-// --- Tab Components --- //
-
-const TabTrigger = ({ children, value, icon }: { children: React.ReactNode, value: string, icon: React.ReactNode }) => (
-  <Tabs.Trigger
-    value={value}
-    className="flex items-center px-4 py-2 text-sm font-medium text-muted-foreground data-[state=active]:text-primary data-[state=active]:border-b-2 data-[state=active]:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 rounded-t-md transition-colors"
-  >
-    {React.cloneElement(icon as React.ReactElement, { className: 'w-4 h-4 mr-2' })}
-    {children}
-  </Tabs.Trigger>
-);
-
-const Card = ({ children, className }: { children: React.ReactNode, className?: string }) => (
-  <div className={`bg-card border border-border rounded-lg p-6 ${className}`}>
-    {children}
-  </div>
-);
-
-const CardHeader = ({ title, description }: { title: string, description: string }) => (
-    <div className="mb-6">
-        <h3 className="text-xl font-semibold">{title}</h3>
-        <p className="text-muted-foreground mt-1">{description}</p>
-    </div>
-);
-
-const Button = ({ children, variant = 'primary', ...props }: { children: React.ReactNode, variant?: 'primary' | 'destructive' | 'secondary', [key: string]: any }) => {
-  const variants = {
-    primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
-    destructive: 'bg-destructive text-destructive-foreground hover:bg-destructive/90',
-    secondary: 'bg-secondary text-secondary-foreground hover:bg-secondary/90 border border-border',
-  };
-  return (
-    <button className={`px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${variants[variant]}`} {...props}>
-      {children}
-    </button>
-  );
-};
-
-function GeneralTab({ settings, setSettings }: { settings: any, setSettings: any }) {
-  const updateSettings = useMutation(api.settings.set);
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
-
-    try {
-      // Use a default user ID for now - in production this would come from auth
-      const userId = 'default';
-      await Promise.all([
-        updateSettings({ userId, key: 'appName', value: settings.appName }),
-        updateSettings({ userId, key: 'defaultModel', value: settings.defaultModel }),
-        updateSettings({ userId, key: 'defaultProvider', value: settings.defaultProvider }),
-      ]);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : 'Failed to save settings');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader title="General Settings" description="Configure the core settings for your application." />
-      <div className="space-y-4">
+      <div className="space-y-6">
         <div>
-          <label className="block text-sm font-medium mb-1">App Name</label>
-          <input type="text" value={settings.appName} onChange={e => setSettings({...settings, appName: e.target.value})} className="w-full bg-background border border-border rounded-md px-3 py-2" />
+          <h1 className="text-3xl font-bold">Settings</h1>
+          <p className="text-muted-foreground">Manage AI provider keys, secrets, and workspace configuration.</p>
         </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Default Model</label>
-          <input type="text" value={settings.defaultModel} onChange={e => setSettings({...settings, defaultModel: e.target.value})} className="w-full bg-background border border-border rounded-md px-3 py-2" />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Default Provider</label>
-          <input type="text" value={settings.defaultProvider} onChange={e => setSettings({...settings, defaultProvider: e.target.value})} className="w-full bg-background border border-border rounded-md px-3 py-2" />
-        </div>
-      </div>
-      {saveError && (
-        <div className="mt-4 p-3 bg-red-500/20 text-red-400 rounded-md text-sm">
-          {saveError}
-        </div>
-      )}
-      {saveSuccess && (
-        <div className="mt-4 p-3 bg-green-500/20 text-green-400 rounded-md text-sm">
-          Settings saved successfully
-        </div>
-      )}
-      <div className="mt-6 flex justify-end">
-        <Button onClick={handleSave} disabled={isSaving}>{isSaving ? 'Saving...' : 'Save Changes'}</Button>
-      </div>
-    </Card>
-  );
-}
 
-function ApiKeysTab({ keys, onAdd, onDelete }: { keys: ApiKey[], onAdd: (p: string, k: string) => void, onDelete: (id: string) => void }) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [newProvider, setNewProvider] = useState(AVAILABLE_PROVIDERS[0]);
-  const [newKey, setNewKey] = useState('');
+        <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
+          <button onClick={() => setTab('providers')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'providers' ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Key className="w-4 h-4 inline mr-2" />AI Providers
+          </button>
+          <button onClick={() => setTab('vault')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'vault' ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Shield className="w-4 h-4 inline mr-2" />Secure Vault
+          </button>
+          <button onClick={() => setTab('general')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'general' ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
+            <Settings className="w-4 h-4 inline mr-2" />General
+          </button>
+        </div>
 
-  const handleAdd = () => {
-    if (newKey.trim()) {
-      onAdd(newProvider, newKey.trim());
-      setNewKey('');
-      setIsModalOpen(false);
-    }
-  };
-
-  return (
-    <Card>
-      <div className="flex justify-between items-start">
-        <CardHeader title="API Keys" description="Manage API keys for third-party providers." />
-        <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <Dialog.Trigger asChild>
-            <Button><Plus className="w-4 h-4 mr-2" />Add API Key</Button>
-          </Dialog.Trigger>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-            <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border border-border rounded-lg p-6 w-[400px] shadow-lg">
-              <Dialog.Title className="text-lg font-semibold">Add New API Key</Dialog.Title>
-              <div className="space-y-4 mt-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Provider</label>
-                  <Select.Root value={newProvider} onValueChange={setNewProvider}>
-                    <Select.Trigger className="w-full flex justify-between items-center bg-background border border-border rounded-md px-3 py-2">
-                      <Select.Value />
-                      <Select.Icon><ChevronDown className="w-4 h-4" /></Select.Icon>
-                    </Select.Trigger>
-                    <Select.Portal>
-                      <Select.Content className="bg-card border border-border rounded-md shadow-lg">
-                        <Select.Viewport className="p-2">
-                          {AVAILABLE_PROVIDERS.map(p => (
-                            <Select.Item key={p} value={p} className="px-3 py-2 rounded-md hover:bg-primary/20 cursor-pointer focus:outline-none">
-                              <Select.ItemText>{p}</Select.ItemText>
-                            </Select.Item>
-                          ))}
-                        </Select.Viewport>
-                      </Select.Content>
-                    </Select.Portal>
-                  </Select.Root>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">API Key</label>
-                  <input type="password" value={newKey} onChange={e => setNewKey(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2" />
-                </div>
+        {/* AI Providers Tab */}
+        {tab === 'providers' && (
+          <div className="space-y-6">
+            <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-blue-400 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm text-foreground font-medium">API keys are stored encrypted in Convex</p>
+                <p className="text-xs text-muted-foreground mt-1">Keys are encrypted at rest and only decrypted when making API calls. You can also manage keys via the CLI with <code className="bg-muted px-1 rounded">agentforge vault set</code>.</p>
               </div>
-              <div className="mt-6 flex justify-end space-x-2">
-                <Dialog.Close asChild><Button variant="secondary">Cancel</Button></Dialog.Close>
-                <Button onClick={handleAdd}>Add Key</Button>
-              </div>
-              <Dialog.Close asChild className="absolute top-4 right-4"><button><X className="w-4 h-4" /></button></Dialog.Close>
-            </Dialog.Content>
-          </Dialog.Portal>
-        </Dialog.Root>
-      </div>
-      <div className="mt-4 space-y-3">
-        {keys.length > 0 ? keys.map(key => (
-          <div key={key.id} className="flex items-center justify-between bg-background/50 p-3 rounded-md border border-border">
-            <div>
-              <span className="font-semibold">{key.provider}</span>
-              <p className="text-sm text-muted-foreground font-mono">{key.maskedKey}</p>
             </div>
-            <Button variant="destructive" onClick={() => onDelete(key.id)}><Trash2 className="w-4 h-4" /></Button>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {AI_PROVIDERS.map(provider => {
+                const keys = keysByProvider[provider.id] || [];
+                const hasKey = keys.length > 0;
+                return (
+                  <div key={provider.id} className={`bg-card border rounded-lg p-5 shadow-sm ${hasKey ? 'border-green-700/30' : 'border-border'}`}>
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-3 h-3 rounded-full ${provider.color}`} />
+                        <div>
+                          <h3 className="font-semibold text-foreground">{provider.name}</h3>
+                          <p className="text-xs text-muted-foreground">{provider.description}</p>
+                        </div>
+                      </div>
+                      <a href={provider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                        Get Key <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+
+                    {keys.length > 0 ? (
+                      <div className="space-y-2 mb-3">
+                        {keys.map((key: any) => (
+                          <div key={key._id} className="flex items-center justify-between bg-background rounded-lg px-3 py-2 border border-border">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className={`w-2 h-2 rounded-full ${key.isActive ? 'bg-green-500' : 'bg-muted-foreground'}`} />
+                              <span className="text-sm truncate">{key.keyName}</span>
+                              <span className="text-xs font-mono text-muted-foreground">••••••••</span>
+                            </div>
+                            <div className="flex items-center gap-1">
+                              <button onClick={() => toggleApiKey({ id: key._id })} className="p-1 rounded hover:bg-muted">
+                                {key.isActive ? <Check className="w-3.5 h-3.5 text-green-500" /> : <X className="w-3.5 h-3.5 text-muted-foreground" />}
+                              </button>
+                              <button onClick={() => handleDeleteKey(key._id)} className="p-1 rounded hover:bg-destructive/10">
+                                <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <button onClick={() => { setAddingProvider(provider); setNewKeyName(`${provider.name} Key`); setNewKeyValue(''); }} className={`w-full px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 ${hasKey ? 'bg-muted text-muted-foreground hover:text-foreground' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`}>
+                      <Plus className="w-4 h-4" /> {hasKey ? 'Add Another Key' : 'Add API Key'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-        )) : (
-          <p className="text-muted-foreground text-center py-4">No API keys added yet.</p>
         )}
-      </div>
-    </Card>
-  );
-}
 
-function ProvidersTab({ providers, defaultProvider, onToggle, onSetDefault }: { providers: ProviderSetting[], defaultProvider: string, onToggle: (id: string, e: boolean) => void, onSetDefault: (name: string) => void }) {
-  return (
-    <Card>
-      <CardHeader title="Providers" description="Enable or disable providers and set a default." />
-      <div className="space-y-3">
-        {providers.map(provider => (
-          <div key={provider.id} className="flex items-center justify-between bg-background/50 p-3 rounded-md border border-border">
-            <span className="font-semibold">{provider.name}</span>
-            <div className="flex items-center space-x-4">
-              <Button 
-                variant={defaultProvider === provider.name ? 'primary' : 'secondary'} 
-                onClick={() => onSetDefault(provider.name)}
-                disabled={!provider.enabled}
-              >
-                {defaultProvider === provider.name ? 'Default' : 'Set as Default'}
-              </Button>
-              <div className="flex items-center space-x-2">
-                <label htmlFor={`switch-${provider.id}`} className="text-sm">{provider.enabled ? 'Enabled' : 'Disabled'}</label>
-                <Switch.Root
-                  id={`switch-${provider.id}`}
-                  checked={provider.enabled}
-                  onCheckedChange={(checked) => onToggle(provider.id, checked)}
-                  className="w-[42px] h-[25px] bg-gray-600 rounded-full relative data-[state=checked]:bg-primary outline-none cursor-pointer"
-                >
-                  <Switch.Thumb className="block w-[21px] h-[21px] bg-white rounded-full shadow-sm transition-transform duration-100 translate-x-0.5 data-[state=checked]:translate-x-[19px]" />
-                </Switch.Root>
+        {/* Vault Tab */}
+        {tab === 'vault' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <p className="text-sm text-muted-foreground">Encrypted secrets stored in the Secure Vault. Secrets detected in chat are automatically stored here.</p>
+              <button onClick={() => setAddingVaultSecret(true)} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm hover:bg-primary/90 flex items-center gap-2">
+                <Plus className="w-4 h-4" /> Add Secret
+              </button>
+            </div>
+
+            {vaultSecrets.length === 0 ? (
+              <div className="text-center py-16 bg-card border border-border rounded-lg">
+                <Shield className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">Vault is empty</h3>
+                <p className="text-muted-foreground">Secrets will appear here when detected in chat or added manually.</p>
+              </div>
+            ) : (
+              <div className="bg-card border border-border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Name</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Category</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Provider</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Value</th>
+                      <th className="text-left px-4 py-3 font-medium text-muted-foreground">Created</th>
+                      <th className="text-right px-4 py-3 font-medium text-muted-foreground">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vaultSecrets.map((secret: any) => (
+                      <tr key={secret._id} className="border-t border-border hover:bg-muted/30">
+                        <td className="px-4 py-3 font-medium">{secret.name}</td>
+                        <td className="px-4 py-3"><span className="text-xs bg-muted px-2 py-0.5 rounded">{secret.category}</span></td>
+                        <td className="px-4 py-3 text-muted-foreground">{secret.provider || '—'}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{secret.maskedValue}</td>
+                        <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(secret.createdAt).toLocaleDateString()}</td>
+                        <td className="px-4 py-3 text-right">
+                          <button
+                          onClick={() => {
+                            if (confirmingDeleteSecretId === secret._id) {
+                              removeVaultSecret({ id: secret._id });
+                              setConfirmingDeleteSecretId(null);
+                            } else {
+                              setConfirmingDeleteSecretId(secret._id);
+                            }
+                          }}
+                          className={`p-1.5 rounded transition-colors ${confirmingDeleteSecretId === secret._id ? 'bg-destructive/20 text-destructive' : 'hover:bg-destructive/10 text-muted-foreground'}`}
+                          title={confirmingDeleteSecretId === secret._id ? 'Click to confirm delete' : 'Delete secret'}
+                        >
+                          {confirmingDeleteSecretId === secret._id ? <span className="text-xs font-medium px-1">Confirm?</span> : <Trash2 className="w-4 h-4 text-destructive" />}
+                        </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* General Tab */}
+        {tab === 'general' && (
+          <div className="space-y-6">
+            <div className="bg-card border border-border rounded-lg p-6">
+              <h3 className="text-lg font-semibold mb-4">Workspace Configuration</h3>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Default Model</label>
+                  <select
+                    value={defaultModel}
+                    onChange={(e) => setDefaultModel(e.target.value)}
+                    className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="">None (use agent default)</option>
+                    {allModels.map(({ provider, model }) => (
+                      <option key={`${provider}/${model}`} value={`${provider}/${model}`}>
+                        {model} ({provider})
+                      </option>
+                    ))}
+                    {allModels.length === 0 && (
+                      <option value="" disabled>Loading models…</option>
+                    )}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">Used when creating new agents without specifying a model.</p>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Default Temperature</label>
+                  <input type="number" defaultValue={0.7} step={0.1} min={0} max={2} className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm" />
+                </div>
               </div>
             </div>
           </div>
-        ))}
-      </div>
-    </Card>
-  );
-}
+        )}
 
-function AppearanceTab({ appearance, setAppearance }: { appearance: any, setAppearance: any }) {
-  const toggleTheme = () => {
-    const newTheme = appearance.theme === 'dark' ? 'light' : 'dark';
-    setAppearance({ ...appearance, theme: newTheme });
-    // In a real app, you'd also do:
-    // document.documentElement.classList.toggle('dark', newTheme === 'dark');
-  };
-
-  return (
-    <Card>
-      <CardHeader title="Appearance" description="Customize the look and feel of the application." />
-      <div className="flex items-center justify-between">
-        <span className="font-medium">Theme</span>
-        <div className="flex items-center space-x-2">
-          <span>Light</span>
-          <Switch.Root
-            checked={appearance.theme === 'dark'}
-            onCheckedChange={toggleTheme}
-            className="w-[42px] h-[25px] bg-gray-600 rounded-full relative data-[state=checked]:bg-primary outline-none cursor-pointer"
-          >
-            <Switch.Thumb className="block w-[21px] h-[21px] bg-white rounded-full shadow-sm transition-transform duration-100 translate-x-0.5 data-[state=checked]:translate-x-[19px]" />
-          </Switch.Root>
-          <span>Dark</span>
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-// ============================================================
-// VAULT TAB - Secure secrets management
-// ============================================================
-type VaultEntry = {
-  id: string;
-  name: string;
-  category: string;
-  provider: string;
-  maskedValue: string;
-  isActive: boolean;
-  accessCount: number;
-  lastAccessedAt: string | null;
-  createdAt: string;
-};
-
-type AuditLogEntry = {
-  id: string;
-  action: string;
-  source: string;
-  timestamp: string;
-  secretName: string;
-};
-
-function VaultTab() {
-  const [entries, setEntries] = useState<VaultEntry[]>([
-    { id: '1', name: 'OpenAI API Key', category: 'api_key', provider: 'openai', maskedValue: 'sk-pro...abc123', isActive: true, accessCount: 47, lastAccessedAt: new Date(Date.now() - 3600000).toISOString(), createdAt: new Date(Date.now() - 86400000 * 7).toISOString() },
-    { id: '2', name: 'Anthropic API Key', category: 'api_key', provider: 'anthropic', maskedValue: 'sk-ant...xyz789', isActive: true, accessCount: 12, lastAccessedAt: new Date(Date.now() - 7200000).toISOString(), createdAt: new Date(Date.now() - 86400000 * 3).toISOString() },
-    { id: '3', name: 'GitHub Token (auto-captured)', category: 'token', provider: 'github', maskedValue: 'ghp_ab...ef1234', isActive: true, accessCount: 3, lastAccessedAt: new Date(Date.now() - 86400000).toISOString(), createdAt: new Date(Date.now() - 86400000).toISOString() },
-    { id: '4', name: 'Stripe Test Key', category: 'api_key', provider: 'stripe', maskedValue: 'sk_tes...9876ab', isActive: false, accessCount: 0, lastAccessedAt: null, createdAt: new Date(Date.now() - 86400000 * 14).toISOString() },
-  ]);
-
-  const [auditLog] = useState<AuditLogEntry[]>([
-    { id: '1', action: 'accessed', source: 'agent', timestamp: new Date(Date.now() - 3600000).toISOString(), secretName: 'OpenAI API Key' },
-    { id: '2', action: 'auto_captured', source: 'chat', timestamp: new Date(Date.now() - 86400000).toISOString(), secretName: 'GitHub Token' },
-    { id: '3', action: 'created', source: 'dashboard', timestamp: new Date(Date.now() - 86400000 * 3).toISOString(), secretName: 'Anthropic API Key' },
-    { id: '4', action: 'updated', source: 'dashboard', timestamp: new Date(Date.now() - 86400000 * 5).toISOString(), secretName: 'OpenAI API Key' },
-  ]);
-
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newSecret, setNewSecret] = useState({ name: '', category: 'api_key', provider: '', value: '' });
-  const [showAuditLog, setShowAuditLog] = useState(false);
-
-  const handleAddSecret = () => {
-    if (!newSecret.name.trim() || !newSecret.value.trim()) return;
-    const masked = newSecret.value.length > 12
-      ? newSecret.value.substring(0, 6) + '...' + newSecret.value.substring(newSecret.value.length - 4)
-      : newSecret.value.substring(0, 3) + '...' + newSecret.value.substring(newSecret.value.length - 3);
-    setEntries(prev => [{
-      id: Date.now().toString(),
-      name: newSecret.name,
-      category: newSecret.category,
-      provider: newSecret.provider,
-      maskedValue: masked,
-      isActive: true,
-      accessCount: 0,
-      lastAccessedAt: null,
-      createdAt: new Date().toISOString(),
-    }, ...prev]);
-    setNewSecret({ name: '', category: 'api_key', provider: '', value: '' });
-    setIsAddModalOpen(false);
-  };
-
-  const handleToggle = (id: string) => {
-    setEntries(prev => prev.map(e => e.id === id ? { ...e, isActive: !e.isActive } : e));
-  };
-
-  const handleDelete = (id: string) => {
-    if (confirm('Are you sure? This will permanently delete this secret.')) {
-      setEntries(prev => prev.filter(e => e.id !== id));
-    }
-  };
-
-  const categoryColors: Record<string, string> = {
-    api_key: 'bg-ae-primary/10 text-ae-accent border-ae-accent/40',
-    token: 'bg-purple-900/30 text-purple-400 border-purple-700/40',
-    secret: 'bg-yellow-900/30 text-yellow-400 border-yellow-700/40',
-    credential: 'bg-orange-900/30 text-orange-400 border-orange-700/40',
-  };
-
-  const actionColors: Record<string, string> = {
-    created: 'text-green-400',
-    accessed: 'text-ae-accent',
-    updated: 'text-yellow-400',
-    deleted: 'text-red-400',
-    auto_captured: 'text-purple-400',
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Vault Header Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1"><Lock className="w-4 h-4" /> Total Secrets</div>
-          <p className="text-2xl font-bold">{entries.length}</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1"><ShieldCheck className="w-4 h-4" /> Active</div>
-          <p className="text-2xl font-bold text-green-400">{entries.filter(e => e.isActive).length}</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1"><Activity className="w-4 h-4" /> Total Accesses</div>
-          <p className="text-2xl font-bold">{entries.reduce((sum, e) => sum + e.accessCount, 0)}</p>
-        </div>
-        <div className="bg-card border border-border rounded-lg p-4">
-          <div className="flex items-center gap-2 text-muted-foreground text-sm mb-1"><Shield className="w-4 h-4" /> Auto-Captured</div>
-          <p className="text-2xl font-bold text-purple-400">{entries.filter(e => e.name.includes('auto-captured')).length}</p>
-        </div>
-      </div>
-
-      {/* Vault Entries */}
-      <Card>
-        <div className="flex justify-between items-start mb-6">
-          <div>
-            <h3 className="text-xl font-semibold flex items-center gap-2"><Lock className="w-5 h-5 text-primary" /> Secure Vault</h3>
-            <p className="text-muted-foreground mt-1">Encrypted storage for API keys, tokens, and secrets. Values are never exposed in the UI or database.</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => setShowAuditLog(!showAuditLog)}>
-              <Clock className="w-4 h-4 mr-2" />{showAuditLog ? 'Hide' : 'Show'} Audit Log
-            </Button>
-            <Button onClick={() => setIsAddModalOpen(true)}><Plus className="w-4 h-4 mr-2" />Add Secret</Button>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {entries.map(entry => (
-            <div key={entry.id} className={`flex items-center justify-between p-4 rounded-lg border ${entry.isActive ? 'bg-background/50 border-border' : 'bg-background/20 border-border/50 opacity-60'}`}>
-              <div className="flex items-center gap-4">
-                <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${entry.isActive ? 'bg-primary/20' : 'bg-muted'}`}>
-                  <Lock className={`w-5 h-5 ${entry.isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+        {/* Add Key Modal */}
+        {addingProvider && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-md">
+              <div className="flex justify-between items-center p-4 border-b border-border">
+                <h2 className="text-lg font-bold">Add {addingProvider.name} API Key</h2>
+                <button onClick={() => setAddingProvider(null)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Key Name</label>
+                  <input type="text" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Production Key" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-medium">{entry.name}</p>
-                    <span className={`text-xs px-2 py-0.5 rounded-full border ${categoryColors[entry.category] || 'bg-muted text-muted-foreground'}`}>{entry.category}</span>
-                    {entry.provider && <span className="text-xs text-muted-foreground">{entry.provider}</span>}
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-sm font-medium">API Key</label>
+                    <a href={addingProvider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">Get key <ExternalLink className="w-3 h-3" /></a>
                   </div>
-                  <div className="flex items-center gap-3 mt-1">
-                    <code className="text-xs text-muted-foreground font-mono bg-background px-2 py-0.5 rounded">{entry.maskedValue}</code>
-                    <span className="text-xs text-muted-foreground">{entry.accessCount} accesses</span>
-                    {entry.lastAccessedAt && <span className="text-xs text-muted-foreground">Last: {new Date(entry.lastAccessedAt).toLocaleDateString()}</span>}
-                  </div>
+                  <input type="password" value={newKeyValue} onChange={(e) => setNewKeyValue(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder={`${addingProvider.prefix}xxxxxxxxxxxxxxxxxxxx`} />
                 </div>
+                {newKeyValue && !newKeyValue.startsWith(addingProvider.prefix) && addingProvider.prefix && (
+                  <p className="text-xs text-yellow-500 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Key should start with "{addingProvider.prefix}"</p>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <Switch.Root
-                  checked={entry.isActive}
-                  onCheckedChange={() => handleToggle(entry.id)}
-                  className="w-[42px] h-[25px] bg-gray-600 rounded-full relative data-[state=checked]:bg-primary outline-none cursor-pointer"
-                >
-                  <Switch.Thumb className="block w-[21px] h-[21px] bg-white rounded-full shadow-sm transition-transform duration-100 translate-x-0.5 data-[state=checked]:translate-x-[19px]" />
-                </Switch.Root>
-                <button onClick={() => handleDelete(entry.id)} className="p-2 rounded-md hover:bg-destructive/20 text-muted-foreground hover:text-destructive">
-                  <Trash2 className="w-4 h-4" />
+              <div className="p-4 border-t border-border flex justify-end gap-2">
+                <button onClick={() => setAddingProvider(null)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
+                <button onClick={handleAddKey} disabled={!newKeyValue.trim()} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
+                  <Key className="w-4 h-4" /> Save Key
                 </button>
               </div>
             </div>
-          ))}
-        </div>
-      </Card>
-
-      {/* Audit Log */}
-      {showAuditLog && (
-        <Card>
-          <CardHeader title="Audit Log" description="Track all vault access and modifications." />
-          <div className="space-y-2">
-            {auditLog.map(log => (
-              <div key={log.id} className="flex items-center justify-between py-2 px-3 rounded-md bg-background/50 border border-border">
-                <div className="flex items-center gap-3">
-                  <span className={`text-sm font-medium capitalize ${actionColors[log.action] || 'text-foreground'}`}>{log.action.replace('_', ' ')}</span>
-                  <span className="text-sm text-foreground">{log.secretName}</span>
-                </div>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                  <span className="px-2 py-0.5 bg-card rounded border border-border">{log.source}</span>
-                  <span>{new Date(log.timestamp).toLocaleString()}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* Add Secret Modal */}
-      <Dialog.Root open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-          <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border border-border rounded-lg p-6 w-[450px] shadow-lg">
-            <Dialog.Title className="text-lg font-semibold flex items-center gap-2"><Lock className="w-5 h-5 text-primary" /> Add Secret to Vault</Dialog.Title>
-            <p className="text-sm text-muted-foreground mt-1">The value will be encrypted before storage. It will never be visible again.</p>
-            <div className="space-y-4 mt-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Name</label>
-                <input type="text" value={newSecret.name} onChange={e => setNewSecret({...newSecret, name: e.target.value})} placeholder="e.g., OpenAI Production Key" className="w-full bg-background border border-border rounded-md px-3 py-2" />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Category</label>
-                  <select value={newSecret.category} onChange={e => setNewSecret({...newSecret, category: e.target.value})} className="w-full bg-background border border-border rounded-md px-3 py-2">
-                    <option value="api_key">API Key</option>
-                    <option value="token">Token</option>
-                    <option value="secret">Secret</option>
-                    <option value="credential">Credential</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Provider</label>
-                  <input type="text" value={newSecret.provider} onChange={e => setNewSecret({...newSecret, provider: e.target.value})} placeholder="e.g., openai" className="w-full bg-background border border-border rounded-md px-3 py-2" />
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Secret Value</label>
-                <input type="password" value={newSecret.value} onChange={e => setNewSecret({...newSecret, value: e.target.value})} placeholder="Enter the secret value" className="w-full bg-background border border-border rounded-md px-3 py-2 font-mono" />
-                <p className="text-xs text-muted-foreground mt-1">This value will be encrypted with AES-256-GCM. You will only see a masked version after saving.</p>
-              </div>
-            </div>
-            <div className="mt-6 flex justify-end space-x-2">
-              <Dialog.Close asChild><Button variant="secondary">Cancel</Button></Dialog.Close>
-              <Button onClick={handleAddSecret}><Lock className="w-4 h-4 mr-2" />Encrypt &amp; Store</Button>
-            </div>
-            <Dialog.Close asChild className="absolute top-4 right-4"><button><X className="w-4 h-4" /></button></Dialog.Close>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
-    </div>
-  );
-}
-
-// ============================================================
-// TOKENS TAB - API Access Token Management (SPEC-004)
-// ============================================================
-type GeneratedTokenData = { id: string; token: string } | null;
-
-function TokensTab() {
-  // Convex queries and mutations
-  const tokens = useQuery(api.apiAccessTokens.list, {}) as ApiAccessToken[] | undefined;
-  const generateToken = useMutation(api.apiAccessTokens.generate);
-  const revokeToken = useMutation(api.apiAccessTokens.revoke);
-
-  // Local state
-  const [newTokenName, setNewTokenName] = useState('');
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedToken, setGeneratedToken] = useState<GeneratedTokenData>(null);
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Token masking helper
-  const maskToken = (token: string): string => {
-    if (token.length <= 12) return token;
-    return `${token.slice(0, 8)}...${token.slice(-4)}`;
-  };
-
-  // Generate token handler
-  const handleGenerate = async () => {
-    if (!newTokenName.trim()) {
-      setError('Token name is required');
-      return;
-    }
-
-    setIsGenerating(true);
-    setError(null);
-
-    try {
-      const result = await generateToken({ name: newTokenName.trim() }) as { id: string; token: string };
-      setGeneratedToken({ id: result.id, token: result.token });
-      setNewTokenName('');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to generate token');
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // Revoke token handler
-  const handleRevoke = async (id: Id<"apiAccessTokens">) => {
-    if (!confirm('Are you sure you want to revoke this token? This action cannot be undone.')) return;
-
-    try {
-      await revokeToken({ id });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to revoke token');
-    }
-  };
-
-  // Copy to clipboard handler
-  const handleCopy = async () => {
-    if (generatedToken?.token) {
-      await navigator.clipboard.writeText(generatedToken.token);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
-
-  // Dismiss token reveal
-  const handleDismiss = () => {
-    setGeneratedToken(null);
-    setCopied(false);
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Generate Token Form */}
-      <Card>
-        <div className="mb-4">
-          <h3 className="text-xl font-semibold flex items-center gap-2">
-            <KeyRound className="w-5 h-5 text-primary" />
-            API Access Tokens
-          </h3>
-          <p className="text-muted-foreground mt-1">
-            Generate tokens for authenticating API requests to the /v1/chat/completions endpoint.
-          </p>
-        </div>
-
-        {/* Inline Generate Form */}
-        <div className="flex items-center gap-3">
-          <input
-            type="text"
-            value={newTokenName}
-            onChange={(e) => setNewTokenName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleGenerate()}
-            placeholder="Token name (e.g., Production App)"
-            className="flex-1 bg-background border border-border rounded-md px-3 py-2"
-            disabled={isGenerating}
-          />
-          <Button onClick={handleGenerate} disabled={isGenerating || !newTokenName.trim()}>
-            {isGenerating ? 'Generating...' : 'Generate Token'}
-          </Button>
-        </div>
-        {error && (
-          <p className="text-destructive text-sm mt-2">{error}</p>
-        )}
-      </Card>
-
-      {/* One-time Token Reveal Callout */}
-      {generatedToken && (
-        <Card className="border-primary bg-primary/5">
-          <div className="flex items-start justify-between">
-            <div className="flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <h4 className="font-semibold text-foreground">Token Generated Successfully!</h4>
-              </div>
-              <p className="text-sm text-muted-foreground mb-3">
-                Save this token now — it won't be shown again.
-              </p>
-              <div className="bg-background border border-border rounded-md p-3 mb-3">
-                <code className="text-sm font-mono break-all text-primary">
-                  {generatedToken.token}
-                </code>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="secondary" onClick={handleCopy}>
-                  <Copy className="w-4 h-4 mr-2" />
-                  {copied ? 'Copied!' : 'Copy Token'}
-                </Button>
-                <Button variant="primary" onClick={handleDismiss}>
-                  Done
-                </Button>
-              </div>
-            </div>
-            <button
-              onClick={handleDismiss}
-              className="text-muted-foreground hover:text-foreground ml-4"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-        </Card>
-      )}
-
-      {/* Tokens List */}
-      <Card>
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold">Your Tokens</h3>
-          <p className="text-sm text-muted-foreground">
-            Active tokens can be used to authenticate API requests.
-          </p>
-        </div>
-
-        {!tokens || tokens.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <KeyRound className="w-12 h-12 mx-auto mb-3 opacity-50" />
-            <p>No tokens generated yet.</p>
-            <p className="text-sm">Create a token above to get started.</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Name</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Token</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Created</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Expires</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                  <th className="text-right py-3 px-4 text-sm font-medium text-muted-foreground">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tokens.map((token) => (
-                  <tr key={token._id} className="border-b border-border hover:bg-muted/50">
-                    <td className="py-3 px-4">
-                      <span className="font-medium">{token.name}</span>
-                    </td>
-                    <td className="py-3 px-4">
-                      <code className="text-sm font-mono text-muted-foreground">
-                        {maskToken(token.token)}
-                      </code>
-                    </td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">
-                      {new Date(token.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-muted-foreground">
-                      {token.expiresAt
-                        ? new Date(token.expiresAt).toLocaleDateString()
-                        : 'Never'}
-                    </td>
-                    <td className="py-3 px-4">
-                      <span
-                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                          token.isActive
-                            ? 'bg-green-500/10 text-green-500'
-                            : 'bg-red-500/10 text-red-500'
-                        }`}
-                      >
-                        {token.isActive ? 'Active' : 'Revoked'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 text-right">
-                      {token.isActive && (
-                        <button
-                          onClick={() => handleRevoke(token._id)}
-                          className="text-destructive hover:text-destructive/80 text-sm font-medium"
-                        >
-                          Revoke
-                        </button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
           </div>
         )}
-      </Card>
-    </div>
-  );
-}
 
-function AdvancedTab() {
-  const [isResetModalOpen, setIsResetModalOpen] = useState(false);
-
-  const handleReset = () => {
-    console.log("Resetting all settings...");
-    // Call mutation to reset settings
-    setIsResetModalOpen(false);
-  };
-
-  return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader title="Configuration Management" description="Export or import your application configuration." />
-        <div className="flex space-x-4">
-          <Button variant="secondary"><Upload className="w-4 h-4 mr-2" />Import Configuration</Button>
-          <Button variant="secondary"><Download className="w-4 h-4 mr-2" />Export Configuration</Button>
-        </div>
-      </Card>
-      <Card className="border-destructive">
-        <CardHeader title="Danger Zone" description="These actions are irreversible. Please proceed with caution." />
-        <Dialog.Root open={isResetModalOpen} onOpenChange={setIsResetModalOpen}>
-          <Dialog.Trigger asChild>
-            <Button variant="destructive">Reset All Settings</Button>
-          </Dialog.Trigger>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 bg-black/50" />
-            <Dialog.Content className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-card border border-border rounded-lg p-6 w-[400px] shadow-lg">
-              <Dialog.Title className="text-lg font-semibold flex items-center"><AlertTriangle className="w-5 h-5 mr-2 text-destructive"/>Confirm Reset</Dialog.Title>
-              <p className="mt-2 text-muted-foreground">Are you sure you want to reset all settings? This will erase all API keys, provider configurations, and general settings. This action cannot be undone.</p>
-              <div className="mt-6 flex justify-end space-x-2">
-                <Dialog.Close asChild><Button variant="secondary">Cancel</Button></Dialog.Close>
-                <Button variant="destructive" onClick={handleReset}>Yes, Reset Everything</Button>
+        {/* Add Vault Secret Modal */}
+        {addingVaultSecret && (
+          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+            <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-md">
+              <div className="flex justify-between items-center p-4 border-b border-border">
+                <h2 className="text-lg font-bold">Add Secret to Vault</h2>
+                <button onClick={() => setAddingVaultSecret(false)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
               </div>
-            </Dialog.Content>
-          </Dialog.Portal>
-        </Dialog.Root>
-      </Card>
-    </div>
+              <div className="p-6 space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Name</label>
+                  <input type="text" value={vaultForm.name} onChange={(e) => setVaultForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Database Password" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Category</label>
+                    <select value={vaultForm.category} onChange={(e) => setVaultForm(prev => ({ ...prev, category: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm">
+                      <option value="api_key">API Key</option>
+                      <option value="token">Token</option>
+                      <option value="credential">Credential</option>
+                      <option value="certificate">Certificate</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Provider</label>
+                    <input type="text" value={vaultForm.provider} onChange={(e) => setVaultForm(prev => ({ ...prev, provider: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. aws" />
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Secret Value</label>
+                  <input type="password" value={vaultForm.value} onChange={(e) => setVaultForm(prev => ({ ...prev, value: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder="Enter the secret value" />
+                </div>
+              </div>
+              <div className="p-4 border-t border-border flex justify-end gap-2">
+                <button onClick={() => setAddingVaultSecret(false)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
+                <button onClick={handleAddVaultSecret} disabled={!vaultForm.name || !vaultForm.value} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
+                  <Shield className="w-4 h-4" /> Store Secret
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
   );
 }

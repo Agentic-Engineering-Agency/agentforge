@@ -1,5 +1,5 @@
 import { Agent } from '@agentforge-ai/core';
-import { AgentForgeWorkspace } from '@agentforge-ai/core/workspace';
+import { createWorkspace } from '@agentforge-ai/core';
 
 /**
  * AgentForge — Your First Agent
@@ -22,12 +22,13 @@ import { AgentForgeWorkspace } from '@agentforge-ai/core/workspace';
 // ─── Workspace Setup ──────────────────────────────────────────────────
 // The workspace provides persistent file storage, command execution,
 // skill discovery, and content search for your agents.
-const workspace = AgentForgeWorkspace.local({
+const workspace = createWorkspace({
+  storage: 'local',
   basePath: './workspace',
-  skills: ['/skills'],
-  search: true,
+  skillsPath: ['/skills'],
+  skillsBasePath: './skills',
+  bm25: true,
   autoIndexPaths: ['/skills'],
-  sandbox: true,
 });
 
 // Initialize workspace (triggers auto-indexing)
@@ -62,13 +63,14 @@ export default myAgent;
 // ─── Example: Cloud Workspace (Cloudflare R2) ─────────────────────────
 // For production deployment on Cloudflare, use a cloud workspace:
 //
-// const cloudWorkspace = AgentForgeWorkspace.cloud({
+// const cloudWorkspace = createWorkspace({
+//   storage: 'r2',
 //   bucket: 'my-agent-files',
 //   region: 'auto',
 //   endpoint: process.env.R2_ENDPOINT,
 //   accessKeyId: process.env.R2_ACCESS_KEY_ID,
 //   secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-//   skills: ['/skills'],
+//   skillsPath: ['/skills'],
 // });
 
 // ─── Example: Agent with Custom Tools ──────────────────────────────────

@@ -31,7 +31,15 @@ export { manageNotesTool } from './tools/manage-notes.js';
 
 // Daemon
 export { AgentForgeDaemon } from './daemon/daemon.js';
-export type { ChannelAdapter, AgentDefinition, DaemonConfig } from './daemon/types.js';
+export type {
+  ChannelAdapter,
+  AgentDefinition,
+  DaemonConfig,
+  WorkflowExecutionResult,
+  WorkflowRunExecutor,
+} from './daemon/types.js';
+export { validateEnv, EnvValidationError } from './daemon/validate-env.js';
+export type { ChannelConfig } from './daemon/validate-env.js';
 
 // Channel adapters
 export { HttpChannel, type HttpChannelConfig } from './channels/http.js';
@@ -43,3 +51,12 @@ export {
   formatSSEChunk,
   generateThreadId,
 } from './channels/shared.js';
+
+// Workflows
+export {
+  executeAgentWorkflow,
+  type AgentWorkflowStepDefinition,
+  type AgentWorkflowPersistence,
+  type ExecuteAgentWorkflowInput,
+  type ExecuteAgentWorkflowResult,
+} from './workflows/agent-workflow.js';

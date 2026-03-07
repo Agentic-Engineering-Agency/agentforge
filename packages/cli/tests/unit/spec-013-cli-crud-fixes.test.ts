@@ -87,7 +87,7 @@ describe('SPEC-013: CLI CRUD Fixes', () => {
 
       const token = 'agf_' + randomBytes(16).toString('hex');
       expect(token).toMatch(/^agf_[a-f0-9]{32}$/);
-      expect(token).toBe('agf_' + '6'.repeat(32)); // 'a'.repeat(32).toString('hex) = '61'.repeat(16) = '6161...'
+      expect(token).toBe('agf_' + 'a'.repeat(32));
     });
 
     it('should require --name flag', () => {

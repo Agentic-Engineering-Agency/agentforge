@@ -8,13 +8,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { registerWorkflowsCommand } from './workflows.js';
 import { Command } from 'commander';
 
+const fetchMock = vi.fn();
+const mockClient = {
+  mutation: vi.fn(() => Promise.resolve('workflow-123')),
+  query: vi.fn(() => Promise.resolve([])),
+  action: vi.fn(),
+};
+
 // Mock the convex client
 vi.mock('../lib/convex-client.js', () => ({
-  createClient: vi.fn(() => ({
-    mutation: vi.fn(() => Promise.resolve('workflow-123')),
-    query: vi.fn(() => Promise.resolve([])),
-  })),
+  createClient: vi.fn(() => mockClient),
   safeCall: vi.fn((fn) => fn()),
+}));
+
+vi.mock('../lib/project-config.js', () => ({
+  loadProjectConfig: vi.fn(() => Promise.resolve({ channels: { http: { port: 3001 } } })),
 }));
 
 // Mock readline for prompts
@@ -30,7 +38,6 @@ vi.mock('node:readline', () => ({
 describe('SPEC-010: workflows create command', () => {
   let program: Command;
   let mutationSpy: ReturnType<typeof vi.fn>;
-
   beforeEach(async () => {
     program = new Command();
     registerWorkflowsCommand(program);
@@ -38,6 +45,11 @@ describe('SPEC-010: workflows create command', () => {
     const mockClient = await createClient();
     mutationSpy = vi.mocked(mockClient.mutation);
     vi.clearAllMocks();
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ status: 'success', output: 'done' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
   });
 
   describe('Fix 3: create subcommand', () => {
@@ -151,6 +163,19 @@ describe('SPEC-010: workflows create command', () => {
       const options = createCmd?.options || [];
       const hasScheduleOption = options.some((o) => o.long === '--schedule');
       expect(hasScheduleOption).toBe(true);
+    });
+
+    it('should dispatch workflow runs to the daemon endpoint', async () => {
+      await program.parseAsync(['workflows', 'run', 'workflow-123', '--input', 'hello'], { from: 'user' });
+
+      expect(mutationSpy).toHaveBeenCalledWith(
+        'workflows:createRun',
+        expect.objectContaining({ workflowId: 'workflow-123', input: 'hello' }),
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        'http://localhost:3001/v1/workflows/runs/workflow-123/execute',
+        expect.objectContaining({ method: 'POST' }),
+      );
     });
   });
 });

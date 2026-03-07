@@ -57,7 +57,7 @@
     "@ai-sdk/google": "^1.0.0",
     "@discordjs/rest": "^2.4.0",
     "@e2b/code-interpreter": "^1.0.0",
-    "@mastra/core": "^1.5.0",
+    "@mastra/core": "^1.8.0",
     "@mastra/s3": "^0.2.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@slack/bolt": "^4.1.0",
