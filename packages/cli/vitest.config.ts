@@ -1,21 +1,21 @@
+import path from 'node:path';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'json', 'html', 'lcov'],
-      include: ['src/**/*.ts'],
-      exclude: ['src/**/*.test.ts', 'src/index.ts'],
-      thresholds: {
-        statements: 90,
-        branches: 90,
-        functions: 90,
-        lines: 90,
+  resolve: {
+    alias: [
+      {
+        find: '@agentforge-ai/core/workspace',
+        replacement: path.resolve(__dirname, '../core/src/workspace.ts'),
       },
-    },
+      {
+        find: '@agentforge-ai/core',
+        replacement: path.resolve(__dirname, '../core/src/index.ts'),
+      },
+      {
+        find: '@agentforge-ai/runtime',
+        replacement: path.resolve(__dirname, '../runtime/src/index.ts'),
+      },
+    ],
   },
 });

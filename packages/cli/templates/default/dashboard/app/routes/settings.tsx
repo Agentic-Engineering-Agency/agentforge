@@ -1,102 +1,48 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
-import { useState, useEffect } from 'react';
-import { useQuery, useMutation, useAction } from 'convex/react';
+import { useEffect, useMemo, useState } from 'react';
+import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Key, Plus, Trash2, Check, X, Shield, AlertTriangle, ExternalLink, Settings } from 'lucide-react';
+import { AlertTriangle, Check, ExternalLink, Key, Plus, Settings, Shield, Trash2, X } from 'lucide-react';
+import { useModelCatalog, type ProviderCatalogEntry } from '../lib/model-catalog';
 
 export const Route = createFileRoute('/settings')({ component: SettingsPage });
 
-// ─── AI Provider Definitions ─────────────────────────────────────
-const AI_PROVIDERS = [
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    description: 'GPT-4o, GPT-4.1 Mini, DALL-E, Whisper',
-    prefix: 'sk-',
-    docsUrl: 'https://platform.openai.com/api-keys',
-    color: 'bg-green-500',
-  },
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    description: 'Claude Sonnet 4.5, Claude Haiku 4.5, Claude Opus 4',
-    prefix: 'sk-ant-',
-    docsUrl: 'https://console.anthropic.com/settings/keys',
-    color: 'bg-orange-500',
-  },
-  {
-    id: 'openrouter',
-    name: 'OpenRouter',
-    description: 'Multi-model routing — access 200+ models through one API',
-    prefix: 'sk-or-',
-    docsUrl: 'https://openrouter.ai/keys',
-    color: 'bg-purple-500',
-  },
-  {
-    id: 'google',
-    name: 'Google AI',
-    description: 'Gemini 2.5 Flash, Gemini 2.5 Pro, Gemini 2.0 Flash',
-    prefix: 'AIza',
-    docsUrl: 'https://aistudio.google.com/apikey',
-    color: 'bg-blue-500',
-  },
-  {
-    id: 'xai',
-    name: 'xAI',
-    description: 'Grok 3, Grok 3 Mini, Grok 2',
-    prefix: 'xai-',
-    docsUrl: 'https://console.x.ai/',
-    color: 'bg-gray-500',
-  },
-  {
-    id: 'groq',
-    name: 'Groq',
-    description: 'Ultra-fast inference — Llama 3.3, DeepSeek-R1, Qwen',
-    prefix: 'gsk_',
-    docsUrl: 'https://console.groq.com/keys',
-    color: 'bg-red-500',
-  },
-  {
-    id: 'together',
-    name: 'Together AI',
-    description: 'Llama 4, DeepSeek-R1, Qwen 2.5 — open-source models',
-    prefix: '',
-    docsUrl: 'https://api.together.xyz/settings/api-keys',
-    color: 'bg-indigo-500',
-  },
-  {
-    id: 'perplexity',
-    name: 'Perplexity',
-    description: 'Sonar Pro, Sonar — real-time web-grounded search',
-    prefix: 'pplx-',
-    docsUrl: 'https://www.perplexity.ai/settings/api',
-    color: 'bg-teal-500',
-  },
-];
+const LOCAL_SETTINGS_USER = 'local';
+const KEY_PREFIXES: Record<string, string> = {
+  openai: 'sk-',
+  anthropic: 'sk-ant-',
+  openrouter: 'sk-or-',
+  google: 'AIza',
+  xai: 'xai-',
+  groq: 'gsk_',
+  perplexity: 'pplx-',
+};
 
 function SettingsPage() {
   const apiKeys = useQuery(api.apiKeys.list, {}) ?? [];
   const vaultSecrets = useQuery(api.vault.list, {}) ?? [];
+  const userSettings = useQuery(api.settings.list, { userId: LOCAL_SETTINGS_USER }) ?? [];
   const createApiKey = useAction(api.apiKeys.create);
   const removeApiKey = useMutation(api.apiKeys.remove);
   const toggleApiKey = useMutation(api.apiKeys.toggleActive);
   const storeVaultSecret = useMutation(api.vault.store);
   const removeVaultSecret = useMutation(api.vault.remove);
-  // All available models fetched from daemon /api/models (flat list for default-model picker)
-  const [allModels, setAllModels] = useState<{ provider: string; model: string }[]>([]);
-  const daemonUrl: string = (window as any).__AGENTFORGE_DAEMON_URL__ ?? 'http://localhost:3001';
+  const setSetting = useMutation(api.settings.set);
+  const removeSetting = useMutation(api.settings.remove);
 
   const [tab, setTab] = useState<'providers' | 'vault' | 'general'>('providers');
-  const [addingProvider, setAddingProvider] = useState<typeof AI_PROVIDERS[0] | null>(null);
+  const [addingProvider, setAddingProvider] = useState<ProviderCatalogEntry | null>(null);
   const [newKeyName, setNewKeyName] = useState('');
   const [newKeyValue, setNewKeyValue] = useState('');
-
   const [addingVaultSecret, setAddingVaultSecret] = useState(false);
   const [vaultForm, setVaultForm] = useState({ name: '', category: 'api_key', provider: '', value: '' });
   const [defaultModel, setDefaultModel] = useState('');
+  const [defaultTemperature, setDefaultTemperature] = useState(0.7);
   const [confirmingDeleteKeyId, setConfirmingDeleteKeyId] = useState<string | null>(null);
   const [confirmingDeleteSecretId, setConfirmingDeleteSecretId] = useState<string | null>(null);
+  const [savingGeneral, setSavingGeneral] = useState(false);
+  const [generalSavedMessage, setGeneralSavedMessage] = useState<string | null>(null);
 
   const keysByProvider = apiKeys.reduce((acc: Record<string, any[]>, key: any) => {
     if (!acc[key.provider]) acc[key.provider] = [];
@@ -104,43 +50,41 @@ function SettingsPage() {
     return acc;
   }, {} as Record<string, any[]>);
 
-  // Fetch all available models from daemon for the General → Default Model dropdown
-  useEffect(() => {
-    fetch(`${daemonUrl}/api/models`, { signal: AbortSignal.timeout(4000) })
-      .then(r => r.ok ? r.json() : Promise.reject())
-      .then((data: { providers: Record<string, string[]> }) => {
-        const flat: { provider: string; model: string }[] = [];
-        for (const [prov, models] of Object.entries(data.providers ?? {})) {
-          for (const m of models) flat.push({ provider: prov, model: m });
-        }
-        if (flat.length > 0) setAllModels(flat);
-      })
-      .catch(() => {
-        // Daemon offline — use fallback static list
-        const FALLBACK: Record<string, string[]> = {
-          openai: ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini'],
-          anthropic: ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-          google: ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash'],
-          xai: ['grok-3', 'grok-3-mini'],
-          openrouter: ['openrouter/auto'],
-        };
-        const flat: { provider: string; model: string }[] = [];
-        for (const [prov, models] of Object.entries(FALLBACK)) {
-          for (const m of models) flat.push({ provider: prov, model: m });
-        }
-        setAllModels(flat);
-      });
-  }, [daemonUrl]);
+  const { providers, loading: catalogLoading, error: catalogError } = useModelCatalog([
+    ...apiKeys.map((key: any) => key.provider),
+    ...vaultSecrets.map((secret: any) => secret.provider).filter(Boolean),
+  ]);
 
-  // (Live provider model descriptions removed — daemon handles model discovery)
+  const providerEntries = providers;
+  const allModels = useMemo(
+    () =>
+      providers.flatMap((provider) =>
+        provider.models.map((model) => ({ provider: provider.id, model })),
+      ),
+    [providers],
+  );
+
+  useEffect(() => {
+    const savedDefaultModel = userSettings.find((setting: any) => setting.key === 'defaultModel')?.value;
+    const savedDefaultTemperature = userSettings.find((setting: any) => setting.key === 'defaultTemperature')?.value;
+
+    if (typeof savedDefaultModel === 'string') {
+      setDefaultModel(savedDefaultModel);
+    }
+    if (typeof savedDefaultTemperature === 'number') {
+      setDefaultTemperature(savedDefaultTemperature);
+    }
+  }, [userSettings]);
 
   const handleAddKey = async () => {
     if (!addingProvider || !newKeyValue.trim()) return;
+
     await createApiKey({
       provider: addingProvider.id,
       keyName: newKeyName || `${addingProvider.name} Key`,
       encryptedKey: newKeyValue,
     });
+
     setAddingProvider(null);
     setNewKeyName('');
     setNewKeyValue('');
@@ -150,16 +94,48 @@ function SettingsPage() {
     if (confirmingDeleteKeyId === id) {
       await removeApiKey({ id });
       setConfirmingDeleteKeyId(null);
-    } else {
-      setConfirmingDeleteKeyId(id);
+      return;
     }
+
+    setConfirmingDeleteKeyId(id);
   };
 
   const handleAddVaultSecret = async () => {
     if (!vaultForm.name || !vaultForm.value) return;
+
     await storeVaultSecret(vaultForm);
     setAddingVaultSecret(false);
     setVaultForm({ name: '', category: 'api_key', provider: '', value: '' });
+  };
+
+  const handleSaveGeneral = async () => {
+    setSavingGeneral(true);
+
+    try {
+      if (defaultModel) {
+        await setSetting({
+          userId: LOCAL_SETTINGS_USER,
+          key: 'defaultModel',
+          value: defaultModel,
+        });
+      } else {
+        await removeSetting({
+          userId: LOCAL_SETTINGS_USER,
+          key: 'defaultModel',
+        });
+      }
+
+      await setSetting({
+        userId: LOCAL_SETTINGS_USER,
+        key: 'defaultTemperature',
+        value: defaultTemperature,
+      });
+
+      setGeneralSavedMessage('General settings saved.');
+      setTimeout(() => setGeneralSavedMessage(null), 3000);
+    } finally {
+      setSavingGeneral(false);
+    }
   };
 
   return (
@@ -170,7 +146,7 @@ function SettingsPage() {
           <p className="text-muted-foreground">Manage AI provider keys, secrets, and workspace configuration.</p>
         </div>
 
-        <div className="flex gap-1 bg-muted p-1 rounded-lg w-fit">
+        <div className="flex gap-1 rounded-lg bg-muted p-1 w-fit">
           <button onClick={() => setTab('providers')} className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'providers' ? 'bg-card shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}>
             <Key className="w-4 h-4 inline mr-2" />AI Providers
           </button>
@@ -182,7 +158,12 @@ function SettingsPage() {
           </button>
         </div>
 
-        {/* AI Providers Tab */}
+        {catalogError && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            Provider catalog unavailable. Start the daemon to load the latest providers and models.
+          </div>
+        )}
+
         {tab === 'providers' && (
           <div className="space-y-6">
             <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg p-4 flex items-start gap-3">
@@ -194,25 +175,29 @@ function SettingsPage() {
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {AI_PROVIDERS.map(provider => {
+              {providerEntries.map((provider) => {
                 const keys = keysByProvider[provider.id] || [];
                 const hasKey = keys.length > 0;
+                const keyPrefix = KEY_PREFIXES[provider.id] ?? '';
+
                 return (
                   <div key={provider.id} className={`bg-card border rounded-lg p-5 shadow-sm ${hasKey ? 'border-green-700/30' : 'border-border'}`}>
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-center gap-3">
-                        <div className={`w-3 h-3 rounded-full ${provider.color}`} />
+                        <div className={`w-3 h-3 rounded-full ${provider.colorClass ?? 'bg-slate-500'}`} />
                         <div>
                           <h3 className="font-semibold text-foreground">{provider.name}</h3>
-                          <p className="text-xs text-muted-foreground">{provider.description}</p>
+                          <p className="text-xs text-muted-foreground">{provider.description ?? 'Provider metadata loaded from the daemon catalog.'}</p>
                         </div>
                       </div>
-                      <a href={provider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
-                        Get Key <ExternalLink className="w-3 h-3" />
-                      </a>
+                      {provider.docsUrl && (
+                        <a href={provider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">
+                          Docs <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
                     </div>
 
-                    {keys.length > 0 ? (
+                    {keys.length > 0 && (
                       <div className="space-y-2 mb-3">
                         {keys.map((key: any) => (
                           <div key={key._id} className="flex items-center justify-between bg-background rounded-lg px-3 py-2 border border-border">
@@ -232,11 +217,12 @@ function SettingsPage() {
                           </div>
                         ))}
                       </div>
-                    ) : null}
+                    )}
 
                     <button onClick={() => { setAddingProvider(provider); setNewKeyName(`${provider.name} Key`); setNewKeyValue(''); }} className={`w-full px-3 py-2 rounded-lg text-sm flex items-center justify-center gap-2 ${hasKey ? 'bg-muted text-muted-foreground hover:text-foreground' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`}>
                       <Plus className="w-4 h-4" /> {hasKey ? 'Add Another Key' : 'Add API Key'}
                     </button>
+                    {keyPrefix && <p className="mt-2 text-xs text-muted-foreground">Expected prefix: <code className="bg-muted px-1 rounded">{keyPrefix}</code></p>}
                   </div>
                 );
               })}
@@ -244,7 +230,6 @@ function SettingsPage() {
           </div>
         )}
 
-        {/* Vault Tab */}
         {tab === 'vault' && (
           <div className="space-y-6">
             <div className="flex justify-between items-center">
@@ -283,19 +268,19 @@ function SettingsPage() {
                         <td className="px-4 py-3 text-xs text-muted-foreground">{new Date(secret.createdAt).toLocaleDateString()}</td>
                         <td className="px-4 py-3 text-right">
                           <button
-                          onClick={() => {
-                            if (confirmingDeleteSecretId === secret._id) {
-                              removeVaultSecret({ id: secret._id });
-                              setConfirmingDeleteSecretId(null);
-                            } else {
-                              setConfirmingDeleteSecretId(secret._id);
-                            }
-                          }}
-                          className={`p-1.5 rounded transition-colors ${confirmingDeleteSecretId === secret._id ? 'bg-destructive/20 text-destructive' : 'hover:bg-destructive/10 text-muted-foreground'}`}
-                          title={confirmingDeleteSecretId === secret._id ? 'Click to confirm delete' : 'Delete secret'}
-                        >
-                          {confirmingDeleteSecretId === secret._id ? <span className="text-xs font-medium px-1">Confirm?</span> : <Trash2 className="w-4 h-4 text-destructive" />}
-                        </button>
+                            onClick={() => {
+                              if (confirmingDeleteSecretId === secret._id) {
+                                removeVaultSecret({ id: secret._id });
+                                setConfirmingDeleteSecretId(null);
+                              } else {
+                                setConfirmingDeleteSecretId(secret._id);
+                              }
+                            }}
+                            className={`p-1.5 rounded transition-colors ${confirmingDeleteSecretId === secret._id ? 'bg-destructive/20 text-destructive' : 'hover:bg-destructive/10 text-muted-foreground'}`}
+                            title={confirmingDeleteSecretId === secret._id ? 'Click to confirm delete' : 'Delete secret'}
+                          >
+                            {confirmingDeleteSecretId === secret._id ? <span className="text-xs font-medium px-1">Confirm?</span> : <Trash2 className="w-4 h-4 text-destructive" />}
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -306,7 +291,6 @@ function SettingsPage() {
           </div>
         )}
 
-        {/* General Tab */}
         {tab === 'general' && (
           <div className="space-y-6">
             <div className="bg-card border border-border rounded-lg p-6">
@@ -316,7 +300,7 @@ function SettingsPage() {
                   <label className="block text-sm font-medium mb-1">Default Model</label>
                   <select
                     value={defaultModel}
-                    onChange={(e) => setDefaultModel(e.target.value)}
+                    onChange={(event) => setDefaultModel(event.target.value)}
                     className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   >
                     <option value="">None (use agent default)</option>
@@ -325,22 +309,33 @@ function SettingsPage() {
                         {model} ({provider})
                       </option>
                     ))}
-                    {allModels.length === 0 && (
-                      <option value="" disabled>Loading models…</option>
-                    )}
+                    {catalogLoading && <option value="" disabled>Loading models…</option>}
                   </select>
                   <p className="text-xs text-muted-foreground mt-1">Used when creating new agents without specifying a model.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Default Temperature</label>
-                  <input type="number" defaultValue={0.7} step={0.1} min={0} max={2} className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm" />
+                  <input
+                    type="number"
+                    value={defaultTemperature}
+                    onChange={(event) => setDefaultTemperature(parseFloat(event.target.value) || 0)}
+                    step={0.1}
+                    min={0}
+                    max={2}
+                    className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-3 pt-2">
+                  <button onClick={handleSaveGeneral} disabled={savingGeneral} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                    {savingGeneral ? 'Saving…' : 'Save General Settings'}
+                  </button>
+                  {generalSavedMessage && <span className="text-sm text-green-400">{generalSavedMessage}</span>}
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        {/* Add Key Modal */}
         {addingProvider && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-md">
@@ -351,17 +346,19 @@ function SettingsPage() {
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Key Name</label>
-                  <input type="text" value={newKeyName} onChange={(e) => setNewKeyName(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Production Key" />
+                  <input type="text" value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Production Key" />
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-sm font-medium">API Key</label>
-                    <a href={addingProvider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">Get key <ExternalLink className="w-3 h-3" /></a>
+                    {addingProvider.docsUrl && (
+                      <a href={addingProvider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">Docs <ExternalLink className="w-3 h-3" /></a>
+                    )}
                   </div>
-                  <input type="password" value={newKeyValue} onChange={(e) => setNewKeyValue(e.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder={`${addingProvider.prefix}xxxxxxxxxxxxxxxxxxxx`} />
+                  <input type="password" value={newKeyValue} onChange={(event) => setNewKeyValue(event.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder={`${KEY_PREFIXES[addingProvider.id] ?? ''}xxxxxxxxxxxxxxxxxxxx`} />
                 </div>
-                {newKeyValue && !newKeyValue.startsWith(addingProvider.prefix) && addingProvider.prefix && (
-                  <p className="text-xs text-yellow-500 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Key should start with "{addingProvider.prefix}"</p>
+                {newKeyValue && KEY_PREFIXES[addingProvider.id] && !newKeyValue.startsWith(KEY_PREFIXES[addingProvider.id]!) && (
+                  <p className="text-xs text-yellow-500 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Key should start with "{KEY_PREFIXES[addingProvider.id]}"</p>
                 )}
               </div>
               <div className="p-4 border-t border-border flex justify-end gap-2">
@@ -374,7 +371,6 @@ function SettingsPage() {
           </div>
         )}
 
-        {/* Add Vault Secret Modal */}
         {addingVaultSecret && (
           <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
             <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-md">
@@ -385,12 +381,12 @@ function SettingsPage() {
               <div className="p-6 space-y-4">
                 <div>
                   <label className="block text-sm font-medium mb-1">Name</label>
-                  <input type="text" value={vaultForm.name} onChange={(e) => setVaultForm(prev => ({ ...prev, name: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Database Password" />
+                  <input type="text" value={vaultForm.name} onChange={(event) => setVaultForm((prev) => ({ ...prev, name: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Database Password" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium mb-1">Category</label>
-                    <select value={vaultForm.category} onChange={(e) => setVaultForm(prev => ({ ...prev, category: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm">
+                    <select value={vaultForm.category} onChange={(event) => setVaultForm((prev) => ({ ...prev, category: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm">
                       <option value="api_key">API Key</option>
                       <option value="token">Token</option>
                       <option value="credential">Credential</option>
@@ -400,12 +396,12 @@ function SettingsPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-1">Provider</label>
-                    <input type="text" value={vaultForm.provider} onChange={(e) => setVaultForm(prev => ({ ...prev, provider: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. aws" />
+                    <input type="text" value={vaultForm.provider} onChange={(event) => setVaultForm((prev) => ({ ...prev, provider: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. aws" />
                   </div>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Secret Value</label>
-                  <input type="password" value={vaultForm.value} onChange={(e) => setVaultForm(prev => ({ ...prev, value: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder="Enter the secret value" />
+                  <input type="password" value={vaultForm.value} onChange={(event) => setVaultForm((prev) => ({ ...prev, value: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder="Enter the secret value" />
                 </div>
               </div>
               <div className="p-4 border-t border-border flex justify-end gap-2">

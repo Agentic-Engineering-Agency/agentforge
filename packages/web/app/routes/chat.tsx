@@ -1,8 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
-import { api } from "../../../../convex/_generated/api";
+import { useQuery, useMutation } from "convex/react";
+import { api } from "@convex/_generated/api";
+import type { Id } from "@convex/_generated/dataModel";
 import {
   Send,
   Plus,
@@ -18,29 +19,10 @@ import {
   Loader2,
   MessageSquare,
   Trash2,
-  ExternalLink,
-  Volume2,
+  X,
+  File,
 } from "lucide-react";
-
-// ============================================================
-// URL Helper Functions
-// ============================================================
-
-/**
- * Normalize a base URL by validating, trimming, and removing trailing slashes.
- * Throws an error if the URL is invalid or empty.
- */
-function normalizeBaseUrl(url: string | undefined, context: string): string {
-  if (!url) {
-    throw new Error(`Missing ${context}. Please configure the environment variable.`);
-  }
-  const trimmed = url.trim();
-  if (!trimmed) {
-    throw new Error(`Empty ${context}. Please configure the environment variable.`);
-  }
-  // Remove trailing slashes
-  return trimmed.replace(/\/+$/, "");
-}
+import { useModelCatalog } from "../lib/model-catalog";
 
 // ============================================================
 // SECRET DETECTION ENGINE (client-side mirror of vault patterns)
@@ -103,20 +85,13 @@ function ChatPageComponent() {
   // ── Convex queries ──────────────────────────────────────────
   const agents = useQuery(api.agents.listActive, {}) ?? [];
   const threads = useQuery(api.threads.listThreads, {}) ?? [];
+  // AGE-144: Query available files for attachment
+  const availableFiles = useQuery(api.files.list, {}) ?? [];
 
   // ── Convex mutations & actions ──────────────────────────────
   const createThread = useMutation(api.threads.createThread);
-  // NOTE: chat.sendMessage removed in SPEC-022 — messages are sent via runtime daemon HTTP API
-  // sendMessage is now a direct HTTP POST to the daemon's /api/chat endpoint
-  const sendMessageAction = async ({ threadId, agentId, content }: { threadId: string; agentId: string; content: string }) => {
-    const res = await fetch("/api/chat", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ threadId, agentId, message: content }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    return res.json();
-  };
+  const censorSecretMessage = useMutation(api.vault.censorMessage);
+  // NOTE: chat.sendMessage removed in v0.12 — messages are sent via runtime daemon HTTP API.
 
   // ── Local state ─────────────────────────────────────────────
   const [currentThreadId, setCurrentThreadId] = useState<string | null>(null);
@@ -127,9 +102,9 @@ function ChatPageComponent() {
   const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const [vaultNotification, setVaultNotification] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [isStreamingMode, setIsStreamingMode] = useState(true);
-  const [streamingMessage, setStreamingMessage] = useState<string>("");
-  const [playingMessageId, setPlayingMessageId] = useState<string | null>(null);
+  // AGE-144: File attachment state
+  const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; name: string; size: number; mimeType: string }>>([]);
+  const [showFilePicker, setShowFilePicker] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -139,8 +114,9 @@ function ChatPageComponent() {
   // when new ones are inserted by the Convex action.
   const messages = useQuery(
     api.threads.getThreadMessages,
-    currentThreadId ? { threadId: currentThreadId as any } : "skip"
+    currentThreadId ? { threadId: currentThreadId as Id<"threads"> } : "skip"
   ) ?? [];
+  const { providersById } = useModelCatalog(agents.map((agent: any) => agent.provider));
 
   // ── Auto-select first agent ─────────────────────────────────
   useEffect(() => {
@@ -162,7 +138,7 @@ function ChatPageComponent() {
   };
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isGenerating, streamingMessage]);
+  }, [messages, isGenerating]);
 
   // ── Secret detection as user types ──────────────────────────
   const inputHasSecrets = input.length > 8 ? detectSecrets(input) : [];
@@ -174,7 +150,7 @@ function ChatPageComponent() {
       return;
     }
     try {
-      const agent = agents.find((a: any) => a.id === currentAgentId);
+      const agent = agents.find((a) => a.id === currentAgentId);
       const threadId = await createThread({
         agentId: currentAgentId,
         name: `Chat with ${agent?.name || "Agent"}`,
@@ -200,13 +176,9 @@ function ChatPageComponent() {
         return;
       }
 
-      if (isStreamingMode) {
-        await sendMessageStreaming(input);
-      } else {
-        await sendMessageToChat(input);
-      }
+      await sendMessageToChat(input);
     },
-    [input, currentAgentId, currentThreadId, isStreamingMode]
+    [input, currentAgentId, currentThreadId]
   );
 
   const sendMessageToChat = async (text: string, secrets?: DetectedSecret[]) => {
@@ -214,10 +186,24 @@ function ChatPageComponent() {
 
     let messageText = text;
     if (secrets && secrets.length > 0) {
-      messageText = censorText(text, secrets);
-      setVaultNotification(
-        `${secrets.length} secret${secrets.length > 1 ? "s" : ""} detected and redacted.`
-      );
+      try {
+        const result = await censorSecretMessage({
+          text,
+          userId: 'local',
+          autoStore: true,
+        });
+        messageText = result.censoredText;
+        setVaultNotification(
+          result.secretsDetected
+            ? `${result.storedSecrets.length} secret${result.storedSecrets.length > 1 ? "s" : ""} detected, redacted, and stored in the Secure Vault.`
+            : `${secrets.length} secret${secrets.length > 1 ? "s" : ""} detected and redacted.`
+        );
+      } catch {
+        messageText = censorText(text, secrets);
+        setVaultNotification(
+          `${secrets.length} secret${secrets.length > 1 ? "s" : ""} detected and redacted. Secure Vault storage failed.`
+        );
+      }
       setTimeout(() => setVaultNotification(null), 5000);
     }
 
@@ -229,7 +215,7 @@ function ChatPageComponent() {
       // If no thread exists, create one first
       let threadId = currentThreadId;
       if (!threadId) {
-        const agent = agents.find((a: any) => a.id === currentAgentId);
+        const agent = agents.find((a) => a.id === currentAgentId);
         threadId = await createThread({
           agentId: currentAgentId,
           name: `Chat with ${agent?.name || "Agent"}`,
@@ -237,14 +223,26 @@ function ChatPageComponent() {
         setCurrentThreadId(threadId);
       }
 
-      // Call the Convex action — this stores user message, calls LLM,
-      // and stores assistant response. The useQuery subscription above
-      // will automatically pick up both new messages in real-time.
-      await sendMessageAction({
-        agentId: currentAgentId,
-        threadId: threadId as any,
-        content: messageText,
+      // Send message to runtime daemon via HTTP — daemon handles LLM and stores response.
+      // The useQuery subscription above will pick up new messages in real-time.
+      const daemonUrl = (window as any).__AGENTFORGE_DAEMON_URL__ ?? "http://localhost:3001";
+      const resp = await fetch(`${daemonUrl}/api/chat`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          agentId: currentAgentId,
+          threadId: threadId,
+          message: messageText,
+          fileIds: attachedFiles.map((f: { id: string }) => f.id),
+        }),
       });
+      if (!resp.ok) {
+        const errText = await resp.text().catch(() => resp.statusText);
+        throw new Error(`Daemon error: ${errText}`);
+      }
+
+      // Clear attachments after sending
+      setAttachedFiles([]);
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(`Failed to send message: ${msg}`);
@@ -253,168 +251,9 @@ function ChatPageComponent() {
     }
   };
 
-  // ── Send message with SSE streaming ───────────────────────────
-  const sendMessageStreaming = async (text: string, secrets?: DetectedSecret[]) => {
-    if (!currentAgentId) return;
-
-    let messageText = text;
-    if (secrets && secrets.length > 0) {
-      messageText = censorText(text, secrets);
-      setVaultNotification(
-        `${secrets.length} secret${secrets.length > 1 ? "s" : ""} detected and redacted.`
-      );
-      setTimeout(() => setVaultNotification(null), 5000);
-    }
-
-    setInput("");
-    setIsGenerating(true);
-    setStreamingMessage("");
-    setError(null);
-
-    try {
-      // If no thread exists, create one first
-      let threadId = currentThreadId;
-      if (!threadId) {
-        const agent = agents.find((a: any) => a.id === currentAgentId);
-        threadId = await createThread({
-          agentId: currentAgentId,
-          name: `Chat with ${agent?.name || "Agent"}`,
-        });
-        setCurrentThreadId(threadId);
-      }
-
-      // Build Convex site URL for SSE endpoint
-      let apiUrl: string;
-      if (import.meta.env.VITE_CONVEX_SITE_URL) {
-        apiUrl = `${normalizeBaseUrl(import.meta.env.VITE_CONVEX_SITE_URL, "VITE_CONVEX_SITE_URL")}/api/stream`;
-      } else {
-        // Convert .cloud to .site for HTTP endpoints
-        const convexUrl = normalizeBaseUrl(import.meta.env.VITE_CONVEX_URL, "VITE_CONVEX_URL");
-        apiUrl = convexUrl.replace('.convex.cloud', '.convex.site') + '/api/stream';
-      }
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          agentId: currentAgentId,
-          message: messageText,
-          threadId: threadId,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.slice(6);
-            if (data === '[DONE]') {
-              setIsGenerating(false);
-              setStreamingMessage('');
-              return;
-            }
-            try {
-              const parsed = JSON.parse(data);
-              if (parsed.type === 'text-delta' && parsed.textDelta) {
-                setStreamingMessage(prev => prev + parsed.textDelta);
-              } else if (parsed.type === 'error') {
-                throw new Error(parsed.error || 'Stream error');
-              }
-            } catch {
-              // Ignore parse errors for non-JSON lines
-            }
-          }
-        }
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(`Streaming failed: ${msg}`);
-    } finally {
-      setIsGenerating(false);
-      setStreamingMessage('');
-    }
-  };
-
-  // ── Play voice TTS for message ───────────────────────────────────
-  const playVoiceForMessage = async (messageContent: string, messageId: string) => {
-    if (playingMessageId) return; // Already playing
-
-    setPlayingMessageId(messageId);
-    let audioUrl: string | null = null;
-
-    try {
-      let apiUrl: string;
-      if (import.meta.env.VITE_CONVEX_SITE_URL) {
-        apiUrl = `${normalizeBaseUrl(import.meta.env.VITE_CONVEX_SITE_URL, "VITE_CONVEX_SITE_URL")}/api/voice/synthesize`;
-      } else {
-        const convexUrl = normalizeBaseUrl(import.meta.env.VITE_CONVEX_URL, "VITE_CONVEX_URL");
-        apiUrl = convexUrl.replace('.convex.cloud', '.convex.site') + '/api/voice/synthesize';
-      }
-
-      const response = await fetch(apiUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: messageContent }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(errorData.error || `HTTP ${response.status}`);
-      }
-
-      const audioBlob = await response.blob();
-      audioUrl = URL.createObjectURL(audioBlob);
-      const audio = new Audio(audioUrl);
-
-      const cleanup = () => {
-        if (audioUrl) {
-          URL.revokeObjectURL(audioUrl);
-          audioUrl = null;
-        }
-        setPlayingMessageId(null);
-      };
-
-      audio.onended = cleanup;
-      audio.onerror = cleanup;
-
-      await audio.play();
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(`Voice playback failed: ${msg}`);
-      setPlayingMessageId(null);
-    } finally {
-      // Ensure cleanup happens on all paths
-      if (audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-      }
-    }
-  };
-
   const handleConfirmSendWithSecrets = () => {
     if (pendingMessage && secretWarning) {
-      if (isStreamingMode) {
-        sendMessageStreaming(pendingMessage, secretWarning);
-      } else {
-        sendMessageToChat(pendingMessage, secretWarning);
-      }
+      sendMessageToChat(pendingMessage, secretWarning);
     }
     setSecretWarning(null);
     setPendingMessage(null);
@@ -427,7 +266,8 @@ function ChatPageComponent() {
   };
 
   // ── Derived state ───────────────────────────────────────────
-  const currentAgent = agents.find((a: any) => a.id === currentAgentId);
+  const currentAgent = agents.find((a) => a.id === currentAgentId);
+  const providerMeta = currentAgent ? providersById.get(currentAgent.provider) : undefined;
   const hasAgents = agents.length > 0;
 
   return (
@@ -445,7 +285,7 @@ function ChatPageComponent() {
               {threads.length === 0 && (
                 <option value="">No threads yet</option>
               )}
-              {threads.map((thread: any) => (
+              {threads.map((thread) => (
                 <option key={thread._id} value={thread._id}>
                   {thread.name || "Untitled Thread"}
                 </option>
@@ -460,40 +300,10 @@ function ChatPageComponent() {
             </button>
           </div>
           <div className="flex items-center gap-3">
-            {/* Streaming mode toggle */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-background border border-border rounded-lg">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <span className="text-xs text-muted-foreground">Stream</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={isStreamingMode}
-                  onClick={() => setIsStreamingMode(!isStreamingMode)}
-                  className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                    isStreamingMode ? 'bg-primary' : 'bg-muted'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      isStreamingMode ? 'translate-x-5' : 'translate-x-0.5'
-                    }`}
-                  />
-                </button>
-              </label>
-            </div>
-
             {/* Agent selector */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-background border border-border rounded-lg">
               <div
-                className={`w-2 h-2 rounded-full ${
-                  currentAgent?.provider === "openai"
-                    ? "bg-green-500"
-                    : currentAgent?.provider === "anthropic"
-                    ? "bg-orange-500"
-                    : currentAgent?.provider === "openrouter"
-                    ? "bg-purple-500"
-                    : "bg-ae-accent"
-                }`}
+                className={`w-2 h-2 rounded-full ${providerMeta?.colorClass ?? "bg-slate-500"}`}
               />
               <select
                 value={currentAgentId || ""}
@@ -503,7 +313,7 @@ function ChatPageComponent() {
                 {agents.length === 0 && (
                   <option value="">No agents configured</option>
                 )}
-                {agents.map((agent: any) => (
+                {agents.map((agent) => (
                   <option key={agent.id} value={agent.id}>
                     {agent.name} ({agent.provider}/{agent.model})
                   </option>
@@ -582,7 +392,7 @@ function ChatPageComponent() {
             )}
 
             {/* Message list */}
-            {messages.map((msg: any) => (
+            {messages.map((msg) => (
               <div
                 key={msg._id}
                 className={`flex items-end gap-2.5 ${
@@ -606,43 +416,18 @@ function ChatPageComponent() {
                   >
                     <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
                   </div>
-                  <div
-                    className={`flex items-center gap-2 text-xs mt-1 px-1 ${
+                  <p
+                    className={`text-xs mt-1 px-1 ${
                       msg.role === "user"
-                        ? "justify-end text-muted-foreground"
+                        ? "text-right text-muted-foreground"
                         : "text-muted-foreground"
                     }`}
                   >
-                    <span>
-                      {new Date(msg.createdAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </span>
-                    {msg.role === "assistant" && msg.traceId && (
-                      <a
-                        href={`/runs/${msg.traceId}`}
-                        className="inline-flex items-center gap-1 text-primary/70 hover:text-primary transition-colors"
-                      >
-                        View Run <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                    {msg.role === "assistant" && (
-                      <button
-                        type="button"
-                        onClick={() => playVoiceForMessage(msg.content, msg._id)}
-                        disabled={playingMessageId !== null}
-                        className="inline-flex items-center gap-1 text-primary/70 hover:text-primary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                        title="Play voice"
-                      >
-                        {playingMessageId === msg._id ? (
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                        ) : (
-                          <Volume2 className="w-3 h-3" />
-                        )}
-                      </button>
-                    )}
-                  </div>
+                    {new Date(msg.createdAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
                 </div>
                 {msg.role === "user" && (
                   <div className="w-8 h-8 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center flex-shrink-0">
@@ -651,23 +436,6 @@ function ChatPageComponent() {
                 )}
               </div>
             ))}
-
-            {/* Streaming message indicator */}
-            {streamingMessage && (
-              <div className="flex items-end gap-2.5 justify-start">
-                <div className="w-8 h-8 rounded-full bg-card border border-border flex items-center justify-center">
-                  <Bot className="w-4 h-4 text-primary" />
-                </div>
-                <div className="max-w-[75%]">
-                  <div className="px-4 py-2.5 rounded-2xl rounded-bl-md bg-card border border-border">
-                    <p className="text-sm whitespace-pre-wrap">
-                      {streamingMessage}
-                      <span className="inline-block w-2 h-4 bg-primary ml-1 animate-pulse" />
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Typing indicator */}
             {isGenerating && (
@@ -774,16 +542,90 @@ function ChatPageComponent() {
               </span>
             </div>
           )}
+
+          {/* AGE-144: Attached files chips */}
+          {attachedFiles.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2 max-w-3xl mx-auto">
+              {attachedFiles.map((file) => (
+                <div
+                  key={file.id}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-muted rounded-lg text-sm"
+                >
+                  <File className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="max-w-[150px] truncate">{file.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAttachedFiles(attachedFiles.filter((f) => f.id !== file.id))}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* AGE-144: File picker dropdown */}
+          {showFilePicker && (
+            <div className="mb-2 max-w-3xl mx-auto bg-card border border-border rounded-lg p-3">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium">Attach a file</h4>
+                <button
+                  type="button"
+                  onClick={() => setShowFilePicker(false)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              {availableFiles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No files available. Upload files in the Files tab.</p>
+              ) : (
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {availableFiles.map((file: any) => (
+                    <button
+                      key={file._id}
+                      type="button"
+                      onClick={() => {
+                        if (!attachedFiles.find((f) => f.id === file._id)) {
+                          setAttachedFiles([...attachedFiles, {
+                            id: file._id,
+                            name: file.name,
+                            size: file.size,
+                            mimeType: file.mimeType,
+                          }]);
+                        }
+                        setShowFilePicker(false);
+                      }}
+                      disabled={attachedFiles.find((f) => f.id === file._id) !== undefined}
+                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed text-sm text-left"
+                    >
+                      <File className="w-4 h-4 text-muted-foreground" />
+                      <span className="flex-1 truncate">{file.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {file.size > 1024 * 1024
+                          ? `${(file.size / (1024 * 1024)).toFixed(1)} MB`
+                          : `${(file.size / 1024).toFixed(1)} KB`}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <form
             onSubmit={handleSendMessage}
             className="max-w-3xl mx-auto flex items-center gap-2"
           >
+            {/* AGE-144: Functional paperclip button */}
             <button
               type="button"
-              className="p-2.5 rounded-lg hover:bg-background border border-border"
+              onClick={() => setShowFilePicker(!showFilePicker)}
+              className={`p-2.5 rounded-lg hover:bg-background border ${showFilePicker || attachedFiles.length > 0 ? 'bg-primary/10 border-primary' : 'border-border'}`}
               title="Attach file"
             >
-              <Paperclip className="w-4 h-4 text-muted-foreground" />
+              <Paperclip className={`w-4 h-4 ${showFilePicker || attachedFiles.length > 0 ? 'text-primary' : 'text-muted-foreground'}`} />
             </button>
             <div className="flex-1 relative">
               <input
@@ -813,7 +655,7 @@ function ChatPageComponent() {
             </button>
             <button
               type="submit"
-              disabled={!input.trim() || isGenerating}
+              disabled={(!input.trim() && attachedFiles.length === 0) || isGenerating}
               className="p-2.5 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isGenerating ? (

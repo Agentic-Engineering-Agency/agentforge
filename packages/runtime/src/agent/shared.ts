@@ -5,7 +5,7 @@ import { ModelRouterEmbeddingModel } from '@mastra/core/llm';
 
 export const DAEMON_MODEL = 'moonshotai/kimi-k2.5';
 export const OBSERVER_MODEL = 'google/gemini-2.5-flash';
-export const EMBEDDING_MODEL = 'google/gemini-embedding-001';
+export const EMBEDDING_MODEL = process.env.AGENTFORGE_EMBEDDING_MODEL ?? 'openai/text-embedding-3-small';
 export const DEFAULT_TOKEN_LIMIT = 100_000;
 
 export interface StandardMemoryOptions {

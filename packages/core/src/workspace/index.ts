@@ -22,7 +22,7 @@
  * ```
  */
 
-import { Workspace, LocalFilesystem } from '@mastra/core/workspace';
+import { Workspace, LocalFilesystem, LocalSandbox, LocalSkillSource } from '@mastra/core/workspace';
 import { S3Filesystem } from '@mastra/s3';
 
 export interface WorkspaceConfig {
@@ -30,8 +30,18 @@ export interface WorkspaceConfig {
   storage?: 'local' | 's3' | 'r2';
   /** Base path for local storage */
   basePath?: string;
-  /** Custom skills path (defaults to /skills) */
-  skillsPath?: string;
+  /** Workspace-mounted skills paths (defaults to ['/skills']) */
+  skillsPath?: string | string[];
+  /** Local path backing the default /skills mount */
+  skillsBasePath?: string;
+  /** Enable BM25 search for indexed content */
+  bm25?: boolean;
+  /** Paths to auto-index on init */
+  autoIndexPaths?: string[];
+  /** Optional workspace name */
+  name?: string;
+  /** Optional search index name */
+  searchIndexName?: string;
 
   // S3/R2 config
   /** S3/R2 bucket name */
@@ -95,22 +105,44 @@ export function createWorkspace(config: WorkspaceConfig = {}): Workspace {
     (process.env.AGENTFORGE_STORAGE as WorkspaceConfig['storage']) ??
     'local';
 
-  // Build skills paths array
-  const skillsPaths = config.skillsPath ? [config.skillsPath] : ['/skills'];
+  const skillsPaths = Array.isArray(config.skillsPath)
+    ? config.skillsPath
+    : config.skillsPath
+      ? [config.skillsPath]
+      : ['/skills'];
 
   switch (storage) {
     case 'local': {
+      const basePath = config.basePath ?? './workspace';
+      const useDedicatedSkillSource =
+        !!config.skillsBasePath &&
+        skillsPaths.length === 1 &&
+        skillsPaths[0] === '/skills';
+
       return new Workspace({
+        name: config.name,
         filesystem: new LocalFilesystem({
-          basePath: config.basePath ?? './workspace',
+          basePath,
         }),
-        skills: skillsPaths,
+        sandbox: new LocalSandbox({
+          workingDirectory: basePath,
+        }),
+        skillSource: useDedicatedSkillSource
+          ? new LocalSkillSource({
+              basePath: config.skillsBasePath,
+            })
+          : undefined,
+        skills: useDedicatedSkillSource ? ['.'] : skillsPaths,
+        bm25: config.bm25,
+        autoIndexPaths: config.autoIndexPaths,
+        searchIndexName: config.searchIndexName,
       });
     }
 
     case 'r2':
     case 's3': {
       return new Workspace({
+        name: config.name,
         filesystem: new S3Filesystem({
           bucket: config.bucket ?? '',
           region:
@@ -122,6 +154,9 @@ export function createWorkspace(config: WorkspaceConfig = {}): Workspace {
           secretAccessKey: config.secretAccessKey,
         }),
         skills: skillsPaths,
+        bm25: config.bm25,
+        autoIndexPaths: config.autoIndexPaths,
+        searchIndexName: config.searchIndexName,
       });
     }
 

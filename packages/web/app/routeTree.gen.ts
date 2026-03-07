@@ -8,178 +8,218 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root'
-import { Route as WorkflowsRouteImport } from './routes/workflows'
-import { Route as UsageRouteImport } from './routes/usage'
-import { Route as SkillsMarketplaceRouteImport } from './routes/skills-marketplace'
-import { Route as SkillsRouteImport } from './routes/skills'
-import { Route as SettingsRouteImport } from './routes/settings'
-import { Route as SessionsRouteImport } from './routes/sessions'
-import { Route as ResearchRouteImport } from './routes/research'
-import { Route as ProjectsRouteImport } from './routes/projects'
-import { Route as ObservabilityRouteImport } from './routes/observability'
-import { Route as FilesRouteImport } from './routes/files'
-import { Route as CronRouteImport } from './routes/cron'
-import { Route as ConnectionsRouteImport } from './routes/connections'
-import { Route as ChatRouteImport } from './routes/chat'
-import { Route as AgentsRouteImport } from './routes/agents'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as SessionsSessionIdRouteImport } from './routes/sessions.$sessionId'
-import { Route as RunsRunIdRouteImport } from './routes/runs.$runId'
-import { Route as AgentsAgentIdRouteImport } from './routes/agents.$agentId'
+// Import Routes
 
-const WorkflowsRoute = WorkflowsRouteImport.update({
-  id: '/workflows',
-  path: '/workflows',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const UsageRoute = UsageRouteImport.update({
+import { Route as rootRoute } from './routes/__root'
+import { Route as UsageImport } from './routes/usage'
+import { Route as SkillsImport } from './routes/skills'
+import { Route as SettingsImport } from './routes/settings'
+import { Route as SessionsImport } from './routes/sessions'
+import { Route as ProjectsImport } from './routes/projects'
+import { Route as FilesImport } from './routes/files'
+import { Route as CronImport } from './routes/cron'
+import { Route as ConnectionsImport } from './routes/connections'
+import { Route as ChatImport } from './routes/chat'
+import { Route as AgentsImport } from './routes/agents'
+import { Route as IndexImport } from './routes/index'
+
+// Create/Update Routes
+
+const UsageRoute = UsageImport.update({
   id: '/usage',
   path: '/usage',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const SkillsMarketplaceRoute = SkillsMarketplaceRouteImport.update({
-  id: '/skills-marketplace',
-  path: '/skills-marketplace',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SkillsRoute = SkillsRouteImport.update({
+
+const SkillsRoute = SkillsImport.update({
   id: '/skills',
   path: '/skills',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const SettingsRoute = SettingsRouteImport.update({
+
+const SettingsRoute = SettingsImport.update({
   id: '/settings',
   path: '/settings',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const SessionsRoute = SessionsRouteImport.update({
+
+const SessionsRoute = SessionsImport.update({
   id: '/sessions',
   path: '/sessions',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const ResearchRoute = ResearchRouteImport.update({
-  id: '/research',
-  path: '/research',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ProjectsRoute = ProjectsRouteImport.update({
+
+const ProjectsRoute = ProjectsImport.update({
   id: '/projects',
   path: '/projects',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const ObservabilityRoute = ObservabilityRouteImport.update({
-  id: '/observability',
-  path: '/observability',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const FilesRoute = FilesRouteImport.update({
+
+const FilesRoute = FilesImport.update({
   id: '/files',
   path: '/files',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const CronRoute = CronRouteImport.update({
+
+const CronRoute = CronImport.update({
   id: '/cron',
   path: '/cron',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const ConnectionsRoute = ConnectionsRouteImport.update({
+
+const ConnectionsRoute = ConnectionsImport.update({
   id: '/connections',
   path: '/connections',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const ChatRoute = ChatRouteImport.update({
+
+const ChatRoute = ChatImport.update({
   id: '/chat',
   path: '/chat',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const AgentsRoute = AgentsRouteImport.update({
+
+const AgentsRoute = AgentsImport.update({
   id: '/agents',
   path: '/agents',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const IndexRoute = IndexRouteImport.update({
+
+const IndexRoute = IndexImport.update({
   id: '/',
   path: '/',
-  getParentRoute: () => rootRouteImport,
+  getParentRoute: () => rootRoute,
 } as any)
-const SessionsSessionIdRoute = SessionsSessionIdRouteImport.update({
-  id: '/$sessionId',
-  path: '/$sessionId',
-  getParentRoute: () => SessionsRoute,
-} as any)
-const RunsRunIdRoute = RunsRunIdRouteImport.update({
-  id: '/runs/$runId',
-  path: '/runs/$runId',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AgentsAgentIdRoute = AgentsAgentIdRouteImport.update({
-  id: '/$agentId',
-  path: '/$agentId',
-  getParentRoute: () => AgentsRoute,
-} as any)
+
+// Populate the FileRoutesByPath interface
+
+declare module '@tanstack/react-router' {
+  interface FileRoutesByPath {
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexImport
+      parentRoute: typeof rootRoute
+    }
+    '/agents': {
+      id: '/agents'
+      path: '/agents'
+      fullPath: '/agents'
+      preLoaderRoute: typeof AgentsImport
+      parentRoute: typeof rootRoute
+    }
+    '/chat': {
+      id: '/chat'
+      path: '/chat'
+      fullPath: '/chat'
+      preLoaderRoute: typeof ChatImport
+      parentRoute: typeof rootRoute
+    }
+    '/connections': {
+      id: '/connections'
+      path: '/connections'
+      fullPath: '/connections'
+      preLoaderRoute: typeof ConnectionsImport
+      parentRoute: typeof rootRoute
+    }
+    '/cron': {
+      id: '/cron'
+      path: '/cron'
+      fullPath: '/cron'
+      preLoaderRoute: typeof CronImport
+      parentRoute: typeof rootRoute
+    }
+    '/files': {
+      id: '/files'
+      path: '/files'
+      fullPath: '/files'
+      preLoaderRoute: typeof FilesImport
+      parentRoute: typeof rootRoute
+    }
+    '/projects': {
+      id: '/projects'
+      path: '/projects'
+      fullPath: '/projects'
+      preLoaderRoute: typeof ProjectsImport
+      parentRoute: typeof rootRoute
+    }
+    '/sessions': {
+      id: '/sessions'
+      path: '/sessions'
+      fullPath: '/sessions'
+      preLoaderRoute: typeof SessionsImport
+      parentRoute: typeof rootRoute
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsImport
+      parentRoute: typeof rootRoute
+    }
+    '/skills': {
+      id: '/skills'
+      path: '/skills'
+      fullPath: '/skills'
+      preLoaderRoute: typeof SkillsImport
+      parentRoute: typeof rootRoute
+    }
+    '/usage': {
+      id: '/usage'
+      path: '/usage'
+      fullPath: '/usage'
+      preLoaderRoute: typeof UsageImport
+      parentRoute: typeof rootRoute
+    }
+  }
+}
+
+// Create and export the route tree
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/agents': typeof AgentsRouteWithChildren
+  '/agents': typeof AgentsRoute
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
   '/cron': typeof CronRoute
   '/files': typeof FilesRoute
-  '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
-  '/research': typeof ResearchRoute
-  '/sessions': typeof SessionsRouteWithChildren
+  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
-  '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
-  '/workflows': typeof WorkflowsRoute
-  '/agents/$agentId': typeof AgentsAgentIdRoute
-  '/runs/$runId': typeof RunsRunIdRoute
-  '/sessions/$sessionId': typeof SessionsSessionIdRoute
 }
+
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/agents': typeof AgentsRouteWithChildren
+  '/agents': typeof AgentsRoute
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
   '/cron': typeof CronRoute
   '/files': typeof FilesRoute
-  '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
-  '/research': typeof ResearchRoute
-  '/sessions': typeof SessionsRouteWithChildren
+  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
-  '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
-  '/workflows': typeof WorkflowsRoute
-  '/agents/$agentId': typeof AgentsAgentIdRoute
-  '/runs/$runId': typeof RunsRunIdRoute
-  '/sessions/$sessionId': typeof SessionsSessionIdRoute
 }
+
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport
+  __root__: typeof rootRoute
   '/': typeof IndexRoute
-  '/agents': typeof AgentsRouteWithChildren
+  '/agents': typeof AgentsRoute
   '/chat': typeof ChatRoute
   '/connections': typeof ConnectionsRoute
   '/cron': typeof CronRoute
   '/files': typeof FilesRoute
-  '/observability': typeof ObservabilityRoute
   '/projects': typeof ProjectsRoute
-  '/research': typeof ResearchRoute
-  '/sessions': typeof SessionsRouteWithChildren
+  '/sessions': typeof SessionsRoute
   '/settings': typeof SettingsRoute
   '/skills': typeof SkillsRoute
-  '/skills-marketplace': typeof SkillsMarketplaceRoute
   '/usage': typeof UsageRoute
-  '/workflows': typeof WorkflowsRoute
-  '/agents/$agentId': typeof AgentsAgentIdRoute
-  '/runs/$runId': typeof RunsRunIdRoute
-  '/sessions/$sessionId': typeof SessionsSessionIdRoute
 }
+
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
@@ -189,18 +229,11 @@ export interface FileRouteTypes {
     | '/connections'
     | '/cron'
     | '/files'
-    | '/observability'
     | '/projects'
-    | '/research'
     | '/sessions'
     | '/settings'
     | '/skills'
-    | '/skills-marketplace'
     | '/usage'
-    | '/workflows'
-    | '/agents/$agentId'
-    | '/runs/$runId'
-    | '/sessions/$sessionId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -209,18 +242,11 @@ export interface FileRouteTypes {
     | '/connections'
     | '/cron'
     | '/files'
-    | '/observability'
     | '/projects'
-    | '/research'
     | '/sessions'
     | '/settings'
     | '/skills'
-    | '/skills-marketplace'
     | '/usage'
-    | '/workflows'
-    | '/agents/$agentId'
-    | '/runs/$runId'
-    | '/sessions/$sessionId'
   id:
     | '__root__'
     | '/'
@@ -229,211 +255,98 @@ export interface FileRouteTypes {
     | '/connections'
     | '/cron'
     | '/files'
-    | '/observability'
     | '/projects'
-    | '/research'
     | '/sessions'
     | '/settings'
     | '/skills'
-    | '/skills-marketplace'
     | '/usage'
-    | '/workflows'
-    | '/agents/$agentId'
-    | '/runs/$runId'
-    | '/sessions/$sessionId'
   fileRoutesById: FileRoutesById
 }
+
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  AgentsRoute: typeof AgentsRouteWithChildren
+  AgentsRoute: typeof AgentsRoute
   ChatRoute: typeof ChatRoute
   ConnectionsRoute: typeof ConnectionsRoute
   CronRoute: typeof CronRoute
   FilesRoute: typeof FilesRoute
-  ObservabilityRoute: typeof ObservabilityRoute
   ProjectsRoute: typeof ProjectsRoute
-  ResearchRoute: typeof ResearchRoute
-  SessionsRoute: typeof SessionsRouteWithChildren
+  SessionsRoute: typeof SessionsRoute
   SettingsRoute: typeof SettingsRoute
   SkillsRoute: typeof SkillsRoute
-  SkillsMarketplaceRoute: typeof SkillsMarketplaceRoute
   UsageRoute: typeof UsageRoute
-  WorkflowsRoute: typeof WorkflowsRoute
-  RunsRunIdRoute: typeof RunsRunIdRoute
 }
-
-declare module '@tanstack/react-router' {
-  interface FileRoutesByPath {
-    '/workflows': {
-      id: '/workflows'
-      path: '/workflows'
-      fullPath: '/workflows'
-      preLoaderRoute: typeof WorkflowsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/usage': {
-      id: '/usage'
-      path: '/usage'
-      fullPath: '/usage'
-      preLoaderRoute: typeof UsageRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/skills-marketplace': {
-      id: '/skills-marketplace'
-      path: '/skills-marketplace'
-      fullPath: '/skills-marketplace'
-      preLoaderRoute: typeof SkillsMarketplaceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/skills': {
-      id: '/skills'
-      path: '/skills'
-      fullPath: '/skills'
-      preLoaderRoute: typeof SkillsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sessions': {
-      id: '/sessions'
-      path: '/sessions'
-      fullPath: '/sessions'
-      preLoaderRoute: typeof SessionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/research': {
-      id: '/research'
-      path: '/research'
-      fullPath: '/research'
-      preLoaderRoute: typeof ResearchRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/projects': {
-      id: '/projects'
-      path: '/projects'
-      fullPath: '/projects'
-      preLoaderRoute: typeof ProjectsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/observability': {
-      id: '/observability'
-      path: '/observability'
-      fullPath: '/observability'
-      preLoaderRoute: typeof ObservabilityRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/files': {
-      id: '/files'
-      path: '/files'
-      fullPath: '/files'
-      preLoaderRoute: typeof FilesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/cron': {
-      id: '/cron'
-      path: '/cron'
-      fullPath: '/cron'
-      preLoaderRoute: typeof CronRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/connections': {
-      id: '/connections'
-      path: '/connections'
-      fullPath: '/connections'
-      preLoaderRoute: typeof ConnectionsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/chat': {
-      id: '/chat'
-      path: '/chat'
-      fullPath: '/chat'
-      preLoaderRoute: typeof ChatRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/agents': {
-      id: '/agents'
-      path: '/agents'
-      fullPath: '/agents'
-      preLoaderRoute: typeof AgentsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/sessions/$sessionId': {
-      id: '/sessions/$sessionId'
-      path: '/$sessionId'
-      fullPath: '/sessions/$sessionId'
-      preLoaderRoute: typeof SessionsSessionIdRouteImport
-      parentRoute: typeof SessionsRoute
-    }
-    '/runs/$runId': {
-      id: '/runs/$runId'
-      path: '/runs/$runId'
-      fullPath: '/runs/$runId'
-      preLoaderRoute: typeof RunsRunIdRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/agents/$agentId': {
-      id: '/agents/$agentId'
-      path: '/$agentId'
-      fullPath: '/agents/$agentId'
-      preLoaderRoute: typeof AgentsAgentIdRouteImport
-      parentRoute: typeof AgentsRoute
-    }
-  }
-}
-
-interface AgentsRouteChildren {
-  AgentsAgentIdRoute: typeof AgentsAgentIdRoute
-}
-
-const AgentsRouteChildren: AgentsRouteChildren = {
-  AgentsAgentIdRoute: AgentsAgentIdRoute,
-}
-
-const AgentsRouteWithChildren =
-  AgentsRoute._addFileChildren(AgentsRouteChildren)
-
-interface SessionsRouteChildren {
-  SessionsSessionIdRoute: typeof SessionsSessionIdRoute
-}
-
-const SessionsRouteChildren: SessionsRouteChildren = {
-  SessionsSessionIdRoute: SessionsSessionIdRoute,
-}
-
-const SessionsRouteWithChildren = SessionsRoute._addFileChildren(
-  SessionsRouteChildren,
-)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  AgentsRoute: AgentsRouteWithChildren,
+  AgentsRoute: AgentsRoute,
   ChatRoute: ChatRoute,
   ConnectionsRoute: ConnectionsRoute,
   CronRoute: CronRoute,
   FilesRoute: FilesRoute,
-  ObservabilityRoute: ObservabilityRoute,
   ProjectsRoute: ProjectsRoute,
-  ResearchRoute: ResearchRoute,
-  SessionsRoute: SessionsRouteWithChildren,
+  SessionsRoute: SessionsRoute,
   SettingsRoute: SettingsRoute,
   SkillsRoute: SkillsRoute,
-  SkillsMarketplaceRoute: SkillsMarketplaceRoute,
   UsageRoute: UsageRoute,
-  WorkflowsRoute: WorkflowsRoute,
-  RunsRunIdRoute: RunsRunIdRoute,
 }
-export const routeTree = rootRouteImport
+
+export const routeTree = rootRoute
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+/* ROUTE_MANIFEST_START
+{
+  "routes": {
+    "__root__": {
+      "filePath": "__root.tsx",
+      "children": [
+        "/",
+        "/agents",
+        "/chat",
+        "/connections",
+        "/cron",
+        "/files",
+        "/projects",
+        "/sessions",
+        "/settings",
+        "/skills",
+        "/usage"
+      ]
+    },
+    "/": {
+      "filePath": "index.tsx"
+    },
+    "/agents": {
+      "filePath": "agents.tsx"
+    },
+    "/chat": {
+      "filePath": "chat.tsx"
+    },
+    "/connections": {
+      "filePath": "connections.tsx"
+    },
+    "/cron": {
+      "filePath": "cron.tsx"
+    },
+    "/files": {
+      "filePath": "files.tsx"
+    },
+    "/projects": {
+      "filePath": "projects.tsx"
+    },
+    "/sessions": {
+      "filePath": "sessions.tsx"
+    },
+    "/settings": {
+      "filePath": "settings.tsx"
+    },
+    "/skills": {
+      "filePath": "skills.tsx"
+    },
+    "/usage": {
+      "filePath": "usage.tsx"
+    }
+  }
+}
+ROUTE_MANIFEST_END */
