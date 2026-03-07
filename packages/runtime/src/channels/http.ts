@@ -4,18 +4,42 @@ import * as crypto from 'node:crypto';
 import type { Agent } from '@mastra/core/agent';
 import type { ChannelAdapter, AgentDefinition } from '../daemon/types.js';
 import { formatSSEChunk } from './shared.js';
+import { getProviderCatalog } from '../models/catalog.js';
+import { getModel } from '../models/registry.js';
 
 interface DaemonAccess {
   listAgents(): AgentDefinition[];
   listAgentIds(): string[];
   getAgent(id: string): Agent | undefined;
+  getOrLoadAgentDefinition(id: string): Promise<{ agent: Agent; definition: AgentDefinition } | null>;
   executeWorkflowRun(runId: string): Promise<{ runId: string; status: 'success' | 'failed'; output?: string; error?: string }>;
+}
+
+export interface HttpDataClient {
+  query(functionName: string, args: Record<string, unknown>): Promise<unknown>;
+  mutation(functionName: string, args: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface HttpChannelConfig {
   port?: number;
   apiKey?: string;
+  allowedOrigins?: string[];
+  dataClient?: HttpDataClient;
 }
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:4173',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:4173',
+  'http://127.0.0.1:5173',
+];
+
+const DEFAULT_AGENT_EXECUTION_OPTIONS = {
+  maxSteps: 8,
+  toolChoice: 'auto' as const,
+};
 
 export class HttpChannel implements ChannelAdapter {
   name = 'http';
@@ -23,18 +47,39 @@ export class HttpChannel implements ChannelAdapter {
   private server?: unknown;
   private port: number;
   private apiKey?: string;
+  private allowedOrigins: string[];
+  private dataClient?: HttpDataClient;
   private daemon: DaemonAccess | null = null;
 
   constructor(config: HttpChannelConfig = {}) {
     this.port = config.port ?? 3001;
     this.apiKey = config.apiKey ?? process.env.AGENTFORGE_API_KEY;
+    this.allowedOrigins = config.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS;
+    this.dataClient = config.dataClient;
     this.app = new Hono();
     this.setupRoutes();
   }
 
   private setupRoutes(): void {
-    // Auth middleware
     this.app.use('*', async (c, next) => {
+      const origin = c.req.header('Origin');
+      const allowedOrigin = this.resolveOrigin(origin);
+      if (c.req.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: this.corsHeaders(allowedOrigin),
+        });
+      }
+
+      await next();
+      const headers = this.corsHeaders(allowedOrigin);
+      for (const [key, value] of Object.entries(headers)) {
+        c.res.headers.set(key, value);
+      }
+    });
+
+    // Auth middleware
+    this.app.use('/v1/*', async (c, next) => {
       const apiKey = this.apiKey;
       if (!apiKey) return next();
 
@@ -104,6 +149,136 @@ export class HttpChannel implements ChannelAdapter {
       });
     });
 
+    this.app.get('/api/models', async (c) => {
+      const providerId = c.req.query('provider');
+      const providers = await getProviderCatalog();
+
+      if (providerId) {
+        const provider = providers.find((entry) => entry.id === providerId);
+        if (!provider) {
+          return c.json({ error: `Unknown provider: ${providerId}` }, 404);
+        }
+        return c.json({
+          providers: [provider],
+          models: provider.models,
+        });
+      }
+
+      return c.json({ providers });
+    });
+
+    this.app.post('/api/chat', async (c) => {
+      const daemon = this.daemon;
+      if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
+      if (!this.dataClient) return c.json({ error: 'Chat persistence is not configured' }, 503);
+
+      const body = await c.req.json();
+      const {
+        agentId,
+        threadId: providedThreadId,
+        message,
+        fileIds = [],
+      } = body as {
+        agentId?: string;
+        threadId?: string;
+        message?: string;
+        fileIds?: string[];
+      };
+
+      if (!agentId || !message?.trim()) {
+        return c.json({ error: 'agentId and message are required' }, 400);
+      }
+
+      const resolvedAgent = await daemon.getOrLoadAgentDefinition(agentId);
+      if (!resolvedAgent) {
+        return c.json({ error: `Agent '${agentId}' not found` }, 404);
+      }
+      const { agent, definition } = resolvedAgent;
+
+      const threadId = await this.resolveThreadId(agentId, definition.name, providedThreadId);
+
+      const existingMessages = await this.dataClient.query('messages:getByThread', { threadId })
+        .catch(() => []) as Array<{ role?: string; content?: string }> | [];
+
+      const userMessage = fileIds.length > 0
+        ? `${message}\n\nAttached file IDs: ${fileIds.join(', ')}`
+        : message;
+
+      await this.dataClient.mutation('messages:create', {
+        threadId,
+        role: 'user',
+        content: userMessage,
+      });
+
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      await this.dataClient.mutation('sessions:create', {
+        sessionId,
+        threadId,
+        agentId,
+        channel: 'dashboard',
+      });
+
+      const history: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
+        ...existingMessages
+          .filter((entry) => typeof entry.role === 'string' && typeof entry.content === 'string')
+          .filter((entry) => entry.role === 'user' || entry.role === 'assistant' || entry.role === 'system')
+          .map((entry) => ({
+            role: entry.role as 'user' | 'assistant' | 'system',
+            content: entry.content as string,
+          })),
+        { role: 'user' as const, content: userMessage },
+      ];
+
+      try {
+        const result = await agent.generate(history as any, DEFAULT_AGENT_EXECUTION_OPTIONS);
+        const assistantText = result.text ?? '';
+
+        await this.dataClient.mutation('messages:create', {
+          threadId,
+          role: 'assistant',
+          content: assistantText,
+        });
+
+        const fullModelId = String(definition.model ?? 'moonshotai/kimi-k2.5');
+        const [provider, ...modelParts] = fullModelId.split('/');
+        const model = modelParts.join('/') || fullModelId;
+        const promptTokens = estimateTokens(userMessage);
+        const completionTokens = estimateTokens(assistantText);
+        const cost = estimateCost(fullModelId, promptTokens, completionTokens);
+
+        await this.dataClient.mutation('usage:record', {
+          agentId,
+          sessionId,
+          provider,
+          model,
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          cost,
+        });
+        await this.dataClient.mutation('sessions:updateStatus', {
+          sessionId,
+          status: 'completed',
+        });
+
+        return c.json({
+          threadId,
+          sessionId,
+          message: {
+            role: 'assistant',
+            content: assistantText,
+          },
+        });
+      } catch (error) {
+        const messageText = error instanceof Error ? error.message : 'Unknown chat error';
+        await this.dataClient.mutation('sessions:updateStatus', {
+          sessionId,
+          status: 'error',
+        }).catch(() => undefined);
+        return c.json({ error: messageText }, 500);
+      }
+    });
+
     // Chat completions - OpenAI compatible
     this.app.post('/v1/chat/completions', async (c) => {
       const daemon = this.daemon;
@@ -140,7 +315,7 @@ export class HttpChannel implements ChannelAdapter {
       if (!stream) {
         // Non-streaming response
         try {
-          const result = await agent.generate([{ role: 'user', content: userMessage }]);
+          const result = await agent.generate([{ role: 'user', content: userMessage }], DEFAULT_AGENT_EXECUTION_OPTIONS);
           return c.json({
             id: `chatcmpl-${Date.now()}`,
             object: 'chat.completion',
@@ -163,7 +338,7 @@ export class HttpChannel implements ChannelAdapter {
       // Streaming response with SSE
       return streamText(c, async (stream) => {
         try {
-          const mastraStream = await agent.stream([{ role: 'user', content: userMessage }]);
+          const mastraStream = await agent.stream([{ role: 'user', content: userMessage }], DEFAULT_AGENT_EXECUTION_OPTIONS);
           await stream.write(formatSSEChunk('', null));
 
           for await (const chunk of mastraStream.fullStream) {
@@ -242,4 +417,58 @@ export class HttpChannel implements ChannelAdapter {
       this.server = undefined;
     }
   }
+
+  private resolveOrigin(origin: string | undefined): string {
+    if (origin && this.allowedOrigins.includes(origin)) {
+      return origin;
+    }
+    return this.allowedOrigins[0] ?? '*';
+  }
+
+  private async resolveThreadId(agentId: string, agentName: string, providedThreadId?: string): Promise<string> {
+    if (!this.dataClient) {
+      throw new Error('Chat persistence is not configured');
+    }
+
+    if (providedThreadId && isProbablyConvexId(providedThreadId)) {
+      const existingThread = await this.dataClient.query('threads:getThread', { threadId: providedThreadId })
+        .catch(() => null);
+      if (existingThread) {
+        return providedThreadId;
+      }
+    }
+
+    return String(await this.dataClient.mutation('threads:createThread', {
+      agentId,
+      name: `Chat with ${agentName}`,
+    }));
+  }
+
+  private corsHeaders(origin: string): Record<string, string> {
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Vary': 'Origin',
+    };
+  }
+}
+
+function estimateTokens(text: string): number {
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function isProbablyConvexId(value: string): boolean {
+  return /^[a-z0-9]{32}$/i.test(value);
+}
+
+function estimateCost(modelId: string, promptTokens: number, completionTokens: number): number {
+  const model = getModel(modelId);
+  if (!model) {
+    return 0;
+  }
+
+  const promptCost = (promptTokens / 1_000_000) * model.costPerMInput;
+  const completionCost = (completionTokens / 1_000_000) * model.costPerMOutput;
+  return Number((promptCost + completionCost).toFixed(8));
 }

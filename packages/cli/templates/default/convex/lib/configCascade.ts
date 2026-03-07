@@ -9,7 +9,7 @@
  * System defaults for agent configuration
  */
 export const SYSTEM_DEFAULTS = {
-  model: "openai/gpt-4o-mini",
+  model: "openai/gpt-5.4",
   temperature: 0.7,
   maxTokens: 4096,
   instructions: "You are a helpful AI assistant.",

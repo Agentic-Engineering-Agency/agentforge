@@ -38,25 +38,39 @@ export interface AgentForgeProjectConfig {
   }>;
 }
 
+async function loadTsConfig(configPath: string): Promise<AgentForgeProjectConfig> {
+  const source = await fs.readFile(configPath, 'utf-8');
+  const ts = await import('typescript');
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled).toString('base64')}`;
+  const loaded = await import(moduleUrl);
+  return (loaded.default ?? loaded) as AgentForgeProjectConfig;
+}
+
 export async function loadProjectConfig(projectDir: string): Promise<AgentForgeProjectConfig | null> {
-  const tsConfigPath = path.join(projectDir, 'agentforge.config.ts');
-  if (await fs.pathExists(tsConfigPath)) {
-    const source = await fs.readFile(tsConfigPath, 'utf-8');
-    const ts = await import('typescript');
-    const transpiled = ts.transpileModule(source, {
-      compilerOptions: {
-        module: ts.ModuleKind.ES2022,
-        target: ts.ScriptTarget.ES2022,
-      },
-    }).outputText;
-    const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled).toString('base64')}`;
-    const loaded = await import(moduleUrl);
-    return (loaded.default ?? loaded) as AgentForgeProjectConfig;
+  const templateProjectDir = path.join(projectDir, 'packages', 'cli', 'templates', 'default');
+
+  for (const tsConfigPath of [
+    path.join(projectDir, 'agentforge.config.ts'),
+    path.join(templateProjectDir, 'agentforge.config.ts'),
+  ]) {
+    if (await fs.pathExists(tsConfigPath)) {
+      return await loadTsConfig(tsConfigPath);
+    }
   }
 
-  const jsonConfigPath = path.join(projectDir, 'agentforge.json');
-  if (await fs.pathExists(jsonConfigPath)) {
-    return await fs.readJson(jsonConfigPath) as AgentForgeProjectConfig;
+  for (const jsonConfigPath of [
+    path.join(projectDir, 'agentforge.json'),
+    path.join(templateProjectDir, 'agentforge.json'),
+  ]) {
+    if (await fs.pathExists(jsonConfigPath)) {
+      return await fs.readJson(jsonConfigPath) as AgentForgeProjectConfig;
+    }
   }
 
   return null;

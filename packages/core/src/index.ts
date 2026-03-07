@@ -147,6 +147,7 @@ export type {
 
 export { parseSkillManifest } from './skills/skill-parser.js';
 export { discoverSkills, fetchSkillFromGitHub } from './skills/skill-discovery.js';
+export { loadExecutableSkillTools } from './skills/executable-skill-loader.js';
 export type { SkillFileSystem } from './skills/skill-discovery.js';
 export { skillDefinitionSchema, SkillParseError } from './skills/types.js';
 export type { SkillDefinition, SkillToolDefinition } from './skills/types.js';

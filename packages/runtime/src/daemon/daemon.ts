@@ -4,6 +4,7 @@ import { createStandardAgent } from '../agent/create-standard-agent.js';
 import type {
   ChannelAdapter,
   AgentDefinition,
+  AgentDefinitionLoader,
   DaemonConfig,
   WorkflowExecutionResult,
   WorkflowRunExecutor,
@@ -14,11 +15,13 @@ export class AgentForgeDaemon {
   private definitions = new Map<string, AgentDefinition>();
   private channels: ChannelAdapter[] = [];
   private workflowExecutor?: WorkflowRunExecutor;
+  private agentLoader?: AgentDefinitionLoader;
 
   constructor(config: DaemonConfig = {}) {
     if (config.deploymentUrl && config.adminAuthToken) {
       initStorage(config.deploymentUrl, config.adminAuthToken);
     }
+    this.agentLoader = config.agentLoader;
   }
 
   async loadAgents(definitions: AgentDefinition[]): Promise<void> {
@@ -28,18 +31,7 @@ export class AgentForgeDaemon {
       );
     }
     for (const def of definitions) {
-      const agent = createStandardAgent({
-        id: def.id,
-        name: def.name,
-        description: def.description,
-        instructions: def.instructions,
-        model: def.model,
-        workspace: def.workspace,
-        workingMemoryTemplate: def.workingMemoryTemplate,
-        disableMemory: def.disableMemory,
-      });
-      this.agents.set(def.id, agent);
-      this.definitions.set(def.id, def);
+      this.registerAgent(def);
     }
   }
 
@@ -59,6 +51,29 @@ export class AgentForgeDaemon {
     return this.agents.get(id);
   }
 
+  async getOrLoadAgentDefinition(id: string): Promise<{ agent: Agent; definition: AgentDefinition } | null> {
+    const existingAgent = this.agents.get(id);
+    const existingDefinition = this.definitions.get(id);
+    if (existingAgent && existingDefinition) {
+      return { agent: existingAgent, definition: existingDefinition };
+    }
+
+    if (!this.agentLoader) {
+      return null;
+    }
+
+    const loadedDefinition = await this.agentLoader(id);
+    if (!loadedDefinition) {
+      return null;
+    }
+
+    const loadedAgent = this.registerAgent(loadedDefinition);
+    return {
+      agent: loadedAgent,
+      definition: loadedDefinition,
+    };
+  }
+
   listAgentIds(): string[] {
     return Array.from(this.agents.keys());
   }
@@ -76,5 +91,22 @@ export class AgentForgeDaemon {
       throw new Error('Workflow executor not configured on daemon.');
     }
     return this.workflowExecutor(runId);
+  }
+
+  private registerAgent(definition: AgentDefinition): Agent {
+    const agent = createStandardAgent({
+      id: definition.id,
+      name: definition.name,
+      description: definition.description,
+      instructions: definition.instructions,
+      model: definition.model,
+      tools: definition.tools,
+      workspace: definition.workspace,
+      workingMemoryTemplate: definition.workingMemoryTemplate,
+      disableMemory: definition.disableMemory,
+    });
+    this.agents.set(definition.id, agent);
+    this.definitions.set(definition.id, definition);
+    return agent;
   }
 }

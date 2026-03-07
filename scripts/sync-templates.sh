@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SRC="$PROJECT_ROOT/packages/cli/templates/default/convex"
 DASHBOARD_SRC="$PROJECT_ROOT/packages/cli/templates/default/dashboard"
+SKILLS_SRC="$PROJECT_ROOT/packages/cli/templates/default/skills"
 
 echo "🔄 Syncing Convex templates from: $SRC"
 
@@ -44,5 +45,11 @@ rsync -av "$DASHBOARD_SRC/" "$WEB_DEST/" \
   --exclude='wrangler.toml' \
   --exclude='packages' \
   --exclude='public'
+
+ROOT_SKILLS_DEST="$PROJECT_ROOT/skills"
+echo "🔄 Syncing built-in skills from: $SKILLS_SRC"
+echo "  → $ROOT_SKILLS_DEST"
+mkdir -p "$ROOT_SKILLS_DEST"
+rsync -av "$SKILLS_SRC/" "$ROOT_SKILLS_DEST/" --exclude='node_modules'
 
 echo "✅ Templates synced successfully"

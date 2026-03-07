@@ -7,6 +7,19 @@ import { BarChart3, TrendingUp, DollarSign, Zap, Activity } from 'lucide-react';
 
 export const Route = createFileRoute('/usage')({ component: UsagePage });
 
+const HIDDEN_DEPRECATED_MODELS = new Set([
+  'gpt-4o',
+  'gpt-4o-mini',
+  'gpt-4.1',
+  'gpt-4.1-mini',
+  'gpt-4.1-nano',
+  'openai/gpt-4o',
+  'openai/gpt-4o-mini',
+  'openai/gpt-4.1',
+  'openai/gpt-4.1-mini',
+  'openai/gpt-4.1-nano',
+]);
+
 function StatCard({ icon: Icon, title, value, subtitle }: { icon: any; title: string; value: string; subtitle?: string }) {
   return (
     <div className="bg-card border border-border rounded-lg p-6 shadow-sm">
@@ -30,9 +43,19 @@ function UsagePage() {
   const totalRequests = stats?.totalRequests ?? 0;
   const byProvider = stats?.byProvider ?? {};
   const byModel = stats?.byModel ?? {};
+  const visibleUsageRecords = useMemo(
+    () => usageRecords.filter((record: any) => !HIDDEN_DEPRECATED_MODELS.has(record.model)),
+    [usageRecords],
+  );
 
   const providerEntries = useMemo(() => Object.entries(byProvider).sort((a: any, b: any) => b[1].tokens - a[1].tokens), [byProvider]);
-  const modelEntries = useMemo(() => Object.entries(byModel).sort((a: any, b: any) => b[1].tokens - a[1].tokens), [byModel]);
+  const modelEntries = useMemo(
+    () =>
+      Object.entries(byModel)
+        .filter(([model]) => !HIDDEN_DEPRECATED_MODELS.has(model))
+        .sort((a: any, b: any) => b[1].tokens - a[1].tokens),
+    [byModel],
+  );
 
   // Calculate max for bar chart scaling
   const maxProviderTokens = providerEntries.length > 0 ? Math.max(...providerEntries.map(([, v]: any) => v.tokens)) : 1;
@@ -104,7 +127,7 @@ function UsagePage() {
         </div>
 
         {/* Recent Usage Records */}
-        {usageRecords.length > 0 && (
+        {visibleUsageRecords.length > 0 && (
           <div className="bg-card border border-border rounded-lg overflow-hidden">
             <div className="p-4 border-b border-border">
               <h2 className="text-lg font-semibold">Recent API Calls</h2>
@@ -120,7 +143,7 @@ function UsagePage() {
                 </tr>
               </thead>
               <tbody>
-                {usageRecords.slice(0, 20).map((record: any) => (
+                {visibleUsageRecords.slice(0, 20).map((record: any) => (
                   <tr key={record._id} className="border-t border-border hover:bg-muted/30">
                     <td className="px-4 py-3 font-mono text-xs">{record.model}</td>
                     <td className="px-4 py-3">{record.provider}</td>

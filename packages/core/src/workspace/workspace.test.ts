@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createWorkspace } from './index.js';
 import { rm, mkdir } from 'node:fs/promises';
-import { Workspace, LocalFilesystem } from '@mastra/core/workspace';
+import { Workspace, LocalFilesystem, LocalSandbox } from '@mastra/core/workspace';
 import { S3Filesystem } from '@mastra/s3';
 
 const testBasePath = '/tmp/test-agentforge-workspace';
@@ -38,6 +38,11 @@ describe('createWorkspace', () => {
     it('has a LocalFilesystem configured', () => {
       const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
       expect(workspace.filesystem).toBeInstanceOf(LocalFilesystem);
+    });
+
+    it('has a LocalSandbox configured for command execution', () => {
+      const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
+      expect(workspace.sandbox).toBeInstanceOf(LocalSandbox);
     });
 
     it('filesystem can write and read files', async () => {

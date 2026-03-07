@@ -6,6 +6,7 @@ import { createClient, safeCall } from '../lib/convex-client.js';
 import { createDaemonWorkflowExecutor } from '../lib/workflow-executor.js';
 import type { AgentForgeProjectConfig } from '../lib/project-config.js';
 import { loadProjectConfig, loadProjectEnv } from '../lib/project-config.js';
+import { resolveWorkspaceSkillsBasePath } from '../lib/runtime-workspace.js';
 import { header, success, error, info, dim } from '../lib/display.js';
 
 export function registerStartCommand(program: Command) {
@@ -40,11 +41,14 @@ export function registerStartCommand(program: Command) {
         process.exit(1);
       }
 
-      const client = await createClient();
-      const agents = await fetchAgents(client, requestedAgents);
-
-      const runtime = await import('@agentforge-ai/runtime');
-      const core = await import('@agentforge-ai/core');
+  const runtime = await import('@agentforge-ai/runtime');
+  const core = await import('@agentforge-ai/core');
+  const client = await createClient();
+  const agents = await fetchAgents(client, requestedAgents);
+  const workspace = await createRuntimeWorkspace(core.createWorkspace, projectConfig?.workspace, cwd, opts.dev);
+  const workspaceSkillTools = workspace
+    ? await core.loadExecutableSkillTools(resolveWorkspaceSkillsBasePath(cwd))
+    : undefined;
 
       const enabledChannels = getEnabledChannels(opts, projectConfig);
       runtime.validateEnv({ channels: enabledChannels });
@@ -54,15 +58,36 @@ export function registerStartCommand(program: Command) {
         deploymentUrl: convexUrl,
         adminAuthToken: adminKey,
         defaultModel: projectConfig?.daemon?.defaultModel,
-      });
+        agentLoader: async (id: string) => {
+          const agentConfig = await safeCall(
+            () => client.query('agents:get' as never, { id } as never),
+            `Failed to fetch agent '${id}' from Convex`,
+          ) as any;
 
-      const workspace = await createRuntimeWorkspace(core.createWorkspace, projectConfig?.workspace, cwd, opts.dev);
+          if (!agentConfig) {
+            return null;
+          }
+
+          return {
+            id: agentConfig.id ?? agentConfig._id,
+            name: agentConfig.name ?? 'Agent',
+            description: agentConfig.description,
+            instructions: agentConfig.instructions ?? 'You are a helpful assistant.',
+            model: buildModelString(agentConfig, projectConfig?.daemon?.defaultModel),
+            tools: workspaceSkillTools,
+            workingMemoryTemplate: agentConfig.workingMemoryTemplate,
+            disableMemory: !adminKey,
+            workspace,
+          };
+        },
+      });
       const agentDefinitions = agents.map((agentConfig: any) => ({
         id: agentConfig.id ?? agentConfig._id,
         name: agentConfig.name ?? 'Agent',
         description: agentConfig.description,
         instructions: agentConfig.instructions ?? 'You are a helpful assistant.',
         model: buildModelString(agentConfig, projectConfig?.daemon?.defaultModel),
+        tools: workspaceSkillTools,
         workingMemoryTemplate: agentConfig.workingMemoryTemplate,
         disableMemory: !adminKey,
         workspace,
@@ -82,6 +107,7 @@ export function registerStartCommand(program: Command) {
         daemon.addChannel(new runtime.HttpChannel({
           port: configuredPort,
           apiKey: process.env.AGENTFORGE_API_KEY,
+          dataClient: client,
         }));
       }
 
@@ -162,11 +188,12 @@ async function createRuntimeWorkspace(
     return undefined;
   }
 
+  const skillsBasePath = resolveWorkspaceSkillsBasePath(cwd);
   const workspace = createWorkspace({
     storage: 'local',
     name: 'agentforge-workspace',
     basePath: path.resolve(cwd, workspaceConfig.basePath ?? './workspace'),
-    skillsBasePath: path.resolve(cwd, './skills'),
+    skillsBasePath,
     skillsPath: workspaceConfig.skills ?? ['/skills'],
     bm25: workspaceConfig.search ?? true,
     autoIndexPaths: workspaceConfig.autoIndexPaths ?? workspaceConfig.skills ?? ['/skills'],
@@ -175,6 +202,7 @@ async function createRuntimeWorkspace(
   await workspace.init();
   if (verbose) {
     info(`Workspace initialized at ${path.relative(cwd, workspaceConfig.basePath ?? './workspace') || '.'}`);
+    info(`Workspace skills loaded from ${path.relative(cwd, skillsBasePath) || '.'}`);
   }
   return workspace;
 }
@@ -191,11 +219,35 @@ function getEnabledChannels(
 }
 
 function buildModelString(agentConfig: any, defaultModel?: string): string {
-  if (agentConfig.provider && agentConfig.model && !String(agentConfig.model).includes('/')) {
-    return `${agentConfig.provider}/${agentConfig.model}`;
+  const normalizeOpenAIModel = (modelId: string) => {
+    if (modelId === 'gpt-5-chat') return 'gpt-5-chat-latest';
+    if (modelId === 'gpt-5.1-chat') return 'gpt-5.1-chat-latest';
+    if (modelId === 'gpt-5.2-chat') return 'gpt-5.2-chat-latest';
+    if (modelId === 'gpt-5.3-chat') return 'gpt-5.3-chat-latest';
+    return modelId;
+  };
+
+  if (
+    agentConfig.provider === 'openrouter' &&
+    agentConfig.model &&
+    String(agentConfig.model).includes('/') &&
+    !String(agentConfig.model).startsWith('openrouter/')
+  ) {
+    return `openrouter/${agentConfig.model}`;
   }
 
-  return agentConfig.model ?? defaultModel ?? 'moonshotai/kimi-k2.5';
+  if (agentConfig.provider && agentConfig.model && !String(agentConfig.model).includes('/')) {
+    const modelId = agentConfig.provider === 'openai'
+      ? normalizeOpenAIModel(String(agentConfig.model))
+      : String(agentConfig.model);
+    return `${agentConfig.provider}/${modelId}`;
+  }
+
+  const directModel = agentConfig.provider === 'openai' && typeof agentConfig.model === 'string'
+    ? `openai/${normalizeOpenAIModel(String(agentConfig.model).replace(/^openai\//, ''))}`
+    : agentConfig.model;
+
+  return directModel ?? defaultModel ?? 'moonshotai/kimi-k2.5';
 }
 
 async function isPortInUse(port: number): Promise<boolean> {

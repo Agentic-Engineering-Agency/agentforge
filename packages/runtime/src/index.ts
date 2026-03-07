@@ -19,9 +19,14 @@ export {
   getModelsByProvider,
   getActiveModels,
   getContextLimit,
+  normalizeModelId,
   resolveModel,
   type ModelEntry,
 } from './models/registry.js';
+export {
+  getProviderCatalog,
+  type ProviderCatalogEntry,
+} from './models/catalog.js';
 
 // Tools
 export { datetimeTool } from './tools/datetime.js';

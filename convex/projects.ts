@@ -133,11 +133,36 @@ export const updateSettings = mutation({
     systemPrompt: v.optional(v.string()),
     defaultModel: v.optional(v.string()),
     defaultProvider: v.optional(v.string()),
+    settings: v.optional(
+      v.object({
+        systemPrompt: v.optional(v.string()),
+        defaultModel: v.optional(v.string()),
+        defaultProvider: v.optional(v.string()),
+      })
+    ),
   },
   handler: async (ctx, args) => {
-    const { id, ...settings } = args;
+    const { id, settings: _legacySettings, ...flatSettings } = args;
+    const project = await ctx.db.get(id);
+    if (!project) {
+      throw new Error("Project not found");
+    }
+
+    const normalizedSettings = {
+      ...(args.settings ?? {}),
+      ...Object.fromEntries(
+        Object.entries(flatSettings).filter(([, value]) => value !== undefined)
+      ),
+    };
+
+    const nextSettings = {
+      ...(project.settings ?? {}),
+      ...normalizedSettings,
+    };
+
     await ctx.db.patch(id, {
-      ...settings,
+      ...normalizedSettings,
+      settings: nextSettings,
       updatedAt: Date.now(),
     });
   },

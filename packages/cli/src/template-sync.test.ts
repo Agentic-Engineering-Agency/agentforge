@@ -42,6 +42,29 @@ describe('template sync', () => {
     }
   });
 
+  it('mirrors canonical built-in skills into the repo root skills directory', () => {
+    const templateRoot = path.join(repoRoot, 'packages/cli/templates/default/skills');
+    const rootSkills = path.join(repoRoot, 'skills');
+
+    for (const relativeFile of listFiles(templateRoot)) {
+      const templatePath = path.join(templateRoot, relativeFile);
+      const rootSkillPath = path.join(rootSkills, relativeFile);
+      expect(existsSync(rootSkillPath), `${relativeFile} should exist in root skills`).toBe(true);
+      expect(readFileSync(rootSkillPath, 'utf-8')).toBe(readFileSync(templatePath, 'utf-8'));
+    }
+  });
+
+  it('keeps the canonical dashboard config compatible with generated apps and packages/web', () => {
+    const templateRoot = path.join(repoRoot, 'packages/cli/templates/default/dashboard');
+    const viteConfig = readFileSync(path.join(templateRoot, 'vite.config.ts'), 'utf-8');
+    const tsconfig = readFileSync(path.join(templateRoot, 'tsconfig.json'), 'utf-8');
+
+    expect(viteConfig).toContain('path.resolve(__dirname, "../convex")');
+    expect(viteConfig).toContain('path.resolve(__dirname, "../../convex")');
+    expect(tsconfig).toContain('"@convex/*": ["../convex/*", "../../convex/*"]');
+    expect(tsconfig).toContain('"include": ["app", "../convex", "../../convex"]');
+  });
+
   it('removes the legacy Convex workflow engine shims from the canonical template', () => {
     expect(existsSync(path.join(repoRoot, 'packages/cli/templates/default/convex/workflowEngine.ts'))).toBe(false);
     expect(existsSync(path.join(repoRoot, 'packages/cli/templates/default/convex/lib/workflowEngine.ts'))).toBe(false);

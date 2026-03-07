@@ -14,7 +14,7 @@ async function callLLM(config: AgentConfig, systemPrompt: string, userPrompt: st
   const resp = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${config.apiKey}` },
-    body: JSON.stringify({ model: config.modelId ?? "gpt-4o-mini", messages: [
+    body: JSON.stringify({ model: config.modelId ?? "gpt-5.1-chat-latest", messages: [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ]}),

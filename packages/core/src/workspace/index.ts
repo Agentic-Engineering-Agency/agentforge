@@ -22,7 +22,7 @@
  * ```
  */
 
-import { Workspace, LocalFilesystem, LocalSkillSource } from '@mastra/core/workspace';
+import { Workspace, LocalFilesystem, LocalSandbox, LocalSkillSource } from '@mastra/core/workspace';
 import { S3Filesystem } from '@mastra/s3';
 
 export interface WorkspaceConfig {
@@ -113,6 +113,7 @@ export function createWorkspace(config: WorkspaceConfig = {}): Workspace {
 
   switch (storage) {
     case 'local': {
+      const basePath = config.basePath ?? './workspace';
       const useDedicatedSkillSource =
         !!config.skillsBasePath &&
         skillsPaths.length === 1 &&
@@ -121,7 +122,10 @@ export function createWorkspace(config: WorkspaceConfig = {}): Workspace {
       return new Workspace({
         name: config.name,
         filesystem: new LocalFilesystem({
-          basePath: config.basePath ?? './workspace',
+          basePath,
+        }),
+        sandbox: new LocalSandbox({
+          workingDirectory: basePath,
         }),
         skillSource: useDedicatedSkillSource
           ? new LocalSkillSource({

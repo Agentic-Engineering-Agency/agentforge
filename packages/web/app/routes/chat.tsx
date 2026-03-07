@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
 import {
@@ -22,6 +22,7 @@ import {
   X,
   File,
 } from "lucide-react";
+import { useModelCatalog } from "../lib/model-catalog";
 
 // ============================================================
 // SECRET DETECTION ENGINE (client-side mirror of vault patterns)
@@ -114,6 +115,7 @@ function ChatPageComponent() {
     api.threads.getThreadMessages,
     currentThreadId ? { threadId: currentThreadId as Id<"threads"> } : "skip"
   ) ?? [];
+  const { providersById } = useModelCatalog(agents.map((agent: any) => agent.provider));
 
   // ── Auto-select first agent ─────────────────────────────────
   useEffect(() => {
@@ -250,6 +252,7 @@ function ChatPageComponent() {
 
   // ── Derived state ───────────────────────────────────────────
   const currentAgent = agents.find((a) => a.id === currentAgentId);
+  const providerMeta = currentAgent ? providersById.get(currentAgent.provider) : undefined;
   const hasAgents = agents.length > 0;
 
   return (
@@ -285,15 +288,7 @@ function ChatPageComponent() {
             {/* Agent selector */}
             <div className="flex items-center gap-2 px-3 py-1.5 bg-background border border-border rounded-lg">
               <div
-                className={`w-2 h-2 rounded-full ${
-                  currentAgent?.provider === "openai"
-                    ? "bg-green-500"
-                    : currentAgent?.provider === "anthropic"
-                    ? "bg-orange-500"
-                    : currentAgent?.provider === "openrouter"
-                    ? "bg-purple-500"
-                    : "bg-blue-500"
-                }`}
+                className={`w-2 h-2 rounded-full ${providerMeta?.colorClass ?? "bg-slate-500"}`}
               />
               <select
                 value={currentAgentId || ""}
