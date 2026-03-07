@@ -41,6 +41,15 @@ const DEFAULT_AGENT_EXECUTION_OPTIONS = {
   toolChoice: 'auto' as const,
 };
 
+const MAX_ATTACHMENT_TEXT_CHARS = 12_000;
+
+interface ResolvedAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  content?: string;
+}
+
 export class HttpChannel implements ChannelAdapter {
   name = 'http';
   private app: Hono;
@@ -199,15 +208,14 @@ export class HttpChannel implements ChannelAdapter {
 
       const existingMessages = await this.dataClient.query('messages:getByThread', { threadId })
         .catch(() => []) as Array<{ role?: string; content?: string }> | [];
-
-      const userMessage = fileIds.length > 0
-        ? `${message}\n\nAttached file IDs: ${fileIds.join(', ')}`
-        : message;
+      const attachments = await this.resolveAttachments(fileIds);
+      const storedUserMessage = this.formatStoredUserMessage(message, attachments);
+      const agentUserMessage = this.formatAgentUserMessage(message, attachments);
 
       await this.dataClient.mutation('messages:create', {
         threadId,
         role: 'user',
-        content: userMessage,
+        content: storedUserMessage,
       });
 
       const sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -226,7 +234,7 @@ export class HttpChannel implements ChannelAdapter {
             role: entry.role as 'user' | 'assistant' | 'system',
             content: entry.content as string,
           })),
-        { role: 'user' as const, content: userMessage },
+        { role: 'user' as const, content: agentUserMessage },
       ];
 
       try {
@@ -242,7 +250,7 @@ export class HttpChannel implements ChannelAdapter {
         const fullModelId = String(definition.model ?? 'moonshotai/kimi-k2.5');
         const [provider, ...modelParts] = fullModelId.split('/');
         const model = modelParts.join('/') || fullModelId;
-        const promptTokens = estimateTokens(userMessage);
+        const promptTokens = estimateTokens(agentUserMessage);
         const completionTokens = estimateTokens(assistantText);
         const cost = estimateCost(fullModelId, promptTokens, completionTokens);
 
@@ -452,6 +460,70 @@ export class HttpChannel implements ChannelAdapter {
       'Vary': 'Origin',
     };
   }
+
+  private async resolveAttachments(fileIds: string[]): Promise<ResolvedAttachment[]> {
+    if (!this.dataClient || fileIds.length === 0) {
+      return [];
+    }
+
+    const attachments = await Promise.all(fileIds.map(async (fileId) => {
+      const download = await this.dataClient!.query('files:getDownloadUrl', { id: fileId })
+        .catch(() => null) as { url?: string; name?: string; mimeType?: string } | null;
+
+      if (!download?.url) {
+        return {
+          id: fileId,
+          name: fileId,
+          mimeType: 'application/octet-stream',
+        } satisfies ResolvedAttachment;
+      }
+
+      const mimeType = download.mimeType ?? 'application/octet-stream';
+      const content = await fetchAttachmentText(download.url, mimeType);
+      return {
+        id: fileId,
+        name: download.name ?? fileId,
+        mimeType,
+        content: content ?? undefined,
+      } satisfies ResolvedAttachment;
+    }));
+
+    return attachments;
+  }
+
+  private formatStoredUserMessage(message: string, attachments: ResolvedAttachment[]): string {
+    if (attachments.length === 0) {
+      return message;
+    }
+
+    const names = attachments.map((attachment) => attachment.name).join(', ');
+    return `${message}\n\nAttached files: ${names}`;
+  }
+
+  private formatAgentUserMessage(message: string, attachments: ResolvedAttachment[]): string {
+    if (attachments.length === 0) {
+      return message;
+    }
+
+    const attachmentContext = attachments.map((attachment) => {
+      if (attachment.content) {
+        return [
+          `File: ${attachment.name}`,
+          `MIME: ${attachment.mimeType}`,
+          'Content:',
+          attachment.content,
+        ].join('\n');
+      }
+
+      return [
+        `File: ${attachment.name}`,
+        `MIME: ${attachment.mimeType}`,
+        'Content preview unavailable for this attachment.',
+      ].join('\n');
+    }).join('\n\n');
+
+    return `${message}\n\nAttached files:\n${attachmentContext}`;
+  }
 }
 
 function estimateTokens(text: string): number {
@@ -471,4 +543,56 @@ function estimateCost(modelId: string, promptTokens: number, completionTokens: n
   const promptCost = (promptTokens / 1_000_000) * model.costPerMInput;
   const completionCost = (completionTokens / 1_000_000) * model.costPerMOutput;
   return Number((promptCost + completionCost).toFixed(8));
+}
+
+async function fetchAttachmentText(url: string, mimeType: string): Promise<string | null> {
+  if (!isTextLikeMime(mimeType)) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+
+    const responseMimeType = response.headers.get('content-type')?.split(';')[0]?.trim();
+    if (responseMimeType && !isTextLikeMime(responseMimeType)) {
+      return null;
+    }
+
+    const text = await response.text();
+    if (!text.trim()) {
+      return null;
+    }
+
+    return text.length > MAX_ATTACHMENT_TEXT_CHARS
+      ? `${text.slice(0, MAX_ATTACHMENT_TEXT_CHARS)}\n...[truncated]`
+      : text;
+  } catch {
+    return null;
+  }
+}
+
+function isTextLikeMime(mimeType: string): boolean {
+  if (!mimeType) {
+    return false;
+  }
+
+  if (mimeType.startsWith('text/')) {
+    return true;
+  }
+
+  return [
+    'application/json',
+    'application/ld+json',
+    'application/xml',
+    'application/javascript',
+    'application/x-javascript',
+    'application/typescript',
+    'application/x-typescript',
+    'application/yaml',
+    'application/x-yaml',
+    'image/svg+xml',
+  ].includes(mimeType);
 }

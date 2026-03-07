@@ -32,12 +32,16 @@ describe('dashboard and convex regressions', () => {
     expect(filesSource).toContain('useConvex');
     expect(filesSource).toContain("convex.query(api.files.getFileUrl, { storageId: file.storageId as string })");
     expect(filesSource).not.toContain("useQuery(api.files.getFileUrl, files.length > 0 && files[0].storageId");
+    expect(filesSource).toContain('const confirmUpload = useMutation(api.files.confirmUpload);');
+    expect(filesSource).not.toContain('const createFile = useMutation(api.files.create);');
+    expect(filesSource).not.toContain('url: uploadUrl.split(\'?\')[0]');
 
     expect(projectsSource).toContain('stripProviderPrefix');
     expect(projectsSource).toContain('joinProviderModel');
 
-    expect(usageSource).toContain('const HIDDEN_DEPRECATED_MODELS');
-    expect(usageSource).toContain('!HIDDEN_DEPRECATED_MODELS.has(model)');
+    expect(usageSource).toContain('useModelCatalog');
+    expect(usageSource).toContain('activeModels');
+    expect(usageSource).not.toContain('const HIDDEN_DEPRECATED_MODELS');
   });
 
   it('keeps project settings fields in the project schema', () => {

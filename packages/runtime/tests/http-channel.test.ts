@@ -189,6 +189,111 @@ describe('HttpChannel dashboard compatibility routes', () => {
     expect((usageCall?.[1] as { cost?: number } | undefined)?.cost).toBeGreaterThan(0);
   });
 
+  it('injects attached text file contents into the dashboard chat prompt', async () => {
+    const mockAgent = {
+      generate: vi.fn().mockResolvedValue({ text: 'Attachment processed' }),
+    };
+    const dataClient = {
+      query: vi.fn().mockImplementation(async (name: string, args: Record<string, unknown>) => {
+        if (name === 'threads:getThread') {
+          return { _id: 'nd76tnamzzrnxye4wn2ry24j0s82fthc' };
+        }
+        if (name === 'messages:getByThread') {
+          return [];
+        }
+        if (name === 'files:getDownloadUrl') {
+          expect(args.id).toBe('k57awsj8qzrqtevrbbt32ebbqs82eyra');
+          return {
+            url: 'https://files.example.test/agentforge-upload.txt',
+            name: 'agentforge-upload.txt',
+            mimeType: 'text/plain',
+          };
+        }
+        return null;
+      }),
+      mutation: vi.fn().mockImplementation(async (name: string) => {
+        if (name === 'sessions:create') return 'session-doc-id';
+        if (name === 'messages:create') return 'message-doc-id';
+        return null;
+      }),
+    };
+
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === 'https://files.example.test/agentforge-upload.txt') {
+        return {
+          ok: true,
+          text: async () => 'AgentForge uploaded file body',
+          headers: new Headers({ 'content-type': 'text/plain; charset=utf-8' }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        json: async () => ({ data: [] }),
+      } as Response;
+    }));
+
+    const channel = new HttpChannel({
+      allowedOrigins: ['http://localhost:4173'],
+      dataClient,
+    });
+
+    (channel as unknown as {
+      daemon: {
+        listAgents: () => Array<{ id: string; name: string; instructions: string; model: string }>;
+        listAgentIds: () => string[];
+        getAgent: (id: string) => unknown;
+        getOrLoadAgentDefinition: (id: string) => Promise<{ agent: unknown; definition: { id: string; name: string; instructions: string; model: string } } | null>;
+        executeWorkflowRun: (id: string) => Promise<{ runId: string; status: 'success' | 'failed' }>;
+      };
+    }).daemon = {
+      listAgents: () => [{ id: 'assistant', name: 'Assistant', instructions: 'Help.', model: 'openai/gpt-5.2' }],
+      listAgentIds: () => ['assistant'],
+      getAgent: () => mockAgent,
+      getOrLoadAgentDefinition: async () => ({
+        agent: mockAgent,
+        definition: { id: 'assistant', name: 'Assistant', instructions: 'Help.', model: 'openai/gpt-5.2' },
+      }),
+      executeWorkflowRun: async (runId: string) => ({ runId, status: 'success' }),
+    };
+
+    const response = await getApp(channel).request('http://localhost/api/chat', {
+      method: 'POST',
+      headers: {
+        Origin: 'http://localhost:4173',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        agentId: 'assistant',
+        threadId: 'nd76tnamzzrnxye4wn2ry24j0s82fthc',
+        message: 'Please summarize the attachment.',
+        fileIds: ['k57awsj8qzrqtevrbbt32ebbqs82eyra'],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(dataClient.query).toHaveBeenCalledWith('files:getDownloadUrl', {
+      id: 'k57awsj8qzrqtevrbbt32ebbqs82eyra',
+    });
+    expect(mockAgent.generate).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role: 'user',
+          content: expect.stringContaining('Attached files:'),
+        }),
+      ]),
+      expect.objectContaining({
+        maxSteps: 8,
+        toolChoice: 'auto',
+      }),
+    );
+    const prompt = mockAgent.generate.mock.calls[0]?.[0]?.at(-1)?.content;
+    expect(prompt).toContain('Please summarize the attachment.');
+    expect(prompt).toContain('agentforge-upload.txt');
+    expect(prompt).toContain('AgentForge uploaded file body');
+    expect(prompt).not.toContain('Attached file IDs:');
+  });
+
   it('hot-loads an agent definition when dashboard chat targets an agent created after daemon startup', async () => {
     const loadedAgent = {
       generate: vi.fn().mockResolvedValue({ text: 'Hot-loaded reply' }),

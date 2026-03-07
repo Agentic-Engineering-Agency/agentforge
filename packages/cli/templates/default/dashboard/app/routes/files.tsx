@@ -34,7 +34,7 @@ function FilesPage() {
   const removeFile = useMutation(api.files.remove);
   const removeFolder = useMutation(api.folders.remove);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const createFile = useMutation(api.files.create);
+  const confirmUpload = useMutation(api.files.confirmUpload);
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,13 +149,12 @@ function FilesPage() {
         // Step 3: Extract storageId from response
         const { storageId } = await response.json();
 
-        // Step 4: Create file metadata record
-        await createFile({
+        // Step 4: Confirm the upload and persist file metadata with a real download URL
+        await confirmUpload({
           name: file.name,
           originalName: file.name,
           mimeType: file.type,
           size: file.size,
-          url: uploadUrl.split('?')[0], // Base URL without query params
           storageId,
           folderId: currentFolderId ? (currentFolderId as Id<'folders'>) : undefined,
         });

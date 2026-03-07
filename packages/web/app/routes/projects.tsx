@@ -73,18 +73,35 @@ function ProjectsPage() {
     if (isAssigned) {
       if (confirmingUnassignAgentId === agentId) {
         await unassignAgent({ id: detailProject._id, agentId });
+        setDetailProject((current: any) =>
+          current
+            ? {
+                ...current,
+                agentIds: (current.agentIds ?? []).filter((id: string) => id !== agentId),
+              }
+            : current,
+        );
         setConfirmingUnassignAgentId(null);
       } else {
         setConfirmingUnassignAgentId(agentId);
       }
     } else {
       await assignAgent({ id: detailProject._id, agentId });
+      setDetailProject((current: any) =>
+        current
+          ? {
+              ...current,
+              agentIds: [...new Set([...(current.agentIds ?? []), agentId])],
+            }
+          : current,
+      );
     }
   };
 
   const handleSettingsSave = async (settings: { systemPrompt?: string; defaultModel?: string; defaultProvider?: string }) => {
     if (!detailProject) return;
     await updateSettings({ id: detailProject._id, ...settings });
+    setDetailProject((current: any) => (current ? { ...current, ...settings } : current));
   };
 
   return (

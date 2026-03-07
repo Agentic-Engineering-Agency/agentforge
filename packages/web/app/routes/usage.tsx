@@ -4,21 +4,9 @@ import { useMemo } from 'react';
 import { useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { BarChart3, TrendingUp, DollarSign, Zap, Activity } from 'lucide-react';
+import { useModelCatalog } from '../lib/model-catalog';
 
 export const Route = createFileRoute('/usage')({ component: UsagePage });
-
-const HIDDEN_DEPRECATED_MODELS = new Set([
-  'gpt-4o',
-  'gpt-4o-mini',
-  'gpt-4.1',
-  'gpt-4.1-mini',
-  'gpt-4.1-nano',
-  'openai/gpt-4o',
-  'openai/gpt-4o-mini',
-  'openai/gpt-4.1',
-  'openai/gpt-4.1-mini',
-  'openai/gpt-4.1-nano',
-]);
 
 function StatCard({ icon: Icon, title, value, subtitle }: { icon: any; title: string; value: string; subtitle?: string }) {
   return (
@@ -43,18 +31,28 @@ function UsagePage() {
   const totalRequests = stats?.totalRequests ?? 0;
   const byProvider = stats?.byProvider ?? {};
   const byModel = stats?.byModel ?? {};
+  const { providers } = useModelCatalog(Object.keys(byProvider));
+  const activeModels = useMemo(
+    () =>
+      new Set(
+        providers.flatMap((provider) =>
+          provider.models.flatMap((model) => [`${provider.id}/${model}`, model]),
+        ),
+      ),
+    [providers],
+  );
   const visibleUsageRecords = useMemo(
-    () => usageRecords.filter((record: any) => !HIDDEN_DEPRECATED_MODELS.has(record.model)),
-    [usageRecords],
+    () => usageRecords.filter((record: any) => activeModels.size === 0 || activeModels.has(record.model)),
+    [activeModels, usageRecords],
   );
 
   const providerEntries = useMemo(() => Object.entries(byProvider).sort((a: any, b: any) => b[1].tokens - a[1].tokens), [byProvider]);
   const modelEntries = useMemo(
     () =>
       Object.entries(byModel)
-        .filter(([model]) => !HIDDEN_DEPRECATED_MODELS.has(model))
+        .filter(([model]) => activeModels.size === 0 || activeModels.has(model))
         .sort((a: any, b: any) => b[1].tokens - a[1].tokens),
-    [byModel],
+    [activeModels, byModel],
   );
 
   // Calculate max for bar chart scaling
