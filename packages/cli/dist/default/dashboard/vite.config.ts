@@ -19,7 +19,7 @@ function resolveConvexRoot(): string {
   return candidates[0];
 }
 
-export default defineConfig({
+export default defineConfig(() => {
   const convexRoot = resolveConvexRoot();
   const envDir = path.dirname(convexRoot);
   const env = loadEnv("", envDir, "");

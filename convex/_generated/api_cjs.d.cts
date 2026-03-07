@@ -741,7 +741,7 @@ export declare const api: {
       any
     >;
     getAllAgents: FunctionReference<"query", "public", {}, any>;
-    list: FunctionReference<"query", "public", { userId?: string }, any>;
+    list: FunctionReference<"query", "public", { userId?: string | null }, any>;
     remove: FunctionReference<
       "mutation",
       "public",

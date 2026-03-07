@@ -4,10 +4,10 @@ import { mutation, query } from "./_generated/server";
 // Query: List projects
 export const list = query({
   args: {
-    userId: v.optional(v.string()),
+    userId: v.optional(v.union(v.string(), v.null())),
   },
   handler: async (ctx, args) => {
-    if (args.userId) {
+    if (typeof args.userId === 'string' && args.userId) {
       return await ctx.db
         .query("projects")
         .withIndex("byUserId", (q) => q.eq("userId", args.userId!))

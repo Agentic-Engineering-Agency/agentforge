@@ -28,6 +28,9 @@ describe('dashboard and convex regressions', () => {
 
     expect(chatSource).not.toContain('currentAgent?.provider === "openai"');
     expect(chatSource).toContain('providerMeta');
+    expect(chatSource).toContain('useMutation(api.vault.censorMessage)');
+    expect(chatSource).toContain('const censorSecretMessage = useMutation(api.vault.censorMessage);');
+    expect(chatSource).toContain("userId: 'local'");
 
     expect(filesSource).toContain('useConvex');
     expect(filesSource).toContain("convex.query(api.files.getFileUrl, { storageId: file.storageId as string })");
@@ -56,6 +59,12 @@ describe('dashboard and convex regressions', () => {
     expect(projectsSource).toContain('settings: v.optional(');
     expect(projectsSource).toContain('const normalizedSettings = {');
     expect(projectsSource).toContain('...(args.settings ?? {})');
+  });
+
+  it('accepts stale null userId payloads when listing projects', () => {
+    const projectsSource = readFileSync(path.join(templateConvexRoot, 'projects.ts'), 'utf-8');
+    expect(projectsSource).toContain('userId: v.optional(v.union(v.string(), v.null()))');
+    expect(projectsSource).toContain("if (typeof args.userId === 'string' && args.userId)");
   });
 
   it('deletes sessions by sessionId rather than the Convex document id', () => {
