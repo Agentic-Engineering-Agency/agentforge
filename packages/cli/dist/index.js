@@ -518,21 +518,21 @@ async function createClient() {
 async function safeCall(fn, errorMessage) {
   try {
     return await fn();
-  } catch (error4) {
-    if (error4.message?.includes("CONVEX_URL not found")) {
+  } catch (error3) {
+    if (error3.message?.includes("CONVEX_URL not found")) {
       console.error("\n\u274C Not connected to Convex.");
       console.error("   Run `npx convex dev` in your project directory first.\n");
-    } else if (error4.message?.includes("Current directory does not exist")) {
+    } else if (error3.message?.includes("Current directory does not exist")) {
       console.error(`
-\u274C ${error4.message}
+\u274C ${error3.message}
 `);
-    } else if (error4.message?.includes("fetch failed") || error4.message?.includes("ECONNREFUSED")) {
+    } else if (error3.message?.includes("fetch failed") || error3.message?.includes("ECONNREFUSED")) {
       console.error("\n\u274C Cannot reach Convex deployment.");
       console.error("   Make sure `npx convex dev` is running.\n");
     } else {
       console.error(`
 \u274C ${errorMessage}`);
-      console.error(`   ${error4.message}
+      console.error(`   ${error3.message}
 `);
     }
     process.exit(1);
@@ -6620,12 +6620,12 @@ function createDaemonWorkflowExecutor(client, daemon) {
               completedAt: Date.now()
             });
           },
-          onStepError: async ({ error: error4, stepRecordId }) => {
+          onStepError: async ({ error: error3, stepRecordId }) => {
             if (!stepRecordId) return;
             await client.mutation("workflows:updateStep", {
               id: stepRecordId,
               status: "failed",
-              error: error4,
+              error: error3,
               completedAt: Date.now()
             });
           }
@@ -6644,8 +6644,8 @@ function createDaemonWorkflowExecutor(client, daemon) {
         output: result.output,
         error: result.error
       };
-    } catch (error4) {
-      const message = error4 instanceof Error ? error4.message : String(error4);
+    } catch (error3) {
+      const message = error3 instanceof Error ? error3.message : String(error3);
       await client.mutation("workflows:updateRun", {
         id: runId,
         status: "failed",
@@ -6951,8 +6951,38 @@ async function keepAlive() {
 import fs18 from "fs-extra";
 import path19 from "path";
 import { execSync as execSync4 } from "child_process";
+function maskEnvValue(value) {
+  if (value.length <= 8) {
+    return "*".repeat(Math.max(4, value.length));
+  }
+  return `${value.slice(0, 2)}${"*".repeat(Math.max(4, value.length - 4))}${value.slice(-2)}`;
+}
+function parseEnvFile(envPath) {
+  const content = fs18.readFileSync(envPath, "utf-8");
+  const envVars = {};
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex === -1) {
+      continue;
+    }
+    const key = line.slice(0, separatorIndex).trim();
+    let value = line.slice(separatorIndex + 1).trim();
+    if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
+      value = value.slice(1, -1);
+    }
+    if (key) {
+      envVars[key] = value;
+    }
+  }
+  return envVars;
+}
 async function deployProject(options) {
   const projectDir = process.cwd();
+  const realProjectDir = fs18.realpathSync(projectDir);
   const pkgPath = path19.join(projectDir, "package.json");
   if (!await fs18.pathExists(pkgPath)) {
     console.error("Error: No package.json found. Are you in an AgentForge project directory?");
@@ -6969,7 +6999,7 @@ async function deployProject(options) {
     console.log("\n\u{1F504} Rolling back to previous Convex deployment...\n");
     try {
       execSync4("npx convex deploy --rollback", {
-        cwd: projectDir,
+        cwd: realProjectDir,
         stdio: "inherit"
       });
       console.log("\n  \u2705 Rollback completed successfully.");
@@ -6981,13 +7011,26 @@ async function deployProject(options) {
   }
   const envPath = path19.resolve(projectDir, options.env);
   const envExists = await fs18.pathExists(envPath);
+  const envVars = envExists ? parseEnvFile(envPath) : {};
   if (options.dryRun) {
     console.log("\n\u{1F50D} Dry run \u2014 previewing deployment plan:\n");
     console.log(`  Project directory: ${projectDir}`);
     console.log(`  Convex directory:  ${convexDir}`);
     console.log(`  Environment file:  ${envExists ? envPath : "(not found)"}`);
+    if (Object.keys(envVars).length > 0) {
+      console.log("  Environment variables:");
+      for (const [key, value] of Object.entries(envVars)) {
+        console.log(`    ${key}=${maskEnvValue(value)}`);
+      }
+    } else {
+      console.log("  No environment variables found in env file.");
+    }
     console.log("\n  \u2139\uFE0F  No changes were made (dry run).\n");
     return;
+  }
+  if (!envExists) {
+    console.error(`Error: Environment file not found: ${options.env}`);
+    process.exit(1);
   }
   if (!options.force) {
     console.log("\n\u{1F680} Ready to deploy Convex backend to production.\n");
@@ -6997,8 +7040,19 @@ async function deployProject(options) {
   }
   console.log("\u{1F4E6} Deploying Convex backend...\n");
   try {
+    for (const [key, value] of Object.entries(envVars)) {
+      try {
+        execSync4(`npx convex env set ${key} "${value.replace(/"/g, '\\"')}"`, {
+          cwd: realProjectDir,
+          stdio: "inherit"
+        });
+      } catch (setError) {
+        const message = setError instanceof Error ? setError.message : String(setError);
+        console.error(`Failed to set ${key}: ${message}`);
+      }
+    }
     execSync4("npx convex deploy", {
-      cwd: projectDir,
+      cwd: realProjectDir,
       stdio: "inherit"
     });
     console.log("\n  \u2705 Deployment completed successfully!");
