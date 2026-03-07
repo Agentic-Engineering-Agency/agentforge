@@ -48,13 +48,13 @@ export function registerAgentsCommand(program: Command) {
     .command('create')
     .description('Create a new agent (interactive)')
     .option('--name <name>', 'Agent name')
-    .option('--model <model>', 'Model identifier (e.g., openai:gpt-4o-mini)')
+    .option('--model <model>', 'Model identifier (e.g., openai:gpt-5.1-chat-latest)')
     .option('--instructions <text>', 'System instructions')
     .option('--description <text>', 'Agent description')
     .option('--provider <provider>', 'Provider (openai, anthropic, etc.)')
     .action(async (opts) => {
       const name = opts.name || await prompt('Agent name: ');
-      const model = opts.model || await prompt('Model (e.g., openai:gpt-4o-mini): ');
+      const model = opts.model || await prompt('Model (e.g., openai:gpt-5.1-chat-latest): ');
       const instructions = opts.instructions || await prompt('Instructions: ');
       const description = opts.description || await prompt('Description (optional): ');
       const provider = opts.provider || await prompt('Provider (openai, anthropic, etc.) [default: openai]: ') || 'openai';
@@ -65,7 +65,7 @@ export function registerAgentsCommand(program: Command) {
       }
 
       let agentProvider = provider;
-      let agentModel = model || 'gpt-4o-mini';
+      let agentModel = model || 'gpt-5.1-chat-latest';
       if (agentModel.includes(':')) {
         const [p, m] = agentModel.split(':');
         agentProvider = p;

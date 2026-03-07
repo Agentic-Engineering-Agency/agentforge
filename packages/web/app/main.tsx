@@ -16,9 +16,13 @@ declare module "@tanstack/react-router" {
 }
 
 // Initialize Convex client
-const convexUrl =
-  (import.meta as any).env?.VITE_CONVEX_URL ||
-  "https://hip-cardinal-943.convex.cloud";
+const convexUrl = import.meta.env.VITE_CONVEX_URL;
+if (!convexUrl) {
+  throw new Error(
+    "Missing VITE_CONVEX_URL environment variable. " +
+    "Run 'agentforge dashboard' from your project root, or create dashboard/.env.local with VITE_CONVEX_URL=<your-url>"
+  );
+}
 const convex = new ConvexReactClient(convexUrl);
 
 // Render

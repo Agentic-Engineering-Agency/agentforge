@@ -1,66 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, useEffect } from 'react';
-import { useQuery, useMutation, useAction } from 'convex/react';
+import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Bot, Plus, Edit, Trash2, Search, X, Star, Loader2 } from 'lucide-react';
+import { Bot, Plus, Edit, Trash2, Search, X, Loader2 } from 'lucide-react';
+import { useModelCatalog, type ProviderCatalogEntry } from '../lib/model-catalog';
 
 export const Route = createFileRoute('/agents')({ component: AgentsPage });
-
-const providers = ['openai', 'anthropic', 'google', 'xai', 'mistral', 'deepseek', 'openrouter', 'groq', 'together', 'perplexity'];
-
-// Static fallback models — used when daemon is offline or provider has no public API
-const FALLBACK_MODELS: Record<string, string[]> = {
-  openai:     ['gpt-4.1', 'gpt-4.1-mini', 'gpt-4.1-nano', 'gpt-4o', 'gpt-4o-mini', 'o3', 'o4-mini'],
-  anthropic:  ['claude-opus-4-6', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
-  google:     ['gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-pro'],
-  xai:        ['grok-3', 'grok-3-mini', 'grok-2'],
-  mistral:    ['mistral-large-latest', 'mistral-small-latest', 'codestral-latest'],
-  deepseek:   ['deepseek-chat', 'deepseek-reasoner'],
-  openrouter: ['openrouter/auto', 'openai/gpt-4o', 'anthropic/claude-sonnet-4-6', 'google/gemini-2.5-flash'],
-  groq:       ['llama-3.3-70b-versatile', 'deepseek-r1-distill-llama-70b', 'qwen-qwq-32b'],
-  together:   ['meta-llama/Llama-4-Scout-17B-16E-Instruct', 'deepseek-ai/DeepSeek-R1', 'Qwen/Qwen2.5-72B-Instruct-Turbo'],
-  perplexity: ['sonar-pro', 'sonar', 'sonar-reasoning-pro'],
-};
-
-/**
- * Fetches available models for a provider from the running daemon's /api/models endpoint.
- * Falls back to FALLBACK_MODELS if the daemon is offline or returns an error.
- * Results are memoised per provider for the lifetime of the component mount.
- */
-function useProviderModels(provider: string) {
-  const [models, setModels] = useState<string[]>(FALLBACK_MODELS[provider] ?? []);
-  const [loading, setLoading] = useState(false);
-  const daemonUrl: string = (window as any).__AGENTFORGE_DAEMON_URL__ ?? 'http://localhost:3001';
-
-  useEffect(() => {
-    if (!provider) return;
-    let cancelled = false;
-    setLoading(true);
-    // Immediately show fallback while fetching
-    setModels(FALLBACK_MODELS[provider] ?? []);
-
-    fetch(`${daemonUrl}/api/models?provider=${encodeURIComponent(provider)}`, {
-      signal: AbortSignal.timeout(4000),
-    })
-      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
-      .then((data: { models: string[] }) => {
-        if (!cancelled && Array.isArray(data.models) && data.models.length > 0) {
-          setModels(data.models);
-        }
-      })
-      .catch(() => {
-        // Daemon offline or error — keep fallback, no toast needed
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-
-    return () => { cancelled = true; };
-  }, [provider, daemonUrl]);
-
-  return { models, loading };
-}
 
 // Validation constraints
 const VALIDATION = {
@@ -82,6 +28,9 @@ function AgentsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingAgent, setEditingAgent] = useState<any>(null);
   const [confirmingDeletingId, setConfirmingDeletingId] = useState<string | null>(null);
+  const { providerIds, providersById, modelsByProvider, loading: catalogLoading, error: catalogError } = useModelCatalog(
+    agents.map((agent: any) => agent.provider),
+  );
 
   const filtered = useMemo(() => {
     if (!searchQuery) return agents;
@@ -140,6 +89,12 @@ function AgentsPage() {
           <input type="text" placeholder="Search agents..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9 pr-3 py-2 bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary w-full" />
         </div>
 
+        {catalogError && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            Provider catalog unavailable. Start the daemon to load the latest model catalog.
+          </div>
+        )}
+
         {filtered.length === 0 ? (
           <div className="text-center py-16 bg-card border border-border rounded-lg">
             <Bot className="w-16 h-16 text-muted-foreground/30 mx-auto mb-4" />
@@ -193,31 +148,70 @@ function AgentsPage() {
           </div>
         )}
 
-        {isModalOpen && <AgentModal key={editingAgent?._id ?? 'create'} agent={editingAgent} onSave={handleSave} onClose={() => { setIsModalOpen(false); setEditingAgent(null); }} />}
+        {isModalOpen && (
+          <AgentModal
+            key={editingAgent?._id ?? 'create'}
+            agent={editingAgent}
+            modelsByProvider={modelsByProvider}
+            modelsLoading={catalogLoading}
+            onClose={() => { setIsModalOpen(false); setEditingAgent(null); }}
+            onSave={handleSave}
+            providerIds={providerIds}
+            providersById={providersById}
+          />
+        )}
       </div>
     </DashboardLayout>
   );
 }
 
-function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any) => void; onClose: () => void }) {
+function AgentModal({
+  agent,
+  onSave,
+  onClose,
+  providerIds,
+  providersById,
+  modelsByProvider,
+  modelsLoading,
+}: {
+  agent: any;
+  onSave: (data: any) => void;
+  onClose: () => void;
+  providerIds: string[];
+  providersById: Map<string, ProviderCatalogEntry>;
+  modelsByProvider: Record<string, string[]>;
+  modelsLoading: boolean;
+}) {
   const [formData, setFormData] = useState({
     name: agent?.name || '',
     description: agent?.description || '',
     instructions: agent?.instructions || '',
-    model: agent?.model || 'gpt-4.1-mini',
-    provider: agent?.provider || 'openai',
+    model: agent?.model || '',
+    provider: agent?.provider || providerIds[0] || '',
     temperature: agent?.temperature ?? 0.7,
     maxTokens: agent?.maxTokens ?? 4096,
   });
 
-  const { models: modelsForProvider, loading: modelsLoading } = useProviderModels(formData.provider);
+  const modelsForProvider = modelsByProvider[formData.provider] ?? [];
+  const selectableModels = useMemo(() => {
+    if (formData.model && !modelsForProvider.includes(formData.model)) {
+      return [formData.model, ...modelsForProvider];
+    }
+    return modelsForProvider;
+  }, [formData.model, modelsForProvider]);
+
+  useEffect(() => {
+    if (!formData.provider && providerIds.length > 0) {
+      setFormData((prev) => ({ ...prev, provider: providerIds[0]!, model: prev.model || '' }));
+    }
+  }, [formData.provider, providerIds]);
 
   // Auto-select first available model when switching provider
   useEffect(() => {
-    if (modelsForProvider.length > 0 && !modelsForProvider.includes(formData.model)) {
+    if (!formData.model && modelsForProvider.length > 0) {
       setFormData(prev => ({ ...prev, model: modelsForProvider[0] }));
     }
-  }, [modelsForProvider]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [formData.model, modelsForProvider]);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -313,7 +307,12 @@ function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any
             <div>
               <label className="block text-sm font-medium mb-1">Provider</label>
               <select name="provider" value={formData.provider} onChange={(e) => { handleChange(e); setFormData(prev => ({ ...prev, provider: e.target.value, model: '' })); }} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary">
-                {providers.map(p => <option key={p} value={p}>{p}</option>)}
+                {providerIds.length === 0 && <option value="">No providers available</option>}
+                {providerIds.map((providerId) => (
+                  <option key={providerId} value={providerId}>
+                    {providersById.get(providerId)?.name ?? providerId}
+                  </option>
+                ))}
               </select>
             </div>
             <div>
@@ -323,7 +322,13 @@ function AgentModal({ agent, onSave, onClose }: { agent: any; onSave: (data: any
               <select name="model" value={formData.model} onChange={handleChange} disabled={modelsLoading} className="w-full bg-background border border-border rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50">
                 {modelsLoading
                   ? <option value="">Loading models…</option>
-                  : modelsForProvider.map(m => <option key={m} value={m}>{m}</option>)
+                  : selectableModels.length > 0
+                    ? selectableModels.map((modelId) => (
+                        <option key={modelId} value={modelId}>
+                          {modelId}
+                        </option>
+                      ))
+                    : <option value="">No models available</option>
                 }
               </select>
             </div>

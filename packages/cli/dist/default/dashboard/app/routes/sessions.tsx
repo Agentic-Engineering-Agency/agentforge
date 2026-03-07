@@ -29,7 +29,10 @@ function SessionsPage() {
   const handleDeleteClick = (id: string) => {
     if (confirmingDeletingId === id) {
       // Second click - actually delete
-      removeSession({ id });
+      const session = sessions.find((entry: any) => entry._id === id);
+      if (session) {
+        removeSession({ sessionId: session.sessionId });
+      }
       setConfirmingDeletingId(null);
     } else {
       // First click - show confirm state

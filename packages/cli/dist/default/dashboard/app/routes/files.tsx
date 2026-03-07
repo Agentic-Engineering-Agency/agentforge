@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, useRef } from 'react';
-import { useQuery, useMutation } from 'convex/react';
+import { useConvex, useQuery, useMutation } from 'convex/react';
 import type { Id } from '@convex/_generated/dataModel';
 import { api } from '@convex/_generated/api';
 import { Folder, File, Upload, Trash2, FolderPlus, Search, Grid, List, Home, FileText, FileImage, FileCode, FileArchive, X, ChevronRight, Download, Loader2 } from 'lucide-react';
@@ -27,14 +27,14 @@ function getFileIcon(type: string) {
 }
 
 function FilesPage() {
+  const convex = useConvex();
   const files = useQuery(api.files.list, {}) ?? [];
   const folders = useQuery(api.folders.list, {}) ?? [];
   const createFolder = useMutation(api.folders.create);
   const removeFile = useMutation(api.files.remove);
   const removeFolder = useMutation(api.folders.remove);
   const generateUploadUrl = useMutation(api.files.generateUploadUrl);
-  const createFile = useMutation(api.files.create);
-  const getFileUrl = useQuery(api.files.getFileUrl, files.length > 0 && files[0].storageId ? { storageId: files[0].storageId as string } : 'skip');
+  const confirmUpload = useMutation(api.files.confirmUpload);
 
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -149,13 +149,12 @@ function FilesPage() {
         // Step 3: Extract storageId from response
         const { storageId } = await response.json();
 
-        // Step 4: Create file metadata record
-        await createFile({
+        // Step 4: Confirm the upload and persist file metadata with a real download URL
+        await confirmUpload({
           name: file.name,
           originalName: file.name,
           mimeType: file.type,
           size: file.size,
-          url: uploadUrl.split('?')[0], // Base URL without query params
           storageId,
           folderId: currentFolderId ? (currentFolderId as Id<'folders'>) : undefined,
         });
@@ -174,9 +173,11 @@ function FilesPage() {
   // AGE-152: Download file via getFileUrl
   const handleDownload = async (file: any) => {
     try {
-      const url = await getFileUrl;
+      const url = file.storageId
+        ? await convex.query(api.files.getFileUrl, { storageId: file.storageId as string })
+        : file.url;
       if (url) {
-        window.open(url, '_blank');
+        window.open(url, '_blank', 'noopener,noreferrer');
       }
     } catch (error) {
       console.error('Failed to download file:', error);

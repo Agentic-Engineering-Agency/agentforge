@@ -8,19 +8,23 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createWorkspace } from './index.js';
 import { rm, mkdir } from 'node:fs/promises';
-import { Workspace, LocalFilesystem } from '@mastra/core/workspace';
+import { Workspace, LocalFilesystem, LocalSandbox } from '@mastra/core/workspace';
 import { S3Filesystem } from '@mastra/s3';
 
 const testBasePath = '/tmp/test-agentforge-workspace';
+const testSkillsPath = '/tmp/test-agentforge-skills';
 
 beforeEach(async () => {
   await rm(testBasePath, { recursive: true, force: true });
+  await rm(testSkillsPath, { recursive: true, force: true });
   await mkdir(testBasePath, { recursive: true });
+  await mkdir(testSkillsPath, { recursive: true });
   delete process.env.AGENTFORGE_STORAGE;
 });
 
 afterEach(async () => {
   await rm(testBasePath, { recursive: true, force: true });
+  await rm(testSkillsPath, { recursive: true, force: true });
   delete process.env.AGENTFORGE_STORAGE;
 });
 
@@ -34,6 +38,11 @@ describe('createWorkspace', () => {
     it('has a LocalFilesystem configured', () => {
       const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
       expect(workspace.filesystem).toBeInstanceOf(LocalFilesystem);
+    });
+
+    it('has a LocalSandbox configured for command execution', () => {
+      const workspace = createWorkspace({ storage: 'local', basePath: testBasePath });
+      expect(workspace.sandbox).toBeInstanceOf(LocalSandbox);
     });
 
     it('filesystem can write and read files', async () => {
@@ -65,6 +74,17 @@ describe('createWorkspace', () => {
       await workspace.filesystem!.deleteFile('/del.txt');
       const exists = await workspace.filesystem!.exists('/del.txt');
       expect(exists).toBe(false);
+    });
+
+    it('initializes with a dedicated local skills source', async () => {
+      const workspace = createWorkspace({
+        storage: 'local',
+        basePath: testBasePath,
+        skillsBasePath: testSkillsPath,
+      });
+
+      await workspace.init();
+      expect(workspace.filesystem).toBeInstanceOf(LocalFilesystem);
     });
   });
 

@@ -18,9 +18,9 @@
     "baseUrl": ".",
     "paths": {
       "~/*": ["./app/*"],
-      "@convex/*": ["../convex/*"]
+      "@convex/*": ["../convex/*", "../../convex/*"]
     }
   },
-  "include": ["app", "../convex"],
+  "include": ["app", "../convex", "../../convex"],
   "exclude": ["node_modules", "dist"]
 }

@@ -1,24 +1,13 @@
-/**
- * AgentForge Start Command
- *
- * Boots the AgentForge daemon with channel adapters.
- * This replaces the broken pattern of running Mastra in Convex actions.
- */
-
 import { Command } from 'commander';
-import { createClient, safeCall } from '../lib/convex-client.js';
-import { header, success, error, info, dim, colors } from '../lib/display.js';
 import fs from 'fs-extra';
-import path from 'node:path';
 import net from 'node:net';
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
-// Lazy-loaded to avoid pulling in heavy runtime deps (jsdom, etc.) at CLI startup
-let _createStandardAgent: typeof import('@agentforge-ai/runtime').createStandardAgent;
-let _initStorage: typeof import('@agentforge-ai/runtime').initStorage;
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import path from 'node:path';
+import { createClient, safeCall } from '../lib/convex-client.js';
+import { createDaemonWorkflowExecutor } from '../lib/workflow-executor.js';
+import type { AgentForgeProjectConfig } from '../lib/project-config.js';
+import { loadProjectConfig, loadProjectEnv } from '../lib/project-config.js';
+import { resolveWorkspaceSkillsBasePath } from '../lib/runtime-workspace.js';
+import { header, success, error, info, dim } from '../lib/display.js';
 
 export function registerStartCommand(program: Command) {
   program
@@ -35,206 +24,241 @@ export function registerStartCommand(program: Command) {
 
       const cwd = process.cwd();
       const port = parseInt(opts.port, 10);
-      const agentsFilter: string[] = opts.agent;
+      const requestedAgents: string[] = opts.agent;
 
-      // Check if this is an AgentForge project
-      const pkgPath = path.join(cwd, 'package.json');
-      if (!fs.existsSync(pkgPath)) {
+      if (!fs.existsSync(path.join(cwd, 'package.json'))) {
         error('Not an AgentForge project directory.');
         info('Run this command from inside an AgentForge project.');
         process.exit(1);
       }
 
-      // Check for Convex deployment
-      let convexUrl = process.env.CONVEX_URL;
-      if (!convexUrl) {
-        const envPath = path.join(cwd, '.env.local');
-        if (fs.existsSync(envPath)) {
-          const envContent = fs.readFileSync(envPath, 'utf-8');
-          const match = envContent.match(/CONVEX_URL=(.+)/);
-          if (match) convexUrl = match[1].trim();
-        }
-      }
+      loadProjectEnv(cwd);
+      const projectConfig = await loadProjectConfig(cwd);
 
+      const convexUrl = process.env.CONVEX_URL ?? projectConfig?.daemon?.dbUrl;
       if (!convexUrl) {
         error('CONVEX_URL not found. Make sure you have run: npx convex dev');
         process.exit(1);
       }
 
-      info(`Connected to Convex: ${convexUrl}`);
+  const runtime = await import('@agentforge-ai/runtime');
+  const core = await import('@agentforge-ai/core');
+  const client = await createClient();
+  const runtimeDataClient = {
+    query: (functionName: string, args: Record<string, unknown>) => client.query(functionName as never, args as never),
+    mutation: (functionName: string, args: Record<string, unknown>) => client.mutation(functionName as never, args as never),
+  };
+  const agents = await fetchAgents(client, requestedAgents);
+  const workspace = await createRuntimeWorkspace(core.createWorkspace, projectConfig?.workspace, cwd, opts.dev);
+  const workspaceSkillTools = workspace
+    ? await core.loadExecutableSkillTools(resolveWorkspaceSkillsBasePath(cwd))
+    : undefined;
 
-      // Fetch agents from Convex
-      const client = await createClient();
+      const enabledChannels = getEnabledChannels(opts, projectConfig);
+      runtime.validateEnv({ channels: enabledChannels });
 
-      let agents: any[] = [];
-      try {
-        const result = await safeCall(
-          () => client.query('agents:list' as any, {}),
-          'Failed to fetch agents from Convex'
-        );
-        agents = (result as any[]) || [];
-      } catch (err) {
-        error(`Failed to fetch agents: ${err instanceof Error ? err.message : String(err)}`);
-        process.exit(1);
-      }
+      const adminKey = process.env.CONVEX_DEPLOY_KEY ?? process.env.CONVEX_ADMIN_KEY;
+      const daemon = new runtime.AgentForgeDaemon({
+        deploymentUrl: convexUrl,
+        adminAuthToken: adminKey,
+        defaultModel: projectConfig?.daemon?.defaultModel,
+        agentLoader: async (id: string) => {
+          const agentConfig = await safeCall(
+            () => client.query('agents:get' as never, { id } as never),
+            `Failed to fetch agent '${id}' from Convex`,
+          ) as any;
 
-      // Filter agents if specified
-      if (agentsFilter.length > 0) {
-        agents = agents.filter((a: any) => agentsFilter.includes(a.id));
-        if (agents.length === 0) {
-          error(`No agents found matching: ${agentsFilter.join(', ')}`);
-          process.exit(1);
-        }
-      }
-
-      if (agents.length === 0) {
-        error('No agents found in Convex.');
-        info('Create an agent first: agentforge agents create');
-        process.exit(1);
-      }
-
-      success(`Loaded ${agents.length} agent config(s): ${agents.map((a: any) => a.name).join(', ')}`);
-
-      // Lazy-load runtime to avoid top-level jsdom/node require issues
-      try {
-        const runtime = await import('@agentforge-ai/runtime');
-        _createStandardAgent = runtime.createStandardAgent;
-        _initStorage = runtime.initStorage;
-      } catch (err) {
-        error(`Failed to load @agentforge-ai/runtime: ${err instanceof Error ? err.message : String(err)}`);
-        info('Make sure @agentforge-ai/runtime is installed: pnpm add @agentforge-ai/runtime');
-        process.exit(1);
-      }
-
-      // Load .env.local for provider API keys
-      const envLocalPath = path.join(cwd, '.env.local');
-      if (fs.existsSync(envLocalPath)) {
-        const envContent = fs.readFileSync(envLocalPath, 'utf-8');
-        for (const line of envContent.split('\n')) {
-          const trimmed = line.trim();
-          if (!trimmed || trimmed.startsWith('#')) continue;
-          const eqIdx = trimmed.indexOf('=');
-          if (eqIdx > 0) {
-            const key = trimmed.slice(0, eqIdx).trim();
-            const val = trimmed.slice(eqIdx + 1).trim();
-            if (!process.env[key]) process.env[key] = val;
+          if (!agentConfig) {
+            return null;
           }
-        }
-      }
 
-      // Initialize Convex storage for agent memory (if admin key available)
-      const adminKey = process.env.CONVEX_DEPLOY_KEY;
-      if (convexUrl && adminKey) {
-        try {
-          _initStorage(convexUrl, adminKey);
-          if (opts.dev) info('Convex memory storage initialized.');
-        } catch (_) { /* memory will be disabled */ }
-      }
-
-      // Create real Mastra Agent instances from Convex records
-      const mastraAgents: any[] = [];
-      for (const agentConfig of agents) {
-        try {
-          // Mastra uses provider/model format (slash separator)
-          const modelStr = agentConfig.provider && agentConfig.model
-            ? `${agentConfig.provider}/${agentConfig.model}`
-            : agentConfig.model || 'openai/gpt-4o-mini';
-          const agent = _createStandardAgent({
+          return {
             id: agentConfig.id ?? agentConfig._id,
             name: agentConfig.name ?? 'Agent',
+            description: agentConfig.description,
             instructions: agentConfig.instructions ?? 'You are a helpful assistant.',
-            model: modelStr,
-            disableMemory: !adminKey, // disable memory if no admin key
-          });
-          // Attach metadata from Convex record for /api/agents
-          (agent as any).id = agentConfig.id ?? agentConfig._id;
-          (agent as any).model = modelStr;
-          mastraAgents.push(agent);
-          if (opts.dev) info(`  Agent "${agentConfig.name}" → ${modelStr}`);
-        } catch (err) {
-          error(`Failed to create agent "${agentConfig.name}": ${err instanceof Error ? err.message : String(err)}`);
-        }
-      }
+            model: buildModelString(agentConfig, projectConfig?.daemon?.defaultModel),
+            tools: workspaceSkillTools,
+            workingMemoryTemplate: agentConfig.workingMemoryTemplate,
+            disableMemory: !adminKey,
+            workspace,
+          };
+        },
+      });
+      const agentDefinitions = agents.map((agentConfig: any) => ({
+        id: agentConfig.id ?? agentConfig._id,
+        name: agentConfig.name ?? 'Agent',
+        description: agentConfig.description,
+        instructions: agentConfig.instructions ?? 'You are a helpful assistant.',
+        model: buildModelString(agentConfig, projectConfig?.daemon?.defaultModel),
+        tools: workspaceSkillTools,
+        workingMemoryTemplate: agentConfig.workingMemoryTemplate,
+        disableMemory: !adminKey,
+        workspace,
+      }));
 
-      if (mastraAgents.length === 0) {
-        error('No agents could be instantiated. Check your API keys in .env.local');
-        process.exit(1);
-      }
+      await daemon.loadAgents(agentDefinitions);
+      daemon.setWorkflowExecutor(createDaemonWorkflowExecutor(client, daemon));
 
-      success(`${mastraAgents.length} agent(s) ready.`);
-
-      // Check if port is already in use
-      const portInUse = await isPortInUse(port);
-      if (portInUse) {
-        error(`Port ${port} is already in use.`);
-        info('Another process may be running. Use --port to use a different port.');
-        process.exit(1);
-      }
-
-      // Collect shutdown callbacks for all started channels
-      const shutdownFns: Array<() => Promise<void>> = [];
-
-      // Start HTTP channel with daemon
       if (!opts.noHttp) {
-        info(`Starting HTTP channel on port ${port}...`);
-
-        const httpModulePath = resolve(__dirname, './lib/http-channel.js');
-
-        try {
-          const { startHttpChannel } = await import(httpModulePath);
-          const agentConfigs = agents.map((a: any) => ({
-            id: a.id ?? a._id,
-            provider: a.provider ?? 'openai',
-            model: a.model ?? 'gpt-4o-mini',
-          }));
-          const close = await startHttpChannel(port, mastraAgents, convexUrl, opts.dev, agentConfigs);
-          shutdownFns.push(close);
-        } catch (err) {
-          error(`Failed to start HTTP channel: ${err instanceof Error ? err.message : String(err)}`);
-          if (!opts.dev) process.exit(1);
+        const configuredPort = projectConfig?.channels?.http?.port ?? port;
+        if (await isPortInUse(configuredPort)) {
+          error(`Port ${configuredPort} is already in use.`);
+          info('Another process may be running. Use --port to use a different port.');
+          process.exit(1);
         }
+
+        daemon.addChannel(new runtime.HttpChannel({
+          port: configuredPort,
+          apiKey: process.env.AGENTFORGE_API_KEY,
+          dataClient: runtimeDataClient,
+        }));
       }
 
-      // Start Discord channel if requested
-      if (opts.discord) {
-        const discordToken = process.env.DISCORD_BOT_TOKEN;
-        if (!discordToken) {
+      if (opts.discord || projectConfig?.channels?.discord?.enabled) {
+        const token = process.env.DISCORD_BOT_TOKEN;
+        if (!token) {
           error('DISCORD_BOT_TOKEN not set. Set it in .env.local');
           process.exit(1);
         }
-        info('Discord channel not yet implemented.');
+
+        daemon.addChannel(new runtime.DiscordChannel(token, {
+          defaultAgentId: projectConfig?.channels?.discord?.defaultAgentId ?? agentDefinitions[0]!.id,
+          autoChannels: projectConfig?.channels?.discord?.autoChannels,
+          teamChannel: projectConfig?.channels?.discord?.teamChannel,
+          editIntervalMs: projectConfig?.channels?.discord?.editIntervalMs,
+        }));
       }
 
-      // Start Telegram channel if requested
-      if (opts.telegram) {
-        const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-        if (!telegramToken) {
+      if (opts.telegram || projectConfig?.channels?.telegram?.enabled) {
+        const token = process.env.TELEGRAM_BOT_TOKEN;
+        if (!token) {
           error('TELEGRAM_BOT_TOKEN not set. Set it in .env.local');
           process.exit(1);
         }
-        info('Telegram channel not yet implemented.');
+
+        daemon.addChannel(new runtime.TelegramChannel(token, {
+          defaultAgentId: projectConfig?.channels?.telegram?.defaultAgentId ?? agentDefinitions[0]!.id,
+          allowedChatIds: projectConfig?.channels?.telegram?.allowedChatIds,
+          editIntervalMs: projectConfig?.channels?.telegram?.editIntervalMs,
+        }));
       }
 
+      await daemon.start();
+
+      success(`Loaded ${agentDefinitions.length} agent config(s): ${agentDefinitions.map((agent) => agent.name).join(', ')}`);
       success('AgentForge daemon started!');
-      dim(`  HTTP: http://localhost:${port}`);
+      if (!opts.noHttp) {
+        dim(`  HTTP: http://localhost:${projectConfig?.channels?.http?.port ?? port}`);
+      }
       dim('  Press Ctrl+C to stop');
       console.log();
 
-      // Wait for shutdown signal, then close all channels gracefully
       await keepAlive();
-      await Promise.allSettled(shutdownFns.map((fn) => fn()));
+      await daemon.stop();
     });
 }
 
-/**
- * Check if a port is in use
- */
+async function fetchAgents(client: Awaited<ReturnType<typeof createClient>>, requestedAgents: string[]) {
+  let agents = await safeCall(
+    () => client.query('agents:list' as never, {} as never),
+    'Failed to fetch agents from Convex',
+  ) as any[];
+
+  if (requestedAgents.length > 0) {
+    agents = agents.filter((agent) => requestedAgents.includes(agent.id));
+    if (agents.length === 0) {
+      error(`No agents found matching: ${requestedAgents.join(', ')}`);
+      process.exit(1);
+    }
+  }
+
+  if (agents.length === 0) {
+    error('No agents found in Convex.');
+    info('Create an agent first: agentforge agents create');
+    process.exit(1);
+  }
+
+  return agents;
+}
+
+async function createRuntimeWorkspace(
+  createWorkspace: typeof import('@agentforge-ai/core').createWorkspace,
+  workspaceConfig: AgentForgeProjectConfig['workspace'] | undefined,
+  cwd: string,
+  verbose: boolean,
+) {
+  if (!workspaceConfig) {
+    return undefined;
+  }
+
+  const skillsBasePath = resolveWorkspaceSkillsBasePath(cwd);
+  const workspace = createWorkspace({
+    storage: 'local',
+    name: 'agentforge-workspace',
+    basePath: path.resolve(cwd, workspaceConfig.basePath ?? './workspace'),
+    skillsBasePath,
+    skillsPath: workspaceConfig.skills ?? ['/skills'],
+    bm25: workspaceConfig.search ?? true,
+    autoIndexPaths: workspaceConfig.autoIndexPaths ?? workspaceConfig.skills ?? ['/skills'],
+  });
+
+  await workspace.init();
+  if (verbose) {
+    info(`Workspace initialized at ${path.relative(cwd, workspaceConfig.basePath ?? './workspace') || '.'}`);
+    info(`Workspace skills loaded from ${path.relative(cwd, skillsBasePath) || '.'}`);
+  }
+  return workspace;
+}
+
+function getEnabledChannels(
+  opts: { noHttp?: boolean; discord?: boolean; telegram?: boolean },
+  config: AgentForgeProjectConfig | null,
+) {
+  const channels: string[] = [];
+  if (!opts.noHttp) channels.push('http');
+  if (opts.discord || config?.channels?.discord?.enabled) channels.push('discord');
+  if (opts.telegram || config?.channels?.telegram?.enabled) channels.push('telegram');
+  return channels;
+}
+
+function buildModelString(agentConfig: any, defaultModel?: string): string {
+  const normalizeOpenAIModel = (modelId: string) => {
+    if (modelId === 'gpt-5-chat') return 'gpt-5-chat-latest';
+    if (modelId === 'gpt-5.1-chat') return 'gpt-5.1-chat-latest';
+    if (modelId === 'gpt-5.2-chat') return 'gpt-5.2-chat-latest';
+    if (modelId === 'gpt-5.3-chat') return 'gpt-5.3-chat-latest';
+    return modelId;
+  };
+
+  if (
+    agentConfig.provider === 'openrouter' &&
+    agentConfig.model &&
+    String(agentConfig.model).includes('/') &&
+    !String(agentConfig.model).startsWith('openrouter/')
+  ) {
+    return `openrouter/${agentConfig.model}`;
+  }
+
+  if (agentConfig.provider && agentConfig.model && !String(agentConfig.model).includes('/')) {
+    const modelId = agentConfig.provider === 'openai'
+      ? normalizeOpenAIModel(String(agentConfig.model))
+      : String(agentConfig.model);
+    return `${agentConfig.provider}/${modelId}`;
+  }
+
+  const directModel = agentConfig.provider === 'openai' && typeof agentConfig.model === 'string'
+    ? `openai/${normalizeOpenAIModel(String(agentConfig.model).replace(/^openai\//, ''))}`
+    : agentConfig.model;
+
+  return directModel ?? defaultModel ?? 'moonshotai/kimi-k2.5';
+}
+
 async function isPortInUse(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = net.createServer();
 
     server.once('error', (err: NodeJS.ErrnoException) => {
-      // EADDRINUSE = port taken; EACCES = permission denied — both mean unusable
       resolve(err.code === 'EADDRINUSE' || err.code === 'EACCES');
     });
 
@@ -247,9 +271,6 @@ async function isPortInUse(port: number): Promise<boolean> {
   });
 }
 
-/**
- * Keep the process alive until SIGINT or SIGTERM.
- */
 async function keepAlive(): Promise<void> {
   return new Promise((resolve) => {
     const shutdown = () => {

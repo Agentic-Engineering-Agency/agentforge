@@ -21,9 +21,6 @@ export const executeTask = internalAction({
       return { success: false, error: `Agent ${args.agentId} not found` };
     }
 
-    const provider = (agent as any).provider || "openai";
-    const modelId = (agent as any).model || "gpt-4o-mini";
-
     try {
       // NOTE: LLM execution moved to runtime daemon (SPEC-020).
       // Store the task as a message; daemon processes it asynchronously.

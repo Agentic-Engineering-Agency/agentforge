@@ -136,9 +136,9 @@ export function registerStatusCommand(program: Command) {
         console.log(`  ${colors.cyan}# Option 1: Recreate the project${colors.reset}`);
         console.log(`  agentforge create my-project`);
         console.log();
-        console.log(`  ${colors.cyan}# Option 2: Clone the dashboard from the repo${colors.reset}`);
+        console.log(`  ${colors.cyan}# Option 2: Copy the canonical dashboard template${colors.reset}`);
         console.log(`  git clone https://github.com/Agentic-Engineering-Agency/agentforge /tmp/af`);
-        console.log(`  cp -r /tmp/af/packages/web ./dashboard`);
+        console.log(`  cp -r /tmp/af/packages/cli/templates/default/dashboard ./dashboard`);
         console.log(`  cd dashboard && pnpm install`);
         console.log();
         return;

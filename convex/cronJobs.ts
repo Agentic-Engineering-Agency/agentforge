@@ -354,7 +354,7 @@ export const executeDueJobs = internalMutation({
         await ctx.db.patch(job._id, { nextRun });
 
         // Schedule the actual job execution immediately
-        ctx.scheduler.runAfter(0, internal.cronJobs.executeJob, {
+        await ctx.scheduler.runAfter(0, internal.cronJobs.executeJob, {
           jobId: job._id,
           runId,
         });
@@ -462,7 +462,17 @@ export const triggerNow = mutation({
   handler: async (ctx, args) => {
     const job = await ctx.db.get(args.id);
     if (!job) throw new Error("Cron job not found");
-    await ctx.db.patch(args.id, { lastRun: Date.now(), nextRun: Date.now() });
-    return { success: true, jobId: args.id };
+
+    const runId = await ctx.runMutation(api.cronJobs.recordRun, {
+      cronJobId: args.id,
+      status: "running",
+    });
+
+    await ctx.scheduler.runAfter(0, internal.cronJobs.executeJob, {
+      jobId: args.id,
+      runId,
+    });
+
+    return { success: true, jobId: args.id, runId };
   },
 });

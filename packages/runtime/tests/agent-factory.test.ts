@@ -2,17 +2,25 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createStandardAgent } from '../src/agent/create-standard-agent.js';
 import { initStorage } from '../src/agent/shared.js';
 import { Agent } from '@mastra/core/agent';
+import { Workspace, LocalFilesystem } from '@mastra/core/workspace';
 import { AgentForgeDaemon } from '../src/daemon/daemon.js';
 
 describe('Agent Factory', () => {
+  const originalOpenAiKey = process.env.OPENAI_API_KEY;
+
   beforeEach(() => {
     // Initialize storage with mock credentials for tests
     initStorage('https://mock.convex.cloud', 'mock-admin-key');
-    // Set required API key for embedding model
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'test-key';
+    // The default embedding model is OpenAI-based, so tests need a placeholder key.
+    process.env.OPENAI_API_KEY = 'test-key';
   });
 
   afterEach(() => {
+    if (originalOpenAiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiKey;
+    }
     // Clean up
     vi.clearAllMocks();
   });
@@ -107,6 +115,18 @@ describe('Agent Factory', () => {
       });
       expect(agent).toBeDefined();
     });
+
+    it('attaches a Mastra workspace when provided', () => {
+      const workspace = new Workspace({
+        filesystem: new LocalFilesystem({ basePath: '/tmp/agentforge-runtime-workspace' }),
+      });
+      expect(() => createStandardAgent({
+        id: 'test-agent-workspace',
+        name: 'Test Agent Workspace',
+        instructions: 'Use the workspace.',
+        workspace,
+      })).not.toThrow();
+    });
   });
 
   describe('AgentForgeDaemon', () => {
@@ -154,6 +174,26 @@ describe('Agent Factory', () => {
       expect(result.description).toBe(def.description);
       expect(result.instructions).toBe(def.instructions);
       expect(result.model).toBe(def.model);
+    });
+
+    it('executes workflow runs through the configured executor', async () => {
+      const daemon = new AgentForgeDaemon({
+        deploymentUrl: 'https://mock.convex.cloud',
+        adminAuthToken: 'mock-admin-key',
+      });
+      const executor = vi.fn().mockResolvedValue({
+        runId: 'run-123',
+        status: 'success' as const,
+        output: 'done',
+      });
+
+      daemon.setWorkflowExecutor(executor);
+      await expect(daemon.executeWorkflowRun('run-123')).resolves.toEqual({
+        runId: 'run-123',
+        status: 'success',
+        output: 'done',
+      });
+      expect(executor).toHaveBeenCalledWith('run-123');
     });
   });
 });

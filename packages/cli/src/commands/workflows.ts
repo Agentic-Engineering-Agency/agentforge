@@ -1,5 +1,6 @@
 import { Command } from 'commander';
 import { createClient, safeCall } from '../lib/convex-client.js';
+import { loadProjectConfig } from '../lib/project-config.js';
 import { header, success, error, info, dim, colors } from '../lib/display.js';
 
 export function registerWorkflowsCommand(program: Command) {
@@ -154,21 +155,31 @@ export function registerWorkflowsCommand(program: Command) {
         );
 
         success(`Created run: ${colors.cyan}${runId}${colors.reset}`);
-        dim('Executing workflow steps...');
+        dim('Dispatching workflow to the daemon...');
 
-        // Execute the workflow (via action)
-        const result = await safeCall(
-          () => client.action('workflowEngine:executeWorkflow' as any, { runId }),
-          'Failed to execute workflow'
-        );
+        const projectConfig = await loadProjectConfig(process.cwd());
+        const port = projectConfig?.channels?.http?.port ?? 3001;
 
-        if (result && (result as any).success) {
-          success('Workflow completed successfully');
-          if ((result as any).output) {
-            console.log();
-            dim('Output:');
-            console.log(`  ${(result as any).output}`);
-          }
+        const response = await fetch(`http://localhost:${port}/v1/workflows/runs/${runId}/execute`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(process.env.AGENTFORGE_API_KEY
+              ? { Authorization: `Bearer ${process.env.AGENTFORGE_API_KEY}` }
+              : {}),
+          },
+        });
+
+        const result = await response.json() as { status?: string; output?: string; error?: string };
+        if (!response.ok || result.status !== 'success') {
+          throw new Error(result.error ?? `Daemon returned HTTP ${response.status}`);
+        }
+
+        success('Workflow completed successfully');
+        if (result.output) {
+          console.log();
+          dim('Output:');
+          console.log(`  ${result.output}`);
         }
       } catch (err: unknown) {
         const errMsg = err instanceof Error ? err.message : String(err);
