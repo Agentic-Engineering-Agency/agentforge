@@ -6,14 +6,21 @@ import { Workspace, LocalFilesystem } from '@mastra/core/workspace';
 import { AgentForgeDaemon } from '../src/daemon/daemon.js';
 
 describe('Agent Factory', () => {
+  const originalOpenAiKey = process.env.OPENAI_API_KEY;
+
   beforeEach(() => {
     // Initialize storage with mock credentials for tests
     initStorage('https://mock.convex.cloud', 'mock-admin-key');
-    // Set required API key for embedding model
-    process.env.GOOGLE_GENERATIVE_AI_API_KEY = 'test-key';
+    // The default embedding model is OpenAI-based, so tests need a placeholder key.
+    process.env.OPENAI_API_KEY = 'test-key';
   });
 
   afterEach(() => {
+    if (originalOpenAiKey === undefined) {
+      delete process.env.OPENAI_API_KEY;
+    } else {
+      process.env.OPENAI_API_KEY = originalOpenAiKey;
+    }
     // Clean up
     vi.clearAllMocks();
   });

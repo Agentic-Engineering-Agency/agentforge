@@ -6759,6 +6759,10 @@ function registerStartCommand(program2) {
     const runtime = await import("@agentforge-ai/runtime");
     const core = await import("@agentforge-ai/core");
     const client = await createClient();
+    const runtimeDataClient = {
+      query: (functionName, args) => client.query(functionName, args),
+      mutation: (functionName, args) => client.mutation(functionName, args)
+    };
     const agents = await fetchAgents(client, requestedAgents);
     const workspace = await createRuntimeWorkspace(core.createWorkspace, projectConfig?.workspace, cwd, opts.dev);
     const workspaceSkillTools = workspace ? await core.loadExecutableSkillTools(resolveWorkspaceSkillsBasePath(cwd)) : void 0;
@@ -6813,7 +6817,7 @@ function registerStartCommand(program2) {
       daemon.addChannel(new runtime.HttpChannel({
         port: configuredPort,
         apiKey: process.env.AGENTFORGE_API_KEY,
-        dataClient: client
+        dataClient: runtimeDataClient
       }));
     }
     if (opts.discord || projectConfig?.channels?.discord?.enabled) {
