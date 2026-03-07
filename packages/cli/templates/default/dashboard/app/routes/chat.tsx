@@ -90,6 +90,7 @@ function ChatPageComponent() {
 
   // ── Convex mutations & actions ──────────────────────────────
   const createThread = useMutation(api.threads.createThread);
+  const censorSecretMessage = useMutation(api.vault.censorMessage);
   // NOTE: chat.sendMessage removed in v0.12 — messages are sent via runtime daemon HTTP API.
 
   // ── Local state ─────────────────────────────────────────────
@@ -185,10 +186,24 @@ function ChatPageComponent() {
 
     let messageText = text;
     if (secrets && secrets.length > 0) {
-      messageText = censorText(text, secrets);
-      setVaultNotification(
-        `${secrets.length} secret${secrets.length > 1 ? "s" : ""} detected and redacted.`
-      );
+      try {
+        const result = await censorSecretMessage({
+          text,
+          userId: 'local',
+          autoStore: true,
+        });
+        messageText = result.censoredText;
+        setVaultNotification(
+          result.secretsDetected
+            ? `${result.storedSecrets.length} secret${result.storedSecrets.length > 1 ? "s" : ""} detected, redacted, and stored in the Secure Vault.`
+            : `${secrets.length} secret${secrets.length > 1 ? "s" : ""} detected and redacted.`
+        );
+      } catch {
+        messageText = censorText(text, secrets);
+        setVaultNotification(
+          `${secrets.length} secret${secrets.length > 1 ? "s" : ""} detected and redacted. Secure Vault storage failed.`
+        );
+      }
       setTimeout(() => setVaultNotification(null), 5000);
     }
 
