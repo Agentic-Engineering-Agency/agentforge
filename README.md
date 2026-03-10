@@ -149,6 +149,7 @@ These requirements are enforced by the current command implementations:
 - [Advanced Tools](docs/advanced-tools.md)
 - [Multi-Agent Collaboration](docs/multi-agent-collaboration.md)
 - [Deployment Guide](docs/deployment-guide.md)
+- [Releasing](docs/releasing.md)
 - [Technical Reference](docs/TECH-REFERENCE.md)
 - [FinForge Demo](docs/finforge-demo.md)
 - [Competitive Positioning](docs/competitive-positioning.md)
