@@ -511,9 +511,9 @@ function getConvexUrl() {
   );
 }
 async function createClient() {
-  const { ConvexHttpClient } = await import("convex/browser");
+  const { ConvexHttpClient: ConvexHttpClient2 } = await import("convex/browser");
   const url = getConvexUrl();
-  return new ConvexHttpClient(url);
+  return new ConvexHttpClient2(url);
 }
 async function safeCall(fn, errorMessage) {
   try {
@@ -4106,7 +4106,7 @@ function registerStatusCommand(program2) {
     checks["LLM Provider"] = storedKeysCount > 0 || providerStatus !== "Not configured" ? `\u2714 ${providerStatus}` : "\u2716 Not configured";
     details(checks);
   });
-  program2.command("dashboard").description("Launch the web dashboard").option("-p, --port <port>", "Port for the dashboard", "3000").option("-d, --dir <path>", "Project directory (defaults to current directory)").option("--install", "Install dashboard dependencies before starting").action(async (opts) => {
+  program2.command("dashboard").description("Launch the web dashboard").option("-p, --port <port>", "Port for the dashboard", "3000").option("--daemon-port <port>", "Port for the AgentForge daemon", process.env.AGENTFORGE_DAEMON_PORT || "3001").option("--daemon-url <url>", "Base URL for the AgentForge daemon").option("-d, --dir <path>", "Project directory (defaults to current directory)").option("--install", "Install dashboard dependencies before starting").action(async (opts) => {
     let cwd;
     try {
       cwd = opts.dir ? path9.resolve(opts.dir) : process.cwd();
@@ -4177,12 +4177,23 @@ function registerStatusCommand(program2) {
       console.log();
     }
     const envPath = path9.join(cwd, ".env.local");
+    let daemonUrl = opts.daemonUrl;
     if (fs8.existsSync(envPath)) {
       const envContent = fs8.readFileSync(envPath, "utf-8");
       const convexUrlMatch = envContent.match(/CONVEX_URL=(.+)/);
+      const daemonUrlMatch = envContent.match(/AGENTFORGE_DAEMON_URL=(.+)/);
+      const daemonPortMatch = envContent.match(/AGENTFORGE_DAEMON_PORT=(.+)/);
+      if (!daemonUrl && daemonUrlMatch) {
+        daemonUrl = daemonUrlMatch[1].trim();
+      }
+      if (!daemonUrl && daemonPortMatch) {
+        daemonUrl = `http://localhost:${daemonPortMatch[1].trim()}`;
+      }
       if (convexUrlMatch) {
         const dashEnvPath = path9.join(dashDir, ".env.local");
+        const resolvedDaemonUrl = daemonUrl || `http://localhost:${opts.daemonPort}`;
         const dashEnvContent = `VITE_CONVEX_URL=${convexUrlMatch[1].trim()}
+VITE_AGENTFORGE_DAEMON_URL=${resolvedDaemonUrl}
 `;
         fs8.writeFileSync(dashEnvPath, dashEnvContent);
       }
@@ -4423,18 +4434,18 @@ Configuration saved to AGENTFORGE_STORAGE environment variable.`);
     try {
       info(`Creating ${storage} workspace...`);
       const workspace = createWorkspace(config);
-      const fs17 = workspace.filesystem ?? workspace;
+      const fs18 = workspace.filesystem ?? workspace;
       const testPath = `agentforge-test-${Date.now()}.txt`;
       const testContent = `AgentForge workspace test at ${(/* @__PURE__ */ new Date()).toISOString()}`;
       info(`Writing test file: ${testPath}`);
-      await fs17.write(testPath, testContent);
+      await fs18.write(testPath, testContent);
       info(`Reading test file...`);
-      const readContent = await fs17.read(testPath);
+      const readContent = await fs18.read(testPath);
       if (readContent === testContent) {
         success(`\u2713 Storage test passed!`);
         info(`Written and read: "${testContent}"`);
         info(`Cleaning up test file...`);
-        await fs17.delete(testPath);
+        await fs18.delete(testPath);
         success(`\u2713 Test file deleted`);
         info(`
 \u2713 ${storage.toUpperCase()} storage is working correctly.`);
@@ -6566,11 +6577,220 @@ function formatReport(report) {
 }
 
 // src/commands/start.ts
-import fs15 from "fs-extra";
-import path16 from "path";
+import fs16 from "fs-extra";
+import path18 from "path";
 import net from "net";
 import { fileURLToPath as fileURLToPath3 } from "url";
 import { dirname, resolve as resolve2 } from "path";
+
+// src/lib/provider-keys.ts
+import { ConvexHttpClient } from "convex/browser";
+import path16 from "path";
+import { pathToFileURL } from "url";
+function getProviderEnvKeys(provider) {
+  if (provider === "google") {
+    return ["GOOGLE_GENERATIVE_AI_API_KEY", "GOOGLE_API_KEY"];
+  }
+  return [getProviderEnvKey(provider)];
+}
+function getProviderEnvKey(provider) {
+  const map = {
+    openai: "OPENAI_API_KEY",
+    anthropic: "ANTHROPIC_API_KEY",
+    google: "GOOGLE_GENERATIVE_AI_API_KEY",
+    xai: "XAI_API_KEY",
+    openrouter: "OPENROUTER_API_KEY",
+    groq: "GROQ_API_KEY",
+    together: "TOGETHER_API_KEY",
+    perplexity: "PERPLEXITY_API_KEY",
+    mistral: "MISTRAL_API_KEY",
+    deepseek: "DEEPSEEK_API_KEY",
+    elevenlabs: "ELEVENLABS_API_KEY",
+    cohere: "COHERE_API_KEY"
+  };
+  return map[provider] ?? `${provider.toUpperCase()}_API_KEY`;
+}
+function getAgentProviders(agentConfigs) {
+  const providers = /* @__PURE__ */ new Set();
+  for (const config of agentConfigs) {
+    if (config.provider) {
+      providers.add(config.provider);
+      continue;
+    }
+    if (config.model?.includes("/")) {
+      providers.add(config.model.split("/")[0]);
+    }
+  }
+  return [...providers];
+}
+async function loadProjectInternalApi(projectDir) {
+  const apiPath = path16.join(projectDir, "convex", "_generated", "api.js");
+  const moduleUrl = pathToFileURL(apiPath).href;
+  const apiModule = await import(moduleUrl);
+  return apiModule.internal;
+}
+function createAdminClient(convexUrl, deployKey) {
+  const client = new ConvexHttpClient(convexUrl);
+  client.setAdminAuth(deployKey);
+  return client;
+}
+async function hydrateProviderEnvVars(options) {
+  const result = {
+    hydrated: [],
+    missing: [],
+    skipped: []
+  };
+  if (options.providers.length === 0) {
+    return result;
+  }
+  const client = options.client ?? createAdminClient(options.convexUrl, options.deployKey);
+  const internalApi = options.internalApi ?? await loadProjectInternalApi(options.projectDir);
+  for (const provider of options.providers) {
+    const envKeys = getProviderEnvKeys(provider);
+    if (envKeys.some((envKey) => process.env[envKey])) {
+      result.skipped.push(provider);
+      continue;
+    }
+    const decrypted = await client.action(
+      internalApi.apiKeys.getDecryptedForProvider,
+      { provider }
+    );
+    if (decrypted?.apiKey) {
+      for (const envKey of envKeys) {
+        process.env[envKey] = decrypted.apiKey;
+      }
+      result.hydrated.push(provider);
+    } else {
+      result.missing.push(provider);
+    }
+  }
+  return result;
+}
+
+// src/lib/convex-auth.ts
+import fs15 from "fs-extra";
+import path17 from "path";
+var CONVEX_API_BASE = "https://api.convex.dev/api";
+function readEnvVarFromFile(filePath, key) {
+  if (!fs15.existsSync(filePath)) return null;
+  const content = fs15.readFileSync(filePath, "utf-8");
+  const pattern = new RegExp(`^${key}\\s*=\\s*(.+)$`, "m");
+  const match = content.match(pattern);
+  if (!match) return null;
+  return match[1].split("#")[0].trim().replace(/^['"]|['"]$/g, "");
+}
+function loadProjectConvexConfig(projectDir) {
+  const envFiles = [".env.local", ".env", ".env.production"];
+  let convexDeployment = null;
+  let convexUrl = null;
+  for (const envFile of envFiles) {
+    const envPath = path17.join(projectDir, envFile);
+    convexDeployment ??= readEnvVarFromFile(envPath, "CONVEX_DEPLOYMENT");
+    convexUrl ??= readEnvVarFromFile(envPath, "CONVEX_URL");
+  }
+  let deploymentName = null;
+  let deploymentType = null;
+  if (convexDeployment) {
+    const normalized = convexDeployment.trim();
+    const separator = normalized.indexOf(":");
+    if (separator >= 0) {
+      deploymentType = normalized.slice(0, separator);
+      deploymentName = normalized.slice(separator + 1);
+    } else {
+      deploymentName = normalized;
+    }
+  }
+  if (!deploymentName && convexUrl) {
+    try {
+      const url = new URL(convexUrl);
+      deploymentName = url.hostname.split(".")[0] || null;
+    } catch {
+      deploymentName = null;
+    }
+  }
+  return { deploymentName, deploymentType, convexUrl };
+}
+function readConvexAccessToken(homeDir = process.env.HOME ?? "") {
+  if (!homeDir) return null;
+  const configPath = path17.join(homeDir, ".convex", "config.json");
+  if (!fs15.existsSync(configPath)) return null;
+  try {
+    const parsed = JSON.parse(fs15.readFileSync(configPath, "utf-8"));
+    return parsed.accessToken ?? null;
+  } catch {
+    return null;
+  }
+}
+async function fetchJson(input, init, fetchImpl) {
+  const response = await fetchImpl(input, init);
+  if (!response.ok) {
+    throw new Error(`Convex auth request failed: ${response.status} ${response.statusText}`);
+  }
+  return await response.json();
+}
+async function resolveConvexAdminAuthFromLogin(options) {
+  const { projectDir, fetchImpl = fetch, homeDir } = options;
+  const { deploymentName, deploymentType } = loadProjectConvexConfig(projectDir);
+  if (!deploymentName) {
+    return null;
+  }
+  const accessToken = readConvexAccessToken(homeDir);
+  if (!accessToken) {
+    return null;
+  }
+  const headers = {
+    Authorization: `Bearer ${accessToken}`,
+    "Content-Type": "application/json"
+  };
+  if (deploymentType === "prod") {
+    const authorized2 = await fetchJson(
+      `${CONVEX_API_BASE}/deployment/authorize_prod`,
+      {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ deploymentName })
+      },
+      fetchImpl
+    );
+    return {
+      adminKey: authorized2.adminKey,
+      deploymentName: authorized2.deploymentName,
+      deploymentType: "prod",
+      url: authorized2.url
+    };
+  }
+  const teamAndProject = await fetchJson(
+    `${CONVEX_API_BASE}/deployment/${deploymentName}/team_and_project`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      }
+    },
+    fetchImpl
+  );
+  const authorized = await fetchJson(
+    `${CONVEX_API_BASE}/deployment/provision_and_authorize`,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        teamSlug: teamAndProject.team,
+        projectSlug: teamAndProject.project,
+        deploymentType: "dev"
+      })
+    },
+    fetchImpl
+  );
+  return {
+    adminKey: authorized.adminKey,
+    deploymentName: authorized.deploymentName,
+    deploymentType: deploymentType ?? "dev",
+    url: authorized.url
+  };
+}
+
+// src/commands/start.ts
 var _createStandardAgent;
 var _initStorage;
 var __filename3 = fileURLToPath3(import.meta.url);
@@ -6581,17 +6801,17 @@ function registerStartCommand(program2) {
     const cwd = process.cwd();
     const port = parseInt(opts.port, 10);
     const agentsFilter = opts.agent;
-    const pkgPath = path16.join(cwd, "package.json");
-    if (!fs15.existsSync(pkgPath)) {
+    const pkgPath = path18.join(cwd, "package.json");
+    if (!fs16.existsSync(pkgPath)) {
       error("Not an AgentForge project directory.");
       info("Run this command from inside an AgentForge project.");
       process.exit(1);
     }
     let convexUrl = process.env.CONVEX_URL;
     if (!convexUrl) {
-      const envPath = path16.join(cwd, ".env.local");
-      if (fs15.existsSync(envPath)) {
-        const envContent = fs15.readFileSync(envPath, "utf-8");
+      const envPath = path18.join(cwd, ".env.local");
+      if (fs16.existsSync(envPath)) {
+        const envContent = fs16.readFileSync(envPath, "utf-8");
         const match = envContent.match(/CONVEX_URL=(.+)/);
         if (match) convexUrl = match[1].trim();
       }
@@ -6635,9 +6855,9 @@ function registerStartCommand(program2) {
       info("Make sure @agentforge-ai/runtime is installed: pnpm add @agentforge-ai/runtime");
       process.exit(1);
     }
-    const envLocalPath = path16.join(cwd, ".env.local");
-    if (fs15.existsSync(envLocalPath)) {
-      const envContent = fs15.readFileSync(envLocalPath, "utf-8");
+    const envLocalPath = path18.join(cwd, ".env.local");
+    if (fs16.existsSync(envLocalPath)) {
+      const envContent = fs16.readFileSync(envLocalPath, "utf-8");
       for (const line of envContent.split("\n")) {
         const trimmed = line.trim();
         if (!trimmed || trimmed.startsWith("#")) continue;
@@ -6649,13 +6869,64 @@ function registerStartCommand(program2) {
         }
       }
     }
-    const adminKey = process.env.CONVEX_DEPLOY_KEY;
+    if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GOOGLE_API_KEY;
+    }
+    let adminKey = process.env.CONVEX_DEPLOY_KEY;
+    if (!adminKey && convexUrl) {
+      try {
+        const resolvedAuth = await resolveConvexAdminAuthFromLogin({ projectDir: cwd });
+        if (resolvedAuth?.adminKey) {
+          adminKey = resolvedAuth.adminKey;
+          process.env.CONVEX_DEPLOY_KEY = resolvedAuth.adminKey;
+          if (opts.dev) info(`Resolved Convex admin auth from local Convex login for ${resolvedAuth.deploymentName}.`);
+        }
+      } catch (err) {
+        if (opts.dev) {
+          info(`Convex admin auth auto-resolution failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    }
     if (convexUrl && adminKey) {
       try {
         _initStorage(convexUrl, adminKey);
         if (opts.dev) info("Convex memory storage initialized.");
       } catch (_) {
       }
+    }
+    const providers = getAgentProviders(
+      agents.map((agentConfig) => ({
+        provider: agentConfig.provider,
+        model: agentConfig.model
+      }))
+    );
+    if (convexUrl && adminKey && providers.length > 0) {
+      try {
+        const hydration = await hydrateProviderEnvVars({
+          convexUrl,
+          deployKey: adminKey,
+          projectDir: cwd,
+          providers
+        });
+        if (opts.dev && hydration.hydrated.length > 0) {
+          info(`Loaded stored API keys for: ${hydration.hydrated.join(", ")}`);
+        }
+      } catch (err) {
+        if (opts.dev) {
+          info(`Stored API key hydration failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+    } else {
+      const missingEnvProviders = providers.filter((provider) => !process.env[getProviderEnvKey(provider)]);
+      if (missingEnvProviders.length > 0) {
+        info(
+          `Missing local env vars for provider keys: ${missingEnvProviders.join(", ")}. Stored Convex API keys require either CONVEX_DEPLOY_KEY or a logged-in local Convex CLI session.`
+        );
+      }
+    }
+    const memoryEnabled = Boolean(adminKey && process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+    if (adminKey && !memoryEnabled && opts.dev) {
+      info("Disabling agent memory because GOOGLE_GENERATIVE_AI_API_KEY is not configured for the shared embedding/observer models.");
     }
     const mastraAgents = [];
     for (const agentConfig of agents) {
@@ -6666,8 +6937,7 @@ function registerStartCommand(program2) {
           name: agentConfig.name ?? "Agent",
           instructions: agentConfig.instructions ?? "You are a helpful assistant.",
           model: modelStr,
-          disableMemory: !adminKey
-          // disable memory if no admin key
+          disableMemory: !memoryEnabled
         });
         agent.id = agentConfig.id ?? agentConfig._id;
         agent.model = modelStr;
@@ -6756,18 +7026,18 @@ async function keepAlive() {
 }
 
 // src/commands/deploy.ts
-import fs16 from "fs-extra";
-import path17 from "path";
+import fs17 from "fs-extra";
+import path19 from "path";
 import { execSync as execSync4 } from "child_process";
 async function deployProject(options) {
   const projectDir = process.cwd();
-  const pkgPath = path17.join(projectDir, "package.json");
-  if (!await fs16.pathExists(pkgPath)) {
+  const pkgPath = path19.join(projectDir, "package.json");
+  if (!await fs17.pathExists(pkgPath)) {
     console.error("Error: No package.json found. Are you in an AgentForge project directory?");
     process.exit(1);
   }
-  const convexDir = path17.join(projectDir, "convex");
-  if (!await fs16.pathExists(convexDir)) {
+  const convexDir = path19.join(projectDir, "convex");
+  if (!await fs17.pathExists(convexDir)) {
     console.error("Error: No convex/ directory found. Are you in an AgentForge project directory?");
     process.exit(1);
   }
@@ -6787,8 +7057,8 @@ async function deployProject(options) {
     }
     return;
   }
-  const envPath = path17.resolve(projectDir, options.env);
-  const envExists = await fs16.pathExists(envPath);
+  const envPath = path19.resolve(projectDir, options.env);
+  const envExists = await fs17.pathExists(envPath);
   if (options.dryRun) {
     console.log("\n\u{1F50D} Dry run \u2014 previewing deployment plan:\n");
     console.log(`  Project directory: ${projectDir}`);

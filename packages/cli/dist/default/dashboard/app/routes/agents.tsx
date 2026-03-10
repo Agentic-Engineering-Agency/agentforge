@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Bot, Plus, Edit, Trash2, Search, X, Star, Loader2 } from 'lucide-react';
+import { getDaemonUrl } from '../lib/runtime';
 
 export const Route = createFileRoute('/agents')({ component: AgentsPage });
 
@@ -31,7 +32,7 @@ const FALLBACK_MODELS: Record<string, string[]> = {
 function useProviderModels(provider: string) {
   const [models, setModels] = useState<string[]>(FALLBACK_MODELS[provider] ?? []);
   const [loading, setLoading] = useState(false);
-  const daemonUrl: string = (window as any).__AGENTFORGE_DAEMON_URL__ ?? 'http://localhost:3001';
+  const daemonUrl = getDaemonUrl();
 
   useEffect(() => {
     if (!provider) return;

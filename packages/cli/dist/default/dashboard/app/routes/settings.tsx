@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Key, Plus, Trash2, Check, X, Shield, AlertTriangle, ExternalLink, Settings } from 'lucide-react';
+import { getDaemonUrl } from '../lib/runtime';
 
 export const Route = createFileRoute('/settings')({ component: SettingsPage });
 
@@ -85,7 +86,7 @@ function SettingsPage() {
   const removeVaultSecret = useMutation(api.vault.remove);
   // All available models fetched from daemon /api/models (flat list for default-model picker)
   const [allModels, setAllModels] = useState<{ provider: string; model: string }[]>([]);
-  const daemonUrl: string = (window as any).__AGENTFORGE_DAEMON_URL__ ?? 'http://localhost:3001';
+  const daemonUrl = getDaemonUrl();
 
   const [tab, setTab] = useState<'providers' | 'vault' | 'general'>('providers');
   const [addingProvider, setAddingProvider] = useState<typeof AI_PROVIDERS[0] | null>(null);

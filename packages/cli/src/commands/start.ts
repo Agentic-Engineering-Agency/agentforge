@@ -13,6 +13,12 @@ import path from 'node:path';
 import net from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
+import {
+  getAgentProviders,
+  getProviderEnvKey,
+  hydrateProviderEnvVars,
+} from '../lib/provider-keys.js';
+import { resolveConvexAdminAuthFromLogin } from '../lib/convex-auth.js';
 // Lazy-loaded to avoid pulling in heavy runtime deps (jsdom, etc.) at CLI startup
 let _createStandardAgent: typeof import('@agentforge-ai/runtime').createStandardAgent;
 let _initStorage: typeof import('@agentforge-ai/runtime').initStorage;
@@ -122,13 +128,70 @@ export function registerStartCommand(program: Command) {
         }
       }
 
+      if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+        process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GOOGLE_API_KEY;
+      }
+
+      let adminKey = process.env.CONVEX_DEPLOY_KEY;
+      if (!adminKey && convexUrl) {
+        try {
+          const resolvedAuth = await resolveConvexAdminAuthFromLogin({ projectDir: cwd });
+          if (resolvedAuth?.adminKey) {
+            adminKey = resolvedAuth.adminKey;
+            process.env.CONVEX_DEPLOY_KEY = resolvedAuth.adminKey;
+            if (opts.dev) info(`Resolved Convex admin auth from local Convex login for ${resolvedAuth.deploymentName}.`);
+          }
+        } catch (err) {
+          if (opts.dev) {
+            info(`Convex admin auth auto-resolution failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      }
+
       // Initialize Convex storage for agent memory (if admin key available)
-      const adminKey = process.env.CONVEX_DEPLOY_KEY;
       if (convexUrl && adminKey) {
         try {
           _initStorage(convexUrl, adminKey);
           if (opts.dev) info('Convex memory storage initialized.');
         } catch (_) { /* memory will be disabled */ }
+      }
+
+      const providers = getAgentProviders(
+        agents.map((agentConfig: any) => ({
+          provider: agentConfig.provider,
+          model: agentConfig.model,
+        })),
+      );
+
+      if (convexUrl && adminKey && providers.length > 0) {
+        try {
+          const hydration = await hydrateProviderEnvVars({
+            convexUrl,
+            deployKey: adminKey,
+            projectDir: cwd,
+            providers,
+          });
+          if (opts.dev && hydration.hydrated.length > 0) {
+            info(`Loaded stored API keys for: ${hydration.hydrated.join(', ')}`);
+          }
+        } catch (err) {
+          if (opts.dev) {
+            info(`Stored API key hydration failed: ${err instanceof Error ? err.message : String(err)}`);
+          }
+        }
+      } else {
+        const missingEnvProviders = providers.filter((provider) => !process.env[getProviderEnvKey(provider)]);
+        if (missingEnvProviders.length > 0) {
+          info(
+            `Missing local env vars for provider keys: ${missingEnvProviders.join(', ')}. ` +
+            'Stored Convex API keys require either CONVEX_DEPLOY_KEY or a logged-in local Convex CLI session.',
+          );
+        }
+      }
+
+      const memoryEnabled = Boolean(adminKey && process.env.GOOGLE_GENERATIVE_AI_API_KEY);
+      if (adminKey && !memoryEnabled && opts.dev) {
+        info('Disabling agent memory because GOOGLE_GENERATIVE_AI_API_KEY is not configured for the shared embedding/observer models.');
       }
 
       // Create real Mastra Agent instances from Convex records
@@ -144,7 +207,7 @@ export function registerStartCommand(program: Command) {
             name: agentConfig.name ?? 'Agent',
             instructions: agentConfig.instructions ?? 'You are a helpful assistant.',
             model: modelStr,
-            disableMemory: !adminKey, // disable memory if no admin key
+            disableMemory: !memoryEnabled,
           });
           // Attach metadata from Convex record for /api/agents
           (agent as any).id = agentConfig.id ?? agentConfig._id;

@@ -89,6 +89,8 @@ export function registerStatusCommand(program: Command) {
     .command('dashboard')
     .description('Launch the web dashboard')
     .option('-p, --port <port>', 'Port for the dashboard', '3000')
+    .option('--daemon-port <port>', 'Port for the AgentForge daemon', process.env.AGENTFORGE_DAEMON_PORT || '3001')
+    .option('--daemon-url <url>', 'Base URL for the AgentForge daemon')
     .option('-d, --dir <path>', 'Project directory (defaults to current directory)')
     .option('--install', 'Install dashboard dependencies before starting')
     .action(async (opts) => {
@@ -172,12 +174,24 @@ export function registerStatusCommand(program: Command) {
 
       // Read the Convex URL from .env.local and inject it into the dashboard
       const envPath = path.join(cwd, '.env.local');
+      let daemonUrl = opts.daemonUrl as string | undefined;
       if (fs.existsSync(envPath)) {
         const envContent = fs.readFileSync(envPath, 'utf-8');
         const convexUrlMatch = envContent.match(/CONVEX_URL=(.+)/);
+        const daemonUrlMatch = envContent.match(/AGENTFORGE_DAEMON_URL=(.+)/);
+        const daemonPortMatch = envContent.match(/AGENTFORGE_DAEMON_PORT=(.+)/);
+        if (!daemonUrl && daemonUrlMatch) {
+          daemonUrl = daemonUrlMatch[1].trim();
+        }
+        if (!daemonUrl && daemonPortMatch) {
+          daemonUrl = `http://localhost:${daemonPortMatch[1].trim()}`;
+        }
         if (convexUrlMatch) {
           const dashEnvPath = path.join(dashDir, '.env.local');
-          const dashEnvContent = `VITE_CONVEX_URL=${convexUrlMatch[1].trim()}\n`;
+          const resolvedDaemonUrl = daemonUrl || `http://localhost:${opts.daemonPort}`;
+          const dashEnvContent =
+            `VITE_CONVEX_URL=${convexUrlMatch[1].trim()}\n` +
+            `VITE_AGENTFORGE_DAEMON_URL=${resolvedDaemonUrl}\n`;
           fs.writeFileSync(dashEnvPath, dashEnvContent);
         }
       }

@@ -1,240 +1,172 @@
 # AgentForge
 
-**The open-source, self-hosted autonomous agent framework.**
+AgentForge is a TypeScript monorepo for building and operating self-hosted AI agents with a persistent Mastra runtime, a Convex-backed data layer, and CLI-driven local workflows.
 
-> The self-hosted Manus alternative for teams that own their data.
+The repository currently contains the framework packages, the local Convex app used during development, the default project template scaffolded by the CLI, and example projects.
 
-AgentForge is a TypeScript framework for building, deploying, and managing autonomous AI agents. It combines [Mastra](https://mastra.ai) for LLM orchestration, [Convex](https://convex.dev) for real-time state, and [Cloudflare](https://cloudflare.com) for edge deployment — giving you a production-ready agent platform you fully control.
+## Monorepo Layout
 
----
-
-## Features
-
-| Category | What you get |
-|----------|-------------|
-| **Multi-Provider LLM** | OpenAI, Anthropic, Google, Mistral, DeepSeek, xAI, Cohere, OpenRouter — hot-swap models with `"provider/model"` format |
-| **Channel Adapters** | Telegram, WhatsApp Cloud API, Slack (Bolt.js), Discord — unified message format across all platforms |
-| **Memory & State** | Convex real-time backend with conversation threads, memory consolidation, and project-scoped multi-tenancy |
-| **Skills Marketplace** | Install, create, and publish agent skills — 6 built-in skills included |
-| **MCP Integration** | Connect external MCP servers, dynamic tool loading at runtime, stdio/HTTP/SSE transports |
-| **Agent-to-Agent (A2A)** | Delegate tasks between agents with the A2A protocol — registry, streaming, whitelist security |
-| **Voice** | Text-to-speech (ElevenLabs) and speech-to-text (Whisper) as Mastra-compatible tools |
-| **Browser Automation** | Playwright-based browser tool — navigate, click, type, screenshot, evaluate JS |
-| **Git Tools** | Built-in git tool for repo inspection, branching, commits, diffs, and stash management |
-| **Sandbox Execution** | Docker container isolation (E2B-compatible) for secure code execution |
-| **Observability** | Usage tracking, cost estimation, structured logging, heartbeat monitoring |
-| **Web Dashboard** | React + Vite dashboard with real-time chat, agent management, and run monitoring |
-
----
-
-## Quick Start
-
-### 1. Install
-
-```bash
-npm install -g @agentforge-ai/cli
+```text
+agentforge/
+├── packages/
+│   ├── cli/                   # agentforge CLI and project scaffolding
+│   ├── runtime/               # Persistent Mastra daemon and channel adapters
+│   ├── core/                  # Shared agent, sandbox, MCP, channel, A2A, voice primitives
+│   └── web/                   # Standalone dashboard package
+├── convex/                    # Local Convex app copy used in repo development
+├── templates/default/         # Synced default project template assets
+├── examples/finforge/         # Example project
+├── docs/                      # Project documentation
+└── tests/e2e/                 # End-to-end test suite
 ```
 
-### 2. Create a project
+The scaffolded project template source of truth lives under [`packages/cli/templates/default/`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/templates/default), and Convex template changes must stay synced with the generated copies.
+
+## What Exists Today
+
+- `@agentforge-ai/cli`: scaffolds projects and provides the operational commands used during local development.
+- `@agentforge-ai/runtime`: exports the daemon, agent factory, Convex-backed memory helpers, and HTTP/Discord/Telegram channel adapters.
+- `@agentforge-ai/core`: exports shared agent primitives, sandboxing, MCP, channels, skills, A2A, research, workflows, voice, and browser tooling.
+- `@agentforge-ai/web`: a package-specific dashboard app.
+- `convex/`: the repo’s local Convex backend copy, which mirrors the default template’s Convex layer.
+
+## CLI Surface
+
+The CLI currently registers these command families from [`packages/cli/src/index.ts`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/src/index.ts):
+
+- Project lifecycle: `create`, `run`, `deploy`, `upgrade`
+- Runtime: `start`
+- Cloud/auth/config: `models`, `workspace`, `tokens`, `config`, `vault`, `keys`, `status`
+- Agent and chat: `agents`, `chat`, `sessions`, `threads`
+- Skills and orchestration: `skills`, `skill`, `cron`, `workflows`, `research`
+- Data and files: `files`, `projects`
+- Integrations: `mcp`, `channel-telegram`, `channel-whatsapp`, `channel-slack`, `channel-discord`
+- Execution: `sandbox`
+- Dashboard and logs: `dashboard`, `logs` are registered from the status command module
+
+Important behavior:
+
+- `agentforge run` starts the local Convex development environment.
+- `agentforge start` boots the persistent daemon and HTTP channel.
+- `agentforge chat` talks to the daemon over the local HTTP/SSE endpoint.
+- `agentforge dashboard` starts a dashboard if it can find one in the project or repo layout.
+
+## Development
+
+### Prerequisites
+
+- Node.js `>=18`
+- pnpm `>=8`
+
+### Install Repo Dependencies
 
 ```bash
-agentforge create my-agent
-cd my-agent
+pnpm install
 ```
 
-### 3. Configure
+### Standard Contributor Commands
+
+Run these from the repo root while working on framework code:
 
 ```bash
+pnpm build
+pnpm test
+pnpm typecheck
+pnpm lint
+```
+
+When editing template-backed Convex files, sync the copies afterward:
+
+```bash
+pnpm sync-templates
+```
+
+### Working On The Template Dashboard
+
+`packages/cli/templates/default/dashboard` is not a workspace package. If you need to run or edit that dashboard directly, install its dependencies inside that directory:
+
+```bash
+cd packages/cli/templates/default/dashboard
+pnpm install
+pnpm dev
+```
+
+### Start A Local AgentForge Project For Contribution
+
+Use this flow when you need to validate the framework against a real project scaffold.
+
+1. Build the workspace packages from the repo root.
+2. Create a fresh project or use an existing scaffold.
+3. Configure the project `.env.local`.
+4. Start Convex.
+5. Start the AgentForge daemon.
+6. Chat with an agent and optionally start the dashboard.
+
+Example flow:
+
+```bash
+# From the repo root
+pnpm build
+
+# Create a local test project
+node packages/cli/dist/index.js create /tmp/agentforge-dev
+cd /tmp/agentforge-dev
+
+# Configure environment
 cp .env.example .env.local
-```
 
-Add your LLM provider key (any supported provider works):
-
-```env
-OPENROUTER_API_KEY=sk-or-...
-# Or use a direct provider:
-# OPENAI_API_KEY=sk-...
-# ANTHROPIC_API_KEY=sk-ant-...
-# CONVEX_URL is set automatically by npx convex dev
-```
-
-### 4. Initialize Convex backend
-
-```bash
+# Terminal 1: start Convex first
 npx convex dev
-```
 
-Then set the required encryption secret (one-time, per deployment):
+# Terminal 2: start the daemon
+agentforge start
 
-```bash
-npx convex env set AGENTFORGE_KEY_SALT "$(openssl rand -base64 32)"
-```
+# Terminal 3: talk to the daemon
+agentforge chat
 
-> ⚠️ **Required:** Without `AGENTFORGE_KEY_SALT`, creating API keys will fail with a cryptographic error. Run this command for every Convex deployment (dev, staging, production).
-
-### 5. Start development
-
-```bash
-# Terminal 1: Start AgentForge runtime
-agentforge run
-
-# Terminal 2: Launch the web dashboard (localhost:3000)
+# Optional: start the dashboard if the project has a dashboard directory
 agentforge dashboard
 ```
 
-### 6. Chat with your agent
+### Environment And Startup Requirements
 
-```bash
-agentforge chat
-```
+These requirements are enforced by the current command implementations:
 
----
+- `CONVEX_URL` must exist before `agentforge start`. The command reads it from the environment or from `.env.local`, and it expects `npx convex dev` to have been run first.
+- At least one agent must exist in Convex before `agentforge start` can boot usable runtime agents.
+- `agentforge chat` requires the daemon to already be running on the local HTTP port.
+- `agentforge dashboard` only starts if it can find a dashboard directory in the project, repo layout, or installed package path.
 
-## Architecture
+## Documentation Map
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                      Channel Adapters                       │
-│  Telegram │ WhatsApp │ Slack │ Discord │ Web Dashboard │ CLI│
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Agent Pipeline                            │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌────────────┐  │
-│  │  Skills  │  │MCP Tools │  │  Voice   │  │  Browser   │  │
-│  └──────────┘  └──────────┘  └──────────┘  └────────────┘  │
-│                                                             │
-│  ┌──────────────────────┐  ┌────────────────────────────┐   │
-│  │   Mastra (LLM Router)│  │  A2A (Agent Delegation)    │   │
-│  │   8+ LLM providers   │  │  Registry + Streaming      │   │
-│  └──────────────────────┘  └────────────────────────────┘   │
-└─────────────────────────┬───────────────────────────────────┘
-                          │
-                          ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     Convex Backend                          │
-│  Real-time DB │ Serverless Functions │ Subscriptions        │
-│  20+ tables   │ Multi-tenancy        │ File storage (R2)    │
-└─────────────────────────────────────────────────────────────┘
-```
+- [Getting Started](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/getting-started.md)
+- [CLI Reference](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/CLI.md)
+- [Architecture](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/architecture.md)
+- [Channels](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/channels.md)
+- [Skills](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/skills.md)
+- [MCP](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/mcp.md)
+- [A2A](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/a2a.md)
+- [Advanced Tools](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/advanced-tools.md)
+- [Multi-Agent Collaboration](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/multi-agent-collaboration.md)
+- [Deployment Guide](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/deployment-guide.md)
+- [Technical Reference](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/TECH-REFERENCE.md)
+- [FinForge Demo](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/finforge-demo.md)
+- [Competitive Positioning](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/competitive-positioning.md)
 
----
+## Package Docs
 
-## Packages
+- [CLI package README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/README.md)
+- [Runtime package README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/runtime/README.md)
+- [Core package README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/core/README.md)
+- [Web package README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/web/README.md)
+- [Default template README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/templates/default/README.md)
 
-| Package | Version | Description |
-|---------|---------|-------------|
-| [`@agentforge-ai/core`](packages/core) | v0.11.21 | Core agent primitives, sandbox integration, MCP server, and channel adapters |
-| [`@agentforge-ai/cli`](packages/cli) | v0.11.21 | CLI tool for creating, running, and managing AgentForge projects |
+## Testing
 
----
-
-## CLI Commands
-
-### Project Lifecycle
-```bash
-agentforge create <name>     # Scaffold a new project
-agentforge run               # Start dev server (Convex backend)
-agentforge deploy            # Deploy to production
-agentforge upgrade           # Sync convex/ with latest template
-```
-
-### Cloud & Authentication
-```bash
-agentforge workspace         # Workspace management
-agentforge models            # LLM model management
-agentforge tokens            # Usage token tracking
-```
-
-### Agent Management
-```bash
-agentforge agents list       # List all agents
-agentforge agents create     # Create agent interactively
-agentforge agents show       # Show agent details
-agentforge agents delete     # Delete an agent
-agentforge chat              # Interactive agent chat
-```
-
-### Skills & Tools
-```bash
-agentforge skills            # Skills marketplace (search, publish, featured)
-agentforge skill             # Manage individual skills
-agentforge cron              # Cron job management
-agentforge workflows         # Workflow orchestration
-```
-
-### Data & State
-```bash
-agentforge sessions          # Chat session management
-agentforge threads           # Conversation thread management
-agentforge files             # File and folder management
-agentforge projects          # Project/workspace management
-```
-
-### Integrations
-```bash
-agentforge mcp               # MCP server connections
-agentforge channel-telegram  # Telegram bot setup
-agentforge channel-whatsapp  # WhatsApp Cloud API setup
-agentforge channel-slack     # Slack Bolt.js setup
-agentforge channel-discord   # Discord bot setup
-```
-
-### Tools & Utilities
-```bash
-agentforge sandbox           # E2B sandbox management
-agentforge browser           # Browser automation
-agentforge voice             # Voice (TTS/STT) tools
-agentforge research          # Research orchestrator
-```
-
-### Configuration
-```bash
-agentforge config            # Project configuration
-agentforge vault             # Secrets management
-agentforge keys              # LLM provider API keys
-agentforge status            # System health check
-```
-
-See [docs/CLI.md](docs/CLI.md) for the full reference.
-
----
-
-## Documentation
-
-- [Getting Started](docs/getting-started.md) — Install to first agent in 5 minutes
-- [Architecture](docs/architecture.md) — System design deep-dive
-- [Channels](docs/channels.md) — Telegram, WhatsApp, Slack, Discord setup
-- [Skills](docs/skills.md) — Skills system and marketplace
-- [MCP Integration](docs/mcp.md) — Model Context Protocol guide
-- [A2A Protocol](docs/a2a.md) — Agent-to-Agent communication
-- [CLI Reference](docs/CLI.md) — All CLI commands
-- [Deployment](docs/deployment-guide.md) — Production deployment guide
-- [Why AgentForge?](docs/competitive-positioning.md) — How we compare
-
----
-
-## Built With
-
-- **[TypeScript](https://www.typescriptlang.org/)** — Strict ESM, end-to-end type safety
-- **[Mastra](https://mastra.ai)** — AI engine with multi-provider model routing
-- **[Convex](https://convex.dev)** — Real-time serverless backend
-- **[Cloudflare](https://cloudflare.com)** — Edge deployment (Pages + R2)
-- **[Playwright](https://playwright.dev)** — Browser automation
-- **[Zod](https://zod.dev)** — Runtime schema validation
-- **[Vitest](https://vitest.dev)** — Test runner
-
----
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
-
-This project uses [SpecSafe](https://specsafe.dev) spec-driven development — all features start as specs before code is written.
-
----
+- Unit and package tests: `pnpm test`
+- Type checking: `pnpm typecheck`
+- End-to-end suite: see [`tests/e2e/README.md`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/tests/e2e/README.md)
 
 ## License
 
-[Apache 2.0](LICENSE) — Use it, modify it, deploy it. Your data stays yours.
+[Apache 2.0](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/LICENSE)
