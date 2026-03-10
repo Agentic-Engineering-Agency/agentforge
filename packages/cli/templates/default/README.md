@@ -98,9 +98,9 @@ pnpm dashboard:build  # build dashboard from ./dashboard
 
 ## Key Files
 
-- [`agentforge.config.ts`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/templates/default/agentforge.config.ts):
+- `agentforge.config.ts`:
   daemon defaults, channels, failover, workspace, sandbox, and starter agent config
-- [`src/agent.ts`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/templates/default/src/agent.ts):
+- `src/agent.ts`:
   local workspace initialization and default `Agent` instance
 
 ## Notes For Template Contributors
@@ -110,6 +110,6 @@ pnpm dashboard:build  # build dashboard from ./dashboard
 
 ## Learn More
 
-- [Root README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/README.md)
-- [CLI package README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/README.md)
-- [Technical Reference](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/TECH-REFERENCE.md)
+- Repository root `README.md`
+- Repository `packages/cli/README.md`
+- Repository `docs/TECH-REFERENCE.md`

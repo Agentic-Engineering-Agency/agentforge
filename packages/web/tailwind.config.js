@@ -38,14 +38,6 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // ─── Agentic Engineering Brand Tokens ───────────────────────────
-        // Use these for direct Tailwind classes: bg-ae-primary, text-ae-accent, etc.
-        ae: {
-          primary:  "#1F337A",   // Primary Blue — trust, logos, headings
-          accent:   "#6A81C7",   // Accent Blue — interactive, highlights
-          bone:     "#F5F5F5",   // Bone — backgrounds, white space
-          charcoal: "#1A1A1A",   // Charcoal — body text
-        },
       },
       borderRadius: {
         lg: "var(--radius)",

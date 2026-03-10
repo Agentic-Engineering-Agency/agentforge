@@ -4,7 +4,7 @@ Persistent Mastra runtime package for AgentForge.
 
 ## What This Package Exports
 
-The public surface is defined in [`src/index.ts`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/runtime/src/index.ts).
+The public surface is defined in `src/index.ts`.
 
 ### Agent Factory And Memory
 

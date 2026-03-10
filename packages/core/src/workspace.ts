@@ -51,6 +51,8 @@ export interface WorkspaceConfig {
  * This custom implementation will be removed in a future version.
  */
 export class AgentForgeWorkspace {
+  private indexedDocuments = new Map<string, string>();
+
   constructor(private provider: WorkspaceProvider) {}
 
   /** Self-reference for backward compatibility with tests expecting workspace.workspace */
@@ -61,6 +63,36 @@ export class AgentForgeWorkspace {
   list(prefix?: string) { return this.provider.list(prefix); }
   delete(path: string) { return this.provider.delete(path); }
   exists(path: string) { return this.provider.exists(path); }
+
+  /**
+   * Backward-compatible in-memory indexing for legacy tests and callers.
+   * The Mastra-native workspace owns real search; this keeps the deprecated wrapper usable
+   * until the remaining contract tests migrate.
+   */
+  async index(id: string, content: string): Promise<void> {
+    this.indexedDocuments.set(id, content);
+  }
+
+  async search(query: string): Promise<Array<{ id: string; content: string; score: number }>> {
+    const terms = query
+      .toLowerCase()
+      .split(/\s+/)
+      .map((term) => term.trim())
+      .filter(Boolean);
+
+    if (terms.length === 0) {
+      return [];
+    }
+
+    return Array.from(this.indexedDocuments.entries())
+      .map(([id, content]) => {
+        const haystack = content.toLowerCase();
+        const score = terms.reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
+        return { id, content, score };
+      })
+      .filter((result) => result.score > 0)
+      .sort((a, b) => b.score - a.score);
+  }
 
   /** Factory: local filesystem workspace (default path: ./workspace) */
   static local(config?: { basePath?: string }): AgentForgeWorkspace {

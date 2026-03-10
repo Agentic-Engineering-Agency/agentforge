@@ -1,4 +1,5 @@
 import fs from 'fs-extra';
+import os from 'node:os';
 import path from 'node:path';
 
 const CONVEX_API_BASE = 'https://api.convex.dev/api';
@@ -62,7 +63,7 @@ function loadProjectConvexConfig(projectDir: string): ProjectConvexConfig {
   return { deploymentName, deploymentType, convexUrl };
 }
 
-function readConvexAccessToken(homeDir = process.env.HOME ?? ''): string | null {
+function readConvexAccessToken(homeDir = os.homedir()): string | null {
   if (!homeDir) return null;
   const configPath = path.join(homeDir, '.convex', 'config.json');
   if (!fs.existsSync(configPath)) return null;

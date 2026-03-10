@@ -4,27 +4,27 @@ This directory contains the project-level documentation that supplements the pac
 
 ## Core Guides
 
-- [Guide](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/guide.md)
-- [Getting Started](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/getting-started.md)
-- [CLI Reference](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/CLI.md)
-- [Technical Reference](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/TECH-REFERENCE.md)
+- [Guide](./guide.md)
+- [Getting Started](./getting-started.md)
+- [CLI Reference](./CLI.md)
+- [Technical Reference](./TECH-REFERENCE.md)
 
 ## Architecture And Platform
 
-- [Architecture](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/architecture.md)
-- [Channels](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/channels.md)
-- [MCP](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/mcp.md)
-- [A2A](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/a2a.md)
-- [Advanced Tools](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/advanced-tools.md)
-- [Multi-Agent Collaboration](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/multi-agent-collaboration.md)
-- [Design: Project Config](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/DESIGN-PROJECT-CONFIG.md)
-- [Dependency Optimization](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/dependency-optimization.md)
+- [Architecture](./architecture.md)
+- [Channels](./channels.md)
+- [MCP](./mcp.md)
+- [A2A](./a2a.md)
+- [Advanced Tools](./advanced-tools.md)
+- [Multi-Agent Collaboration](./multi-agent-collaboration.md)
+- [Design: Project Config](./DESIGN-PROJECT-CONFIG.md)
+- [Dependency Optimization](./dependency-optimization.md)
 
 ## Skills, Deployment, And Product Docs
 
-- [Skills](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/skills.md)
-- [Deployment Guide](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/deployment-guide.md)
-- [FinForge Demo](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/finforge-demo.md)
-- [Competitive Positioning](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/competitive-positioning.md)
+- [Skills](./skills.md)
+- [Deployment Guide](./deployment-guide.md)
+- [FinForge Demo](./finforge-demo.md)
+- [Competitive Positioning](./competitive-positioning.md)
 
 For package-specific usage, start with the README in the relevant package directory.

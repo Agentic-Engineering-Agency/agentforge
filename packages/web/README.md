@@ -2,7 +2,7 @@
 
 Standalone dashboard package for AgentForge.
 
-This package is separate from the root repo documentation and should be read as package-specific web app documentation. The root architecture and contributor workflow are documented in the repository [`README.md`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/README.md).
+This package is separate from the root repo documentation and should be read as package-specific web app documentation. The root architecture and contributor workflow are documented in the repository root `README.md`.
 
 ## Current Package Role
 
@@ -29,4 +29,4 @@ pnpm --filter @agentforge-ai/web lint
 
 - This package is marked `private` in its package manifest.
 - The root workspace does not expose repo-wide `dev` orchestration for this package.
-- For scaffolded project dashboard behavior, see the template README at [`packages/cli/templates/default/README.md`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/templates/default/README.md).
+- For scaffolded project dashboard behavior, see `packages/cli/templates/default/README.md` in the repository.

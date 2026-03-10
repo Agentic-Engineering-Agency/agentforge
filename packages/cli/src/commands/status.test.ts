@@ -46,4 +46,20 @@ describe('dashboard command', () => {
     expect(dashEnv).toContain('VITE_CONVEX_URL=https://example.convex.cloud');
     expect(dashEnv).toContain('VITE_AGENTFORGE_DAEMON_URL=http://localhost:3010');
   });
+
+  it('parses quoted daemon env values with inline comments', async () => {
+    await fs.writeFile(
+      path.join(tmpDir, '.env.local'),
+      'CONVEX_URL="https://example.convex.cloud" # dev\nAGENTFORGE_DAEMON_URL="http://localhost:3020" # daemon\n',
+    );
+
+    const program = new Command();
+    registerStatusCommand(program);
+
+    await program.parseAsync(['node', 'agentforge', 'dashboard', '--dir', tmpDir]);
+
+    const dashEnv = await fs.readFile(path.join(tmpDir, 'dashboard', '.env.local'), 'utf-8');
+    expect(dashEnv).toContain('VITE_CONVEX_URL=https://example.convex.cloud');
+    expect(dashEnv).toContain('VITE_AGENTFORGE_DAEMON_URL=http://localhost:3020');
+  });
 });

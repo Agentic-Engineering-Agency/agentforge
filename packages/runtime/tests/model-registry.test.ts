@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getModel, getModelsByProvider, getActiveModels, getContextLimit, resolveModel } from '../src/models/registry.js';
+import { getModel, getModelsByProvider, getActiveModels, getContextLimit, normalizeModelId, resolveModel } from '../src/models/registry.js';
 
 describe('Model Registry', () => {
   describe('getModel', () => {
@@ -16,6 +16,13 @@ describe('Model Registry', () => {
     it('returns undefined for unknown model', () => {
       const model = getModel('unknown/model');
       expect(model).toBeUndefined();
+    });
+
+    it('normalizes legacy chat aliases to current OpenAI model names', () => {
+      expect(normalizeModelId('openai/gpt-5.2-chat')).toBe('openai/gpt-5.2-chat-latest');
+      expect(getModel('openai/gpt-5.2-chat')?.id).toBe('openai/gpt-5.2-chat-latest');
+      expect(normalizeModelId('openai/gpt-5.1-chat')).toBe('openai/gpt-5.1-chat-latest');
+      expect(getModel('openai/gpt-5.1-chat')?.id).toBe('openai/gpt-5.1-chat-latest');
     });
   });
 
@@ -64,13 +71,13 @@ describe('Model Registry', () => {
     });
 
     it('returns first valid fallback when primary is unknown', () => {
-      const model = resolveModel('unknown/model', ['anthropic/claude-sonnet-4-6', 'openai/gpt-4o']);
+      const model = resolveModel('unknown/model', ['anthropic/claude-sonnet-4-6', 'openai/gpt-5.1-chat-latest']);
       expect(model.id).toBe('anthropic/claude-sonnet-4-6');
     });
 
     it('skips unknown fallbacks and returns first valid one', () => {
-      const model = resolveModel('unknown/model', ['also/unknown', 'openai/gpt-4o']);
-      expect(model.id).toBe('openai/gpt-4o');
+      const model = resolveModel('unknown/model', ['also/unknown', 'openai/gpt-5.1-codex-mini']);
+      expect(model.id).toBe('openai/gpt-5.1-codex-mini');
     });
 
     it('returns daemon default when all IDs are unknown', () => {
@@ -96,11 +103,14 @@ describe('Model Registry', () => {
 
     it('no deprecated model IDs', () => {
       const models = getActiveModels();
-      const deprecatedIds = ['claude-3-5-haiku-20241022', 'gpt-4-turbo', 'gpt-3.5-turbo'];
+      const deprecatedIds = ['claude-3-5-haiku-20241022', 'gpt-4-turbo', 'gpt-3.5-turbo', 'openai/gpt-4.1-mini', 'openai/gpt-5.1-mini', 'openai/gpt-5.2-chat'];
       const modelIds = models.map(m => m.id);
       deprecatedIds.forEach(deprecated => {
         expect(modelIds).not.toContain(deprecated);
       });
+      expect(modelIds).toContain('openai/gpt-5.1-chat-latest');
+      expect(modelIds).toContain('openai/gpt-5.1-codex-mini');
+      expect(modelIds).toContain('openai/gpt-5.2-chat-latest');
     });
   });
 });

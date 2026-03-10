@@ -4,15 +4,50 @@ import * as crypto from 'node:crypto';
 import type { Agent } from '@mastra/core/agent';
 import type { ChannelAdapter, AgentDefinition } from '../daemon/types.js';
 import { formatSSEChunk } from './shared.js';
+import { getProviderCatalog } from '../models/catalog.js';
+import { getModel } from '../models/registry.js';
 
 interface DaemonAccess {
   listAgents(): AgentDefinition[];
+  listAgentIds(): string[];
   getAgent(id: string): Agent | undefined;
+  getOrLoadAgentDefinition(id: string): Promise<{ agent: Agent; definition: AgentDefinition } | null>;
+  executeWorkflowRun(runId: string): Promise<{ runId: string; status: 'success' | 'failed'; output?: string; error?: string }>;
+}
+
+export interface HttpDataClient {
+  query(functionName: string, args: Record<string, unknown>): Promise<unknown>;
+  mutation(functionName: string, args: Record<string, unknown>): Promise<unknown>;
 }
 
 export interface HttpChannelConfig {
   port?: number;
   apiKey?: string;
+  allowedOrigins?: string[];
+  dataClient?: HttpDataClient;
+}
+
+const DEFAULT_ALLOWED_ORIGINS = [
+  'http://localhost:3000',
+  'http://localhost:4173',
+  'http://localhost:5173',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:4173',
+  'http://127.0.0.1:5173',
+];
+
+const DEFAULT_AGENT_EXECUTION_OPTIONS = {
+  maxSteps: 8,
+  toolChoice: 'auto' as const,
+};
+
+const MAX_ATTACHMENT_TEXT_CHARS = 12_000;
+
+interface ResolvedAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  content?: string;
 }
 
 export class HttpChannel implements ChannelAdapter {
@@ -21,18 +56,39 @@ export class HttpChannel implements ChannelAdapter {
   private server?: unknown;
   private port: number;
   private apiKey?: string;
+  private allowedOrigins: string[];
+  private dataClient?: HttpDataClient;
   private daemon: DaemonAccess | null = null;
 
   constructor(config: HttpChannelConfig = {}) {
     this.port = config.port ?? 3001;
     this.apiKey = config.apiKey ?? process.env.AGENTFORGE_API_KEY;
+    this.allowedOrigins = config.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS;
+    this.dataClient = config.dataClient;
     this.app = new Hono();
     this.setupRoutes();
   }
 
   private setupRoutes(): void {
-    // Auth middleware
     this.app.use('*', async (c, next) => {
+      const origin = c.req.header('Origin');
+      const allowedOrigin = this.resolveOrigin(origin);
+      if (c.req.method === 'OPTIONS') {
+        return new Response(null, {
+          status: 204,
+          headers: this.corsHeaders(allowedOrigin),
+        });
+      }
+
+      await next();
+      const headers = this.corsHeaders(allowedOrigin);
+      for (const [key, value] of Object.entries(headers)) {
+        c.res.headers.set(key, value);
+      }
+    });
+
+    // Auth middleware
+    this.app.use('/v1/*', async (c, next) => {
       const apiKey = this.apiKey;
       if (!apiKey) return next();
 
@@ -59,10 +115,13 @@ export class HttpChannel implements ChannelAdapter {
 
     // Health check
     this.app.get('/health', (c) => {
+      const daemon = this.daemon;
       return c.json({
         status: 'ok',
         version: '0.1.0',
         timestamp: new Date().toISOString(),
+        agents: daemon?.listAgents().length ?? 0,
+        agentIds: daemon?.listAgentIds() ?? [],
       });
     });
 
@@ -97,6 +156,135 @@ export class HttpChannel implements ChannelAdapter {
         object: 'list',
         data: [],
       });
+    });
+
+    this.app.get('/api/models', async (c) => {
+      const providerId = c.req.query('provider');
+      const providers = await getProviderCatalog();
+
+      if (providerId) {
+        const provider = providers.find((entry) => entry.id === providerId);
+        if (!provider) {
+          return c.json({ error: `Unknown provider: ${providerId}` }, 404);
+        }
+        return c.json({
+          providers: [provider],
+          models: provider.models,
+        });
+      }
+
+      return c.json({ providers });
+    });
+
+    this.app.post('/api/chat', async (c) => {
+      const daemon = this.daemon;
+      if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
+      if (!this.dataClient) return c.json({ error: 'Chat persistence is not configured' }, 503);
+
+      const body = await c.req.json();
+      const {
+        agentId,
+        threadId: providedThreadId,
+        message,
+        fileIds = [],
+      } = body as {
+        agentId?: string;
+        threadId?: string;
+        message?: string;
+        fileIds?: string[];
+      };
+
+      if (!agentId || !message?.trim()) {
+        return c.json({ error: 'agentId and message are required' }, 400);
+      }
+
+      const resolvedAgent = await daemon.getOrLoadAgentDefinition(agentId);
+      if (!resolvedAgent) {
+        return c.json({ error: `Agent '${agentId}' not found` }, 404);
+      }
+      const { agent, definition } = resolvedAgent;
+
+      const threadId = await this.resolveThreadId(agentId, definition.name, providedThreadId);
+
+      const existingMessages = await this.dataClient.query('messages:getByThread', { threadId })
+        .catch(() => []) as Array<{ role?: string; content?: string }> | [];
+      const attachments = await this.resolveAttachments(fileIds);
+      const storedUserMessage = this.formatStoredUserMessage(message, attachments);
+      const agentUserMessage = this.formatAgentUserMessage(message, attachments);
+
+      await this.dataClient.mutation('messages:create', {
+        threadId,
+        role: 'user',
+        content: storedUserMessage,
+      });
+
+      const sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      await this.dataClient.mutation('sessions:create', {
+        sessionId,
+        threadId,
+        agentId,
+        channel: 'dashboard',
+      });
+
+      const history: Array<{ role: 'user' | 'assistant' | 'system'; content: string }> = [
+        ...existingMessages
+          .filter((entry) => typeof entry.role === 'string' && typeof entry.content === 'string')
+          .filter((entry) => entry.role === 'user' || entry.role === 'assistant' || entry.role === 'system')
+          .map((entry) => ({
+            role: entry.role as 'user' | 'assistant' | 'system',
+            content: entry.content as string,
+          })),
+        { role: 'user' as const, content: agentUserMessage },
+      ];
+
+      try {
+        const result = await agent.generate(history as any, DEFAULT_AGENT_EXECUTION_OPTIONS);
+        const assistantText = result.text ?? '';
+
+        await this.dataClient.mutation('messages:create', {
+          threadId,
+          role: 'assistant',
+          content: assistantText,
+        });
+
+        const fullModelId = String(definition.model ?? 'moonshotai/kimi-k2.5');
+        const [provider, ...modelParts] = fullModelId.split('/');
+        const model = modelParts.join('/') || fullModelId;
+        const promptTokens = estimateTokens(agentUserMessage);
+        const completionTokens = estimateTokens(assistantText);
+        const cost = estimateCost(fullModelId, promptTokens, completionTokens);
+
+        await this.dataClient.mutation('usage:record', {
+          agentId,
+          sessionId,
+          provider,
+          model,
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          cost,
+        });
+        await this.dataClient.mutation('sessions:updateStatus', {
+          sessionId,
+          status: 'completed',
+        });
+
+        return c.json({
+          threadId,
+          sessionId,
+          message: {
+            role: 'assistant',
+            content: assistantText,
+          },
+        });
+      } catch (error) {
+        const messageText = error instanceof Error ? error.message : 'Unknown chat error';
+        await this.dataClient.mutation('sessions:updateStatus', {
+          sessionId,
+          status: 'error',
+        }).catch(() => undefined);
+        return c.json({ error: messageText }, 500);
+      }
     });
 
     // Chat completions - OpenAI compatible
@@ -135,7 +323,7 @@ export class HttpChannel implements ChannelAdapter {
       if (!stream) {
         // Non-streaming response
         try {
-          const result = await agent.generate([{ role: 'user', content: userMessage }]);
+          const result = await agent.generate([{ role: 'user', content: userMessage }], DEFAULT_AGENT_EXECUTION_OPTIONS);
           return c.json({
             id: `chatcmpl-${Date.now()}`,
             object: 'chat.completion',
@@ -158,7 +346,7 @@ export class HttpChannel implements ChannelAdapter {
       // Streaming response with SSE
       return streamText(c, async (stream) => {
         try {
-          const mastraStream = await agent.stream([{ role: 'user', content: userMessage }]);
+          const mastraStream = await agent.stream([{ role: 'user', content: userMessage }], DEFAULT_AGENT_EXECUTION_OPTIONS);
           await stream.write(formatSSEChunk('', null));
 
           for await (const chunk of mastraStream.fullStream) {
@@ -175,6 +363,29 @@ export class HttpChannel implements ChannelAdapter {
           await stream.write('data: [DONE]\n\n');
         }
       });
+    });
+
+    this.app.post('/v1/workflows/runs/:id/execute', async (c) => {
+      const daemon = this.daemon;
+      if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
+
+      const runId = c.req.param('id');
+      if (!runId) {
+        return c.json({ error: 'Workflow run ID is required' }, 400);
+      }
+
+      try {
+        const result = await daemon.executeWorkflowRun(runId);
+        const status = result.status === 'success' ? 200 : 500;
+        return c.json(result, status);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown workflow execution error';
+        return c.json({
+          runId,
+          status: 'failed',
+          error: message,
+        }, 500);
+      }
     });
   }
 
@@ -214,4 +425,174 @@ export class HttpChannel implements ChannelAdapter {
       this.server = undefined;
     }
   }
+
+  private resolveOrigin(origin: string | undefined): string {
+    if (origin && this.allowedOrigins.includes(origin)) {
+      return origin;
+    }
+    return this.allowedOrigins[0] ?? '*';
+  }
+
+  private async resolveThreadId(agentId: string, agentName: string, providedThreadId?: string): Promise<string> {
+    if (!this.dataClient) {
+      throw new Error('Chat persistence is not configured');
+    }
+
+    if (providedThreadId && isProbablyConvexId(providedThreadId)) {
+      const existingThread = await this.dataClient.query('threads:getThread', { threadId: providedThreadId })
+        .catch(() => null);
+      if (existingThread) {
+        return providedThreadId;
+      }
+    }
+
+    return String(await this.dataClient.mutation('threads:createThread', {
+      agentId,
+      name: `Chat with ${agentName}`,
+    }));
+  }
+
+  private corsHeaders(origin: string): Record<string, string> {
+    return {
+      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+      'Vary': 'Origin',
+    };
+  }
+
+  private async resolveAttachments(fileIds: string[]): Promise<ResolvedAttachment[]> {
+    if (!this.dataClient || fileIds.length === 0) {
+      return [];
+    }
+
+    const attachments = await Promise.all(fileIds.map(async (fileId) => {
+      const download = await this.dataClient!.query('files:getDownloadUrl', { id: fileId })
+        .catch(() => null) as { url?: string; name?: string; mimeType?: string } | null;
+
+      if (!download?.url) {
+        return {
+          id: fileId,
+          name: fileId,
+          mimeType: 'application/octet-stream',
+        } satisfies ResolvedAttachment;
+      }
+
+      const mimeType = download.mimeType ?? 'application/octet-stream';
+      const content = await fetchAttachmentText(download.url, mimeType);
+      return {
+        id: fileId,
+        name: download.name ?? fileId,
+        mimeType,
+        content: content ?? undefined,
+      } satisfies ResolvedAttachment;
+    }));
+
+    return attachments;
+  }
+
+  private formatStoredUserMessage(message: string, attachments: ResolvedAttachment[]): string {
+    if (attachments.length === 0) {
+      return message;
+    }
+
+    const names = attachments.map((attachment) => attachment.name).join(', ');
+    return `${message}\n\nAttached files: ${names}`;
+  }
+
+  private formatAgentUserMessage(message: string, attachments: ResolvedAttachment[]): string {
+    if (attachments.length === 0) {
+      return message;
+    }
+
+    const attachmentContext = attachments.map((attachment) => {
+      if (attachment.content) {
+        return [
+          `File: ${attachment.name}`,
+          `MIME: ${attachment.mimeType}`,
+          'Content:',
+          attachment.content,
+        ].join('\n');
+      }
+
+      return [
+        `File: ${attachment.name}`,
+        `MIME: ${attachment.mimeType}`,
+        'Content preview unavailable for this attachment.',
+      ].join('\n');
+    }).join('\n\n');
+
+    return `${message}\n\nAttached files:\n${attachmentContext}`;
+  }
+}
+
+function estimateTokens(text: string): number {
+  return Math.max(1, Math.ceil(text.length / 4));
+}
+
+function isProbablyConvexId(value: string): boolean {
+  return /^[a-z0-9]{32}$/i.test(value);
+}
+
+function estimateCost(modelId: string, promptTokens: number, completionTokens: number): number {
+  const model = getModel(modelId);
+  if (!model) {
+    return 0;
+  }
+
+  const promptCost = (promptTokens / 1_000_000) * model.costPerMInput;
+  const completionCost = (completionTokens / 1_000_000) * model.costPerMOutput;
+  return Number((promptCost + completionCost).toFixed(8));
+}
+
+async function fetchAttachmentText(url: string, mimeType: string): Promise<string | null> {
+  if (!isTextLikeMime(mimeType)) {
+    return null;
+  }
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return null;
+    }
+
+    const responseMimeType = response.headers.get('content-type')?.split(';')[0]?.trim();
+    if (responseMimeType && !isTextLikeMime(responseMimeType)) {
+      return null;
+    }
+
+    const text = await response.text();
+    if (!text.trim()) {
+      return null;
+    }
+
+    return text.length > MAX_ATTACHMENT_TEXT_CHARS
+      ? `${text.slice(0, MAX_ATTACHMENT_TEXT_CHARS)}\n...[truncated]`
+      : text;
+  } catch {
+    return null;
+  }
+}
+
+function isTextLikeMime(mimeType: string): boolean {
+  if (!mimeType) {
+    return false;
+  }
+
+  if (mimeType.startsWith('text/')) {
+    return true;
+  }
+
+  return [
+    'application/json',
+    'application/ld+json',
+    'application/xml',
+    'application/javascript',
+    'application/x-javascript',
+    'application/typescript',
+    'application/x-typescript',
+    'application/yaml',
+    'application/x-yaml',
+    'image/svg+xml',
+  ].includes(mimeType);
 }

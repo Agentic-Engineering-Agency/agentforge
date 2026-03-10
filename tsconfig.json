@@ -3,6 +3,13 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "paths": {
+      "@agentforge-ai/core": ["packages/core/src/index.ts"],
+      "@agentforge-ai/core/*": ["packages/core/src/*"],
+      "@agentforge-ai/runtime": ["packages/runtime/src/index.ts"],
+      "@agentforge-ai/runtime/*": ["packages/runtime/src/*"]
+    },
     "lib": ["ES2022"],
     "types": ["node"],
     "strict": true,

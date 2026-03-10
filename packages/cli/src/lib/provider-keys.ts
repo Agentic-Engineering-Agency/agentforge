@@ -59,6 +59,20 @@ export function getAgentProviders(agentConfigs: AgentProviderConfig[]): string[]
   return [...providers];
 }
 
+export function getProvidersFromModels(models: Array<string | undefined | null>): string[] {
+  const providers = new Set<string>();
+
+  for (const model of models) {
+    if (!model || !model.includes('/')) {
+      continue;
+    }
+
+    providers.add(model.split('/')[0]!);
+  }
+
+  return [...providers];
+}
+
 async function loadProjectInternalApi(projectDir: string): Promise<any> {
   const apiPath = path.join(projectDir, 'convex', '_generated', 'api.js');
   const moduleUrl = pathToFileURL(apiPath).href;
@@ -95,7 +109,14 @@ export async function hydrateProviderEnvVars(options: {
 
   for (const provider of options.providers) {
     const envKeys = getProviderEnvKeys(provider);
-    if (envKeys.some((envKey) => process.env[envKey])) {
+    const existingValue = envKeys
+      .map((envKey) => process.env[envKey])
+      .find((value): value is string => Boolean(value));
+
+    if (existingValue) {
+      for (const envKey of envKeys) {
+        process.env[envKey] ??= existingValue;
+      }
       result.skipped.push(provider);
       continue;
     }
