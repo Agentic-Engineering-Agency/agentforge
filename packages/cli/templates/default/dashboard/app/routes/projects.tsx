@@ -5,8 +5,18 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Id } from '@convex/_generated/dataModel';
 import { FolderKanban, Plus, Trash2, Edit, Search, X, Bot, Settings, Check } from 'lucide-react';
+import { useModelCatalog } from '../lib/model-catalog';
 
 export const Route = createFileRoute('/projects')({ component: ProjectsPage });
+
+function stripProviderPrefix(provider: string, model: string): string {
+  const prefix = provider ? `${provider}/` : '';
+  return prefix && model.startsWith(prefix) ? model.slice(prefix.length) : model;
+}
+
+function joinProviderModel(provider: string, model: string): string {
+  return provider && model ? `${provider}/${model}` : model;
+}
 
 function ProjectsPage() {
   const projects = useQuery(api.projects.list, {}) ?? [];
@@ -63,18 +73,35 @@ function ProjectsPage() {
     if (isAssigned) {
       if (confirmingUnassignAgentId === agentId) {
         await unassignAgent({ id: detailProject._id, agentId });
+        setDetailProject((current: any) =>
+          current
+            ? {
+                ...current,
+                agentIds: (current.agentIds ?? []).filter((id: string) => id !== agentId),
+              }
+            : current,
+        );
         setConfirmingUnassignAgentId(null);
       } else {
         setConfirmingUnassignAgentId(agentId);
       }
     } else {
       await assignAgent({ id: detailProject._id, agentId });
+      setDetailProject((current: any) =>
+        current
+          ? {
+              ...current,
+              agentIds: [...new Set([...(current.agentIds ?? []), agentId])],
+            }
+          : current,
+      );
     }
   };
 
   const handleSettingsSave = async (settings: { systemPrompt?: string; defaultModel?: string; defaultProvider?: string }) => {
     if (!detailProject) return;
     await updateSettings({ id: detailProject._id, ...settings });
+    setDetailProject((current: any) => (current ? { ...current, ...settings } : current));
   };
 
   return (
@@ -208,19 +235,6 @@ function ProjectForm({ initial, onSave, onClose }: { initial: any; onSave: (data
   );
 }
 
-const PROVIDERS = ['openai', 'anthropic', 'openrouter', 'google', 'xai', 'mistral', 'deepseek', 'cohere', 'meta'];
-const MODELS_BY_PROVIDER: Record<string, string[]> = {
-  openai: ['gpt-4.1-mini', 'gpt-4o', 'gpt-4o-mini'],
-  google: ['gemini-2.5-flash', 'gemini-2.5-pro'],
-  anthropic: ['claude-sonnet-4-6', 'claude-haiku-4-5'],
-  openrouter: ['openrouter/auto'],
-  xai: ['grok-4', 'grok-3'],
-  mistral: ['mistral-large', 'mistral-medium'],
-  deepseek: ['deepseek-chat', 'deepseek-coder'],
-  cohere: ['command-r-plus', 'command-r'],
-  meta: ['llama-3.1-70b', 'llama-3.1-8b'],
-};
-
 interface ProjectDetailModalProps {
   project: any;
   allAgents: any[];
@@ -233,12 +247,16 @@ interface ProjectDetailModalProps {
 function ProjectDetailModal({ project, allAgents, onClose, onToggleAgent, onSettingsSave, confirmingUnassignAgentId }: ProjectDetailModalProps) {
   const [activeTab, setActiveTab] = useState<'agents' | 'settings'>('agents');
   const [systemPrompt, setSystemPrompt] = useState(project.systemPrompt || '');
-  const [defaultModel, setDefaultModel] = useState(project.defaultModel || '');
+  const [defaultModel, setDefaultModel] = useState(stripProviderPrefix(project.defaultProvider || '', project.defaultModel || ''));
   const [defaultProvider, setDefaultProvider] = useState(project.defaultProvider || '');
 
   const handleSettingsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSettingsSave({ systemPrompt, defaultModel, defaultProvider });
+    onSettingsSave({
+      systemPrompt,
+      defaultProvider,
+      defaultModel: joinProviderModel(defaultProvider, defaultModel),
+    });
   };
 
   const assignedAgents = allAgents.filter((agent) => project.agentIds?.includes(agent.id));
@@ -407,6 +425,9 @@ function ProjectSettingsSection({
   onDefaultProviderChange,
   onSubmit,
 }: ProjectSettingsSectionProps) {
+  const { modelsByProvider, providerIds } = useModelCatalog();
+  const availableModels = defaultProvider ? modelsByProvider[defaultProvider] ?? [] : [];
+
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div>
@@ -429,12 +450,12 @@ function ProjectSettingsSection({
             value={defaultProvider}
             onChange={(e) => {
               onDefaultProviderChange(e.target.value);
-              onDefaultModelChange((MODELS_BY_PROVIDER[e.target.value] || [])[0] || '');
+              onDefaultModelChange((modelsByProvider[e.target.value] || [])[0] || '');
             }}
             className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           >
             <option value="">None (use agent default)</option>
-            {PROVIDERS.map((p) => <option key={p} value={p}>{p}</option>)}
+            {providerIds.map((p) => <option key={p} value={p}>{p}</option>)}
           </select>
         </div>
 
@@ -447,7 +468,7 @@ function ProjectSettingsSection({
             className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           >
             <option value="">None (use agent default)</option>
-            {defaultProvider && (MODELS_BY_PROVIDER[defaultProvider] || []).map((m) => <option key={m} value={m}>{m}</option>)}
+            {defaultProvider && availableModels.map((m) => <option key={m} value={m}>{m}</option>)}
           </select>
         </div>
       </div>

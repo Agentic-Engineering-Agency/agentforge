@@ -105,7 +105,7 @@ export function applyContextStrategy(
 
 /**
  * Summarize oldest context messages when over 80% of token limit.
- * Uses a cheap model (gpt-4o-mini by default) to compress history.
+ * Uses a current low-cost OpenAI model by default to compress history.
  *
  * AGE-158: Triggered automatically in mastraIntegration when strategy is "summarize".
  */
@@ -152,7 +152,7 @@ export const summarizeContext = internalAction({
       const resp = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Authorization": `Bearer ${args.apiKey}` },
-        body: JSON.stringify({ model: "gpt-4o-mini", messages: [
+        body: JSON.stringify({ model: process.env.OPENAI_SUMMARIZER_MODEL ?? "gpt-5.1-chat-latest", messages: [
           { role: "system", content: "Summarize conversations concisely." },
           { role: "user", content: prompt },
         ]}),

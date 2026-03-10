@@ -156,7 +156,7 @@ export declare const api: {
   };
   apiKeys: {
     create: FunctionReference<
-      "mutation",
+      "action",
       "public",
       {
         encryptedKey: string;
@@ -187,7 +187,7 @@ export declare const api: {
       any
     >;
     update: FunctionReference<
-      "mutation",
+      "action",
       "public",
       {
         encryptedKey?: string;
@@ -383,6 +383,7 @@ export declare const api: {
         originalName: string;
         projectId?: Id<"projects">;
         size: number;
+        storageId?: string;
         url: string;
         userId?: string;
       },
@@ -586,11 +587,6 @@ export declare const api: {
       any
     >;
   };
-  mastra: {
-    storage: {
-      handle: FunctionReference<"mutation", "public", any, any>;
-    };
-  };
   mcpConnectionActions: {
     testConnection: FunctionReference<
       "action",
@@ -745,7 +741,7 @@ export declare const api: {
       any
     >;
     getAllAgents: FunctionReference<"query", "public", {}, any>;
-    list: FunctionReference<"query", "public", { userId?: string }, any>;
+    list: FunctionReference<"query", "public", { userId?: string | null }, any>;
     remove: FunctionReference<
       "mutation",
       "public",
@@ -776,6 +772,11 @@ export declare const api: {
         defaultModel?: string;
         defaultProvider?: string;
         id: Id<"projects">;
+        settings?: {
+          defaultModel?: string;
+          defaultProvider?: string;
+          systemPrompt?: string;
+        };
         systemPrompt?: string;
       },
       any
@@ -1357,12 +1358,42 @@ export declare const internal: {
       "action",
       "internal",
       { provider: string },
-      string | null
+      { apiKey: string } | null
     >;
     getEncryptedKeyForProvider: FunctionReference<
       "query",
       "internal",
       { provider: string },
+      any
+    >;
+    insertApiKey: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        encryptedKey: string;
+        iv: string;
+        keyName: string;
+        provider: string;
+        tag: string;
+        userId?: string;
+        version: string;
+      },
+      any
+    >;
+    patchApiKey: FunctionReference<
+      "mutation",
+      "internal",
+      {
+        id: Id<"apiKeys">;
+        updates: {
+          encryptedKey?: string;
+          isActive?: boolean;
+          iv?: string;
+          keyName?: string;
+          tag?: string;
+          version?: string;
+        };
+      },
       any
     >;
   };
@@ -1447,14 +1478,6 @@ export declare const internal: {
       "mutation",
       "internal",
       { id: Id<"vault">; userId?: string },
-      any
-    >;
-  };
-  workflowEngine: {
-    executeWorkflow: FunctionReference<
-      "action",
-      "internal",
-      { runId: Id<"workflowRuns"> },
       any
     >;
   };

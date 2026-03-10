@@ -1,5 +1,6 @@
 import { Agent, type ToolsInput } from '@mastra/core/agent';
 import { UnicodeNormalizer, TokenLimiterProcessor } from '@mastra/core/processors';
+import type { Workspace } from '@mastra/core/workspace';
 import { DAEMON_MODEL, DEFAULT_TOKEN_LIMIT, createStandardMemory } from './shared.js';
 
 export interface StandardAgentConfig {
@@ -9,6 +10,7 @@ export interface StandardAgentConfig {
   instructions: string;
   model?: string;
   tools?: ToolsInput;
+  workspace?: Workspace;
   workingMemoryTemplate?: string;
   disableMemory?: boolean;
   disableObservationalMemory?: boolean;
@@ -33,6 +35,7 @@ export function createStandardAgent(config: StandardAgentConfig): Agent {
     model,
     memory,
     tools: config.tools ?? {},
+    workspace: config.workspace,
     inputProcessors,
     instructions: config.instructions,
   });

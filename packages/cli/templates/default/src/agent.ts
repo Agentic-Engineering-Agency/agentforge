@@ -1,5 +1,5 @@
 import { Agent } from '@agentforge-ai/core';
-import { AgentForgeWorkspace } from '@agentforge-ai/core/workspace';
+import { createWorkspace } from '@agentforge-ai/core';
 
 /**
  * AgentForge — Your First Agent
@@ -22,12 +22,13 @@ import { AgentForgeWorkspace } from '@agentforge-ai/core/workspace';
 // ─── Workspace Setup ──────────────────────────────────────────────────
 // The workspace provides persistent file storage, command execution,
 // skill discovery, and content search for your agents.
-const workspace = AgentForgeWorkspace.local({
+const workspace = createWorkspace({
+  storage: 'local',
   basePath: './workspace',
-  skills: ['/skills'],
-  search: true,
+  skillsPath: ['/skills'],
+  skillsBasePath: './skills',
+  bm25: true,
   autoIndexPaths: ['/skills'],
-  sandbox: true,
 });
 
 // Initialize workspace (triggers auto-indexing)
@@ -48,12 +49,12 @@ When you don't know something, say so honestly.
 When asked about your capabilities, mention that you're powered by AgentForge.`,
 
   // Choose your model — supports multiple providers:
-  //   OpenAI:      "openai/gpt-4o-mini", "openai:gpt-4o"
-  //   OpenRouter:  "openrouter:anthropic/claude-3.5-sonnet", "openrouter:google/gemini-pro"
-  //   Anthropic:   "anthropic:claude-3-5-sonnet-20241022"
-  //   Google:      "google:gemini-2.0-flash"
-  //   xAI:         "xai:grok-2"
-  model: 'openai/gpt-4o-mini',
+  //   OpenAI:      "openai/gpt-5.1-chat-latest", "openai/gpt-5.1-codex-mini"
+  //   OpenRouter:  "openrouter:anthropic/claude-sonnet-4.6", "openrouter:google/gemini-3.1-pro-preview"
+  //   Anthropic:   "anthropic:claude-sonnet-4-6"
+  //   Google:      "google:gemini-3.1-pro-preview"
+  //   xAI:         "xai:grok-3"
+  model: 'openai/gpt-5.1-chat-latest',
 });
 
 export { workspace };
@@ -62,13 +63,14 @@ export default myAgent;
 // ─── Example: Cloud Workspace (Cloudflare R2) ─────────────────────────
 // For production deployment on Cloudflare, use a cloud workspace:
 //
-// const cloudWorkspace = AgentForgeWorkspace.cloud({
+// const cloudWorkspace = createWorkspace({
+//   storage: 'r2',
 //   bucket: 'my-agent-files',
 //   region: 'auto',
 //   endpoint: process.env.R2_ENDPOINT,
 //   accessKeyId: process.env.R2_ACCESS_KEY_ID,
 //   secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-//   skills: ['/skills'],
+//   skillsPath: ['/skills'],
 // });
 
 // ─── Example: Agent with Custom Tools ──────────────────────────────────
@@ -78,7 +80,7 @@ export default myAgent;
 //   id: 'research-agent',
 //   name: 'Research Agent',
 //   instructions: 'You are a research assistant that helps find and summarize information.',
-//   model: 'openrouter:anthropic/claude-3.5-sonnet',
+//   model: 'openrouter:anthropic/claude-sonnet-4.6',
 //   tools: [
 //     {
 //       name: 'calculator',

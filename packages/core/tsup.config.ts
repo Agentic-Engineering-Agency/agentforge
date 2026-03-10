@@ -22,5 +22,5 @@ export default defineConfig({
   clean: true,
   outDir: 'dist',
   target: 'es2022',
-  external: ['@mastra/core', '@mastra/s3', '@e2b/code-interpreter', 'playwright', 'playwright-core'],
+  external: ['@mastra/core', '@mastra/s3', '@e2b/code-interpreter', 'playwright', 'playwright-core', 'typescript'],
 });

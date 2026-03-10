@@ -377,10 +377,10 @@ function promptConfirmation() {
     input: process.stdin,
     output: process.stdout
   });
-  return new Promise((resolve4) => {
+  return new Promise((resolve3) => {
     rl.question("  Apply these updates? [y/N] ", (answer) => {
       rl.close();
-      resolve4(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
+      resolve3(answer.toLowerCase() === "y" || answer.toLowerCase() === "yes");
     });
   });
 }
@@ -518,21 +518,21 @@ async function createClient() {
 async function safeCall(fn, errorMessage) {
   try {
     return await fn();
-  } catch (error4) {
-    if (error4.message?.includes("CONVEX_URL not found")) {
+  } catch (error3) {
+    if (error3.message?.includes("CONVEX_URL not found")) {
       console.error("\n\u274C Not connected to Convex.");
       console.error("   Run `npx convex dev` in your project directory first.\n");
-    } else if (error4.message?.includes("Current directory does not exist")) {
+    } else if (error3.message?.includes("Current directory does not exist")) {
       console.error(`
-\u274C ${error4.message}
+\u274C ${error3.message}
 `);
-    } else if (error4.message?.includes("fetch failed") || error4.message?.includes("ECONNREFUSED")) {
+    } else if (error3.message?.includes("fetch failed") || error3.message?.includes("ECONNREFUSED")) {
       console.error("\n\u274C Cannot reach Convex deployment.");
       console.error("   Make sure `npx convex dev` is running.\n");
     } else {
       console.error(`
 \u274C ${errorMessage}`);
-      console.error(`   ${error4.message}
+      console.error(`   ${error3.message}
 `);
     }
     process.exit(1);
@@ -615,9 +615,9 @@ function truncate(str, max) {
 import readline2 from "readline";
 function prompt(question) {
   const rl = readline2.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve4) => rl.question(question, (ans) => {
+  return new Promise((resolve3) => rl.question(question, (ans) => {
     rl.close();
-    resolve4(ans.trim());
+    resolve3(ans.trim());
   }));
 }
 function registerAgentsCommand(program2) {
@@ -649,9 +649,9 @@ function registerAgentsCommand(program2) {
       }))
     );
   });
-  agents.command("create").description("Create a new agent (interactive)").option("--name <name>", "Agent name").option("--model <model>", "Model identifier (e.g., openai:gpt-4o-mini)").option("--instructions <text>", "System instructions").option("--description <text>", "Agent description").option("--provider <provider>", "Provider (openai, anthropic, etc.)").action(async (opts) => {
+  agents.command("create").description("Create a new agent (interactive)").option("--name <name>", "Agent name").option("--model <model>", "Model identifier (e.g., openai:gpt-5.1-chat-latest)").option("--instructions <text>", "System instructions").option("--description <text>", "Agent description").option("--provider <provider>", "Provider (openai, anthropic, etc.)").action(async (opts) => {
     const name = opts.name || await prompt("Agent name: ");
-    const model = opts.model || await prompt("Model (e.g., openai:gpt-4o-mini): ");
+    const model = opts.model || await prompt("Model (e.g., openai:gpt-5.1-chat-latest): ");
     const instructions = opts.instructions || await prompt("Instructions: ");
     const description = opts.description || await prompt("Description (optional): ");
     const provider = opts.provider || await prompt("Provider (openai, anthropic, etc.) [default: openai]: ") || "openai";
@@ -660,7 +660,7 @@ function registerAgentsCommand(program2) {
       process.exit(1);
     }
     let agentProvider = provider;
-    let agentModel = model || "gpt-4o-mini";
+    let agentModel = model || "gpt-5.1-chat-latest";
     if (agentModel.includes(":")) {
       const [p, m] = agentModel.split(":");
       agentProvider = p;
@@ -1116,9 +1116,9 @@ function registerSessionsCommand(program2) {
   });
   sessions.command("delete").argument("<id>", "Session ID").option("-f, --force", "Skip confirmation").description("Delete a session").action(async (id, opts) => {
     const rl = readline4.createInterface({ input: process.stdin, output: process.stdout });
-    const confirmPrompt = (question) => new Promise((resolve4) => rl.question(question, (ans) => {
+    const confirmPrompt = (question) => new Promise((resolve3) => rl.question(question, (ans) => {
       rl.close();
-      resolve4(ans.trim());
+      resolve3(ans.trim());
     }));
     if (!opts.force) {
       const confirm = await confirmPrompt(`Delete session "${id}"? (y/N): `);
@@ -3691,7 +3691,7 @@ function prompt7(q) {
   }));
 }
 function promptSecret(q) {
-  return new Promise((resolve4) => {
+  return new Promise((resolve3) => {
     const rl = readline10.createInterface({ input: process.stdin, output: process.stdout });
     if (process.stdin.isTTY) {
       process.stdout.write(q);
@@ -3706,7 +3706,7 @@ function promptSecret(q) {
           process.stdin.removeListener("data", onData);
           console.log();
           rl.close();
-          resolve4(input);
+          resolve3(input);
         } else if (char === "") {
           process.exit();
         } else if (char === "\x7F") {
@@ -3723,7 +3723,7 @@ function promptSecret(q) {
     } else {
       rl.question(q, (ans) => {
         rl.close();
-        resolve4(ans.trim());
+        resolve3(ans.trim());
       });
     }
   });
@@ -3844,7 +3844,7 @@ function maskKey(key) {
   return key.substring(0, 8) + "..." + key.substring(key.length - 4);
 }
 function promptSecret2(question) {
-  return new Promise((resolve4) => {
+  return new Promise((resolve3) => {
     const readline17 = __require("readline");
     if (process.stdin.isTTY) {
       process.stdout.write(question);
@@ -3858,7 +3858,7 @@ function promptSecret2(question) {
           process.stdin.pause();
           process.stdin.removeListener("data", onData);
           process.stdout.write("\n");
-          resolve4(input);
+          resolve3(input);
         } else if (char === "") {
           process.exit(0);
         } else if (char === "\x7F" || char === "\b") {
@@ -3876,7 +3876,7 @@ function promptSecret2(question) {
       const rl = readline17.createInterface({ input: process.stdin, output: process.stdout });
       rl.question(question, (ans) => {
         rl.close();
-        resolve4(ans.trim());
+        resolve3(ans.trim());
       });
     }
   });
@@ -3966,10 +3966,10 @@ function registerKeysCommand(program2) {
     if (!opts.force) {
       const readline17 = __require("readline");
       const rl = readline17.createInterface({ input: process.stdin, output: process.stdout });
-      const answer = await new Promise((resolve4) => {
+      const answer = await new Promise((resolve3) => {
         rl.question(`Delete "${target.keyName}" for ${provider}? (y/N): `, (ans) => {
           rl.close();
-          resolve4(ans.trim());
+          resolve3(ans.trim());
         });
       });
       if (answer.toLowerCase() !== "y") {
@@ -4148,9 +4148,9 @@ function registerStatusCommand(program2) {
       console.log(`  ${colors.cyan}# Option 1: Recreate the project${colors.reset}`);
       console.log(`  agentforge create my-project`);
       console.log();
-      console.log(`  ${colors.cyan}# Option 2: Clone the dashboard from the repo${colors.reset}`);
+      console.log(`  ${colors.cyan}# Option 2: Copy the canonical dashboard template${colors.reset}`);
       console.log(`  git clone https://github.com/Agentic-Engineering-Agency/agentforge /tmp/af`);
-      console.log(`  cp -r /tmp/af/packages/web ./dashboard`);
+      console.log(`  cp -r /tmp/af/packages/cli/templates/default/dashboard ./dashboard`);
       console.log(`  cd dashboard && pnpm install`);
       console.log();
       return;
@@ -4165,9 +4165,9 @@ function registerStatusCommand(program2) {
         stdio: "inherit",
         shell: true
       });
-      await new Promise((resolve4, reject) => {
+      await new Promise((resolve3, reject) => {
         installChild.on("close", (code) => {
-          if (code === 0) resolve4();
+          if (code === 0) resolve3();
           else reject(new Error(`pnpm install exited with code ${code}`));
         });
         installChild.on("error", reject);
@@ -4434,18 +4434,18 @@ Configuration saved to AGENTFORGE_STORAGE environment variable.`);
     try {
       info(`Creating ${storage} workspace...`);
       const workspace = createWorkspace(config);
-      const fs18 = workspace.filesystem ?? workspace;
+      const fs20 = workspace.filesystem ?? workspace;
       const testPath = `agentforge-test-${Date.now()}.txt`;
       const testContent = `AgentForge workspace test at ${(/* @__PURE__ */ new Date()).toISOString()}`;
       info(`Writing test file: ${testPath}`);
-      await fs18.write(testPath, testContent);
+      await fs20.write(testPath, testContent);
       info(`Reading test file...`);
-      const readContent = await fs18.read(testPath);
+      const readContent = await fs20.read(testPath);
       if (readContent === testContent) {
         success(`\u2713 Storage test passed!`);
         info(`Written and read: "${testContent}"`);
         info(`Cleaning up test file...`);
-        await fs18.delete(testPath);
+        await fs20.delete(testPath);
         success(`\u2713 Test file deleted`);
         info(`
 \u2713 ${storage.toUpperCase()} storage is working correctly.`);
@@ -4474,9 +4474,9 @@ import readline12 from "readline";
 import { randomBytes as randomBytes2 } from "crypto";
 function prompt8(question) {
   const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve4) => rl.question(question, (ans) => {
+  return new Promise((resolve3) => rl.question(question, (ans) => {
     rl.close();
-    resolve4(ans.trim());
+    resolve3(ans.trim());
   }));
 }
 function registerTokensCommand(program2) {
@@ -6577,15 +6577,180 @@ function formatReport(report) {
 }
 
 // src/commands/start.ts
-import fs16 from "fs-extra";
-import path18 from "path";
+import fs18 from "fs-extra";
 import net from "net";
-import { fileURLToPath as fileURLToPath3 } from "url";
-import { dirname, resolve as resolve2 } from "path";
+import path20 from "path";
+
+// src/lib/workflow-executor.ts
+import { executeAgentWorkflow } from "@agentforge-ai/runtime";
+function createDaemonWorkflowExecutor(client, daemon) {
+  return async (runId) => {
+    const run = await client.query("workflows:getRun", { id: runId });
+    if (!run) {
+      throw new Error(`Workflow run not found: ${runId}`);
+    }
+    const workflow = await client.query("workflows:get", { id: run.workflowId });
+    if (!workflow) {
+      throw new Error(`Workflow definition not found: ${run.workflowId}`);
+    }
+    const steps = JSON.parse(workflow.steps);
+    await client.mutation("workflows:updateRun", {
+      id: runId,
+      status: "running"
+    });
+    try {
+      const result = await executeAgentWorkflow({
+        runId,
+        workflowId: String(run.workflowId),
+        workflowName: workflow.name,
+        input: run.input,
+        steps,
+        getAgent: (agentId) => daemon.getAgent(agentId),
+        persistence: {
+          onStepStart: async ({ step, input }) => {
+            const stepRecordId = await client.mutation("workflows:createStep", {
+              runId,
+              stepId: step.agentId,
+              name: step.name,
+              input,
+              projectId: run.projectId
+            });
+            await client.mutation("workflows:updateStep", {
+              id: stepRecordId,
+              status: "running",
+              startedAt: Date.now()
+            });
+            return stepRecordId;
+          },
+          onStepComplete: async ({ output, stepRecordId }) => {
+            if (!stepRecordId) return;
+            await client.mutation("workflows:updateStep", {
+              id: stepRecordId,
+              status: "completed",
+              output,
+              completedAt: Date.now()
+            });
+          },
+          onStepError: async ({ error: error3, stepRecordId }) => {
+            if (!stepRecordId) return;
+            await client.mutation("workflows:updateStep", {
+              id: stepRecordId,
+              status: "failed",
+              error: error3,
+              completedAt: Date.now()
+            });
+          }
+        }
+      });
+      await client.mutation("workflows:updateRun", {
+        id: runId,
+        status: result.status === "success" ? "completed" : "failed",
+        output: result.output,
+        error: result.error,
+        completedAt: Date.now()
+      });
+      return {
+        runId,
+        status: result.status,
+        output: result.output,
+        error: result.error
+      };
+    } catch (error3) {
+      const message = error3 instanceof Error ? error3.message : String(error3);
+      await client.mutation("workflows:updateRun", {
+        id: runId,
+        status: "failed",
+        error: message,
+        completedAt: Date.now()
+      });
+      return {
+        runId,
+        status: "failed",
+        error: message
+      };
+    }
+  };
+}
+
+// src/lib/project-config.ts
+import fs15 from "fs-extra";
+import path16 from "path";
+async function loadTsConfig(configPath) {
+  const source = await fs15.readFile(configPath, "utf-8");
+  const ts = await import("typescript");
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022
+    }
+  }).outputText;
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(transpiled).toString("base64")}`;
+  const loaded = await import(moduleUrl);
+  return loaded.default ?? loaded;
+}
+async function loadProjectConfig(projectDir) {
+  const templateProjectDir = path16.join(projectDir, "packages", "cli", "templates", "default");
+  for (const tsConfigPath of [
+    path16.join(projectDir, "agentforge.config.ts"),
+    path16.join(templateProjectDir, "agentforge.config.ts")
+  ]) {
+    if (await fs15.pathExists(tsConfigPath)) {
+      return await loadTsConfig(tsConfigPath);
+    }
+  }
+  for (const jsonConfigPath of [
+    path16.join(projectDir, "agentforge.json"),
+    path16.join(templateProjectDir, "agentforge.json")
+  ]) {
+    if (await fs15.pathExists(jsonConfigPath)) {
+      return await fs15.readJson(jsonConfigPath);
+    }
+  }
+  return null;
+}
+function loadProjectEnv(projectDir) {
+  for (const envFile of [".env.local", ".env"]) {
+    const envPath = path16.join(projectDir, envFile);
+    if (!fs15.existsSync(envPath)) continue;
+    const envContent = fs15.readFileSync(envPath, "utf-8");
+    for (const line of envContent.split("\n")) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) continue;
+      const eqIndex = trimmed.indexOf("=");
+      if (eqIndex < 1) continue;
+      const key = trimmed.slice(0, eqIndex).trim();
+      const value = trimmed.slice(eqIndex + 1).trim().replace(/^['"]|['"]$/g, "");
+      if (!process.env[key]) {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
+// src/lib/runtime-workspace.ts
+import fs16 from "fs-extra";
+import path17 from "path";
+function hasUsableSkillEntries(dir) {
+  if (!fs16.existsSync(dir) || !fs16.statSync(dir).isDirectory()) {
+    return false;
+  }
+  return fs16.readdirSync(dir).some((entry) => entry !== ".DS_Store");
+}
+function resolveWorkspaceSkillsBasePath(cwd) {
+  const localSkillsPath = path17.resolve(cwd, "./skills");
+  if (hasUsableSkillEntries(localSkillsPath)) {
+    return localSkillsPath;
+  }
+  const canonicalTemplateSkillsPath = path17.resolve(cwd, "packages/cli/templates/default/skills");
+  if (hasUsableSkillEntries(canonicalTemplateSkillsPath)) {
+    return canonicalTemplateSkillsPath;
+  }
+  return localSkillsPath;
+}
 
 // src/lib/provider-keys.ts
 import { ConvexHttpClient } from "convex/browser";
-import path16 from "path";
+import path18 from "path";
 import { pathToFileURL } from "url";
 function getProviderEnvKeys(provider) {
   if (provider === "google") {
@@ -6624,7 +6789,7 @@ function getAgentProviders(agentConfigs) {
   return [...providers];
 }
 async function loadProjectInternalApi(projectDir) {
-  const apiPath = path16.join(projectDir, "convex", "_generated", "api.js");
+  const apiPath = path18.join(projectDir, "convex", "_generated", "api.js");
   const moduleUrl = pathToFileURL(apiPath).href;
   const apiModule = await import(moduleUrl);
   return apiModule.internal;
@@ -6668,12 +6833,12 @@ async function hydrateProviderEnvVars(options) {
 }
 
 // src/lib/convex-auth.ts
-import fs15 from "fs-extra";
-import path17 from "path";
+import fs17 from "fs-extra";
+import path19 from "path";
 var CONVEX_API_BASE = "https://api.convex.dev/api";
 function readEnvVarFromFile(filePath, key) {
-  if (!fs15.existsSync(filePath)) return null;
-  const content = fs15.readFileSync(filePath, "utf-8");
+  if (!fs17.existsSync(filePath)) return null;
+  const content = fs17.readFileSync(filePath, "utf-8");
   const pattern = new RegExp(`^${key}\\s*=\\s*(.+)$`, "m");
   const match = content.match(pattern);
   if (!match) return null;
@@ -6684,7 +6849,7 @@ function loadProjectConvexConfig(projectDir) {
   let convexDeployment = null;
   let convexUrl = null;
   for (const envFile of envFiles) {
-    const envPath = path17.join(projectDir, envFile);
+    const envPath = path19.join(projectDir, envFile);
     convexDeployment ??= readEnvVarFromFile(envPath, "CONVEX_DEPLOYMENT");
     convexUrl ??= readEnvVarFromFile(envPath, "CONVEX_URL");
   }
@@ -6712,10 +6877,10 @@ function loadProjectConvexConfig(projectDir) {
 }
 function readConvexAccessToken(homeDir = process.env.HOME ?? "") {
   if (!homeDir) return null;
-  const configPath = path17.join(homeDir, ".convex", "config.json");
-  if (!fs15.existsSync(configPath)) return null;
+  const configPath = path19.join(homeDir, ".convex", "config.json");
+  if (!fs17.existsSync(configPath)) return null;
   try {
-    const parsed = JSON.parse(fs15.readFileSync(configPath, "utf-8"));
+    const parsed = JSON.parse(fs17.readFileSync(configPath, "utf-8"));
     return parsed.accessToken ?? null;
   } catch {
     return null;
@@ -6791,107 +6956,51 @@ async function resolveConvexAdminAuthFromLogin(options) {
 }
 
 // src/commands/start.ts
-var _createStandardAgent;
-var _initStorage;
-var __filename3 = fileURLToPath3(import.meta.url);
-var __dirname3 = dirname(__filename3);
 function registerStartCommand(program2) {
   program2.command("start").description("Start the AgentForge daemon with channel adapters").option("-p, --port <n>", "HTTP channel port (default: 3001)", "3001").option("--discord", "Enable Discord channel (requires DISCORD_BOT_TOKEN)").option("--telegram", "Enable Telegram channel (requires TELEGRAM_BOT_TOKEN)").option("--no-http", "Disable HTTP channel").option("--agent <id>", "Load specific agent only (repeatable)", (val, prev) => [...prev, val], []).option("--dev", "Dev mode: verbose logging, no process.exit on error").action(async (opts) => {
     header("AgentForge Daemon");
     const cwd = process.cwd();
     const port = parseInt(opts.port, 10);
-    const agentsFilter = opts.agent;
-    const pkgPath = path18.join(cwd, "package.json");
-    if (!fs16.existsSync(pkgPath)) {
+    const requestedAgents = opts.agent;
+    if (!fs18.existsSync(path20.join(cwd, "package.json"))) {
       error("Not an AgentForge project directory.");
       info("Run this command from inside an AgentForge project.");
       process.exit(1);
     }
-    let convexUrl = process.env.CONVEX_URL;
-    if (!convexUrl) {
-      const envPath = path18.join(cwd, ".env.local");
-      if (fs16.existsSync(envPath)) {
-        const envContent = fs16.readFileSync(envPath, "utf-8");
-        const match = envContent.match(/CONVEX_URL=(.+)/);
-        if (match) convexUrl = match[1].trim();
-      }
-    }
+    loadProjectEnv(cwd);
+    const projectConfig = await loadProjectConfig(cwd);
+    const convexUrl = process.env.CONVEX_URL ?? projectConfig?.daemon?.dbUrl;
     if (!convexUrl) {
       error("CONVEX_URL not found. Make sure you have run: npx convex dev");
       process.exit(1);
     }
-    info(`Connected to Convex: ${convexUrl}`);
+    const runtime = await import("@agentforge-ai/runtime");
+    const core = await import("@agentforge-ai/core");
     const client = await createClient();
-    let agents = [];
-    try {
-      const result = await safeCall(
-        () => client.query("agents:list", {}),
-        "Failed to fetch agents from Convex"
-      );
-      agents = result || [];
-    } catch (err) {
-      error(`Failed to fetch agents: ${err instanceof Error ? err.message : String(err)}`);
-      process.exit(1);
-    }
-    if (agentsFilter.length > 0) {
-      agents = agents.filter((a) => agentsFilter.includes(a.id));
-      if (agents.length === 0) {
-        error(`No agents found matching: ${agentsFilter.join(", ")}`);
-        process.exit(1);
-      }
-    }
-    if (agents.length === 0) {
-      error("No agents found in Convex.");
-      info("Create an agent first: agentforge agents create");
-      process.exit(1);
-    }
-    success(`Loaded ${agents.length} agent config(s): ${agents.map((a) => a.name).join(", ")}`);
-    try {
-      const runtime = await import("@agentforge-ai/runtime");
-      _createStandardAgent = runtime.createStandardAgent;
-      _initStorage = runtime.initStorage;
-    } catch (err) {
-      error(`Failed to load @agentforge-ai/runtime: ${err instanceof Error ? err.message : String(err)}`);
-      info("Make sure @agentforge-ai/runtime is installed: pnpm add @agentforge-ai/runtime");
-      process.exit(1);
-    }
-    const envLocalPath = path18.join(cwd, ".env.local");
-    if (fs16.existsSync(envLocalPath)) {
-      const envContent = fs16.readFileSync(envLocalPath, "utf-8");
-      for (const line of envContent.split("\n")) {
-        const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) continue;
-        const eqIdx = trimmed.indexOf("=");
-        if (eqIdx > 0) {
-          const key = trimmed.slice(0, eqIdx).trim();
-          const val = trimmed.slice(eqIdx + 1).trim();
-          if (!process.env[key]) process.env[key] = val;
-        }
-      }
-    }
+    const agents = await fetchAgents(client, requestedAgents);
+    const workspace = await createRuntimeWorkspace(core.createWorkspace, projectConfig?.workspace, cwd, opts.dev);
+    const runtimeWorkspace = workspace;
+    const workspaceSkillTools = workspace ? await core.loadExecutableSkillTools(resolveWorkspaceSkillsBasePath(cwd)) : void 0;
+    const enabledChannels = getEnabledChannels(opts, projectConfig);
+    runtime.validateEnv({ channels: enabledChannels });
     if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
       process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GOOGLE_API_KEY;
     }
-    let adminKey = process.env.CONVEX_DEPLOY_KEY;
-    if (!adminKey && convexUrl) {
+    let adminKey = process.env.CONVEX_DEPLOY_KEY ?? process.env.CONVEX_ADMIN_KEY;
+    if (!adminKey) {
       try {
         const resolvedAuth = await resolveConvexAdminAuthFromLogin({ projectDir: cwd });
         if (resolvedAuth?.adminKey) {
           adminKey = resolvedAuth.adminKey;
           process.env.CONVEX_DEPLOY_KEY = resolvedAuth.adminKey;
-          if (opts.dev) info(`Resolved Convex admin auth from local Convex login for ${resolvedAuth.deploymentName}.`);
+          if (opts.dev) {
+            info(`Resolved Convex admin auth from local Convex login for ${resolvedAuth.deploymentName}.`);
+          }
         }
-      } catch (err) {
+      } catch (authError) {
         if (opts.dev) {
-          info(`Convex admin auth auto-resolution failed: ${err instanceof Error ? err.message : String(err)}`);
+          info(`Convex admin auth auto-resolution failed: ${authError instanceof Error ? authError.message : String(authError)}`);
         }
-      }
-    }
-    if (convexUrl && adminKey) {
-      try {
-        _initStorage(convexUrl, adminKey);
-        if (opts.dev) info("Convex memory storage initialized.");
-      } catch (_) {
       }
     }
     const providers = getAgentProviders(
@@ -6911,114 +7020,200 @@ function registerStartCommand(program2) {
         if (opts.dev && hydration.hydrated.length > 0) {
           info(`Loaded stored API keys for: ${hydration.hydrated.join(", ")}`);
         }
-      } catch (err) {
+      } catch (hydrationError) {
         if (opts.dev) {
-          info(`Stored API key hydration failed: ${err instanceof Error ? err.message : String(err)}`);
+          info(`Stored API key hydration failed: ${hydrationError instanceof Error ? hydrationError.message : String(hydrationError)}`);
         }
       }
     } else {
       const missingEnvProviders = providers.filter((provider) => !process.env[getProviderEnvKey(provider)]);
-      if (missingEnvProviders.length > 0) {
+      if (missingEnvProviders.length > 0 && opts.dev) {
         info(
           `Missing local env vars for provider keys: ${missingEnvProviders.join(", ")}. Stored Convex API keys require either CONVEX_DEPLOY_KEY or a logged-in local Convex CLI session.`
         );
       }
     }
-    const memoryEnabled = Boolean(adminKey && process.env.GOOGLE_GENERATIVE_AI_API_KEY);
-    if (adminKey && !memoryEnabled && opts.dev) {
-      info("Disabling agent memory because GOOGLE_GENERATIVE_AI_API_KEY is not configured for the shared embedding/observer models.");
-    }
-    const mastraAgents = [];
-    for (const agentConfig of agents) {
-      try {
-        const modelStr = agentConfig.provider && agentConfig.model ? `${agentConfig.provider}/${agentConfig.model}` : agentConfig.model || "openai/gpt-4o-mini";
-        const agent = _createStandardAgent({
-          id: agentConfig.id ?? agentConfig._id,
-          name: agentConfig.name ?? "Agent",
-          instructions: agentConfig.instructions ?? "You are a helpful assistant.",
-          model: modelStr,
-          disableMemory: !memoryEnabled
+    const runtimeDataClient = {
+      query: (functionName, args) => client.query(functionName, args),
+      mutation: (functionName, args) => client.mutation(functionName, args)
+    };
+    const daemon = new runtime.AgentForgeDaemon({
+      deploymentUrl: convexUrl,
+      adminAuthToken: adminKey,
+      defaultModel: projectConfig?.daemon?.defaultModel,
+      agentLoader: async (id) => {
+        const agentConfig = await safeCall(
+          () => client.query("agents:get", { id }),
+          `Failed to fetch agent '${id}' from Convex`
+        );
+        if (!agentConfig) {
+          return null;
+        }
+        return buildAgentDefinition(agentConfig, {
+          defaultModel: projectConfig?.daemon?.defaultModel,
+          tools: workspaceSkillTools,
+          disableMemory: !adminKey,
+          workspace: runtimeWorkspace
         });
-        agent.id = agentConfig.id ?? agentConfig._id;
-        agent.model = modelStr;
-        mastraAgents.push(agent);
-        if (opts.dev) info(`  Agent "${agentConfig.name}" \u2192 ${modelStr}`);
-      } catch (err) {
-        error(`Failed to create agent "${agentConfig.name}": ${err instanceof Error ? err.message : String(err)}`);
       }
-    }
-    if (mastraAgents.length === 0) {
-      error("No agents could be instantiated. Check your API keys in .env.local");
-      process.exit(1);
-    }
-    success(`${mastraAgents.length} agent(s) ready.`);
-    const portInUse = await isPortInUse(port);
-    if (portInUse) {
-      error(`Port ${port} is already in use.`);
-      info("Another process may be running. Use --port to use a different port.");
-      process.exit(1);
-    }
-    const shutdownFns = [];
+    });
+    const agentDefinitions = agents.map(
+      (agentConfig) => buildAgentDefinition(agentConfig, {
+        defaultModel: projectConfig?.daemon?.defaultModel,
+        tools: workspaceSkillTools,
+        disableMemory: !adminKey,
+        workspace: runtimeWorkspace
+      })
+    );
+    await daemon.loadAgents(agentDefinitions);
+    daemon.setWorkflowExecutor(createDaemonWorkflowExecutor(client, daemon));
     if (!opts.noHttp) {
-      info(`Starting HTTP channel on port ${port}...`);
-      const httpModulePath = resolve2(__dirname3, "./lib/http-channel.js");
-      try {
-        const { startHttpChannel } = await import(httpModulePath);
-        const agentConfigs = agents.map((a) => ({
-          id: a.id ?? a._id,
-          provider: a.provider ?? "openai",
-          model: a.model ?? "gpt-4o-mini"
-        }));
-        const close = await startHttpChannel(port, mastraAgents, convexUrl, opts.dev, agentConfigs);
-        shutdownFns.push(close);
-      } catch (err) {
-        error(`Failed to start HTTP channel: ${err instanceof Error ? err.message : String(err)}`);
-        if (!opts.dev) process.exit(1);
+      const configuredPort = projectConfig?.channels?.http?.port ?? port;
+      if (await isPortInUse(configuredPort)) {
+        error(`Port ${configuredPort} is already in use.`);
+        info("Another process may be running. Use --port to use a different port.");
+        process.exit(1);
       }
+      daemon.addChannel(new runtime.HttpChannel({
+        port: configuredPort,
+        apiKey: process.env.AGENTFORGE_API_KEY,
+        dataClient: runtimeDataClient
+      }));
     }
-    if (opts.discord) {
-      const discordToken = process.env.DISCORD_BOT_TOKEN;
-      if (!discordToken) {
+    if (opts.discord || projectConfig?.channels?.discord?.enabled) {
+      const token = process.env.DISCORD_BOT_TOKEN;
+      if (!token) {
         error("DISCORD_BOT_TOKEN not set. Set it in .env.local");
         process.exit(1);
       }
-      info("Discord channel not yet implemented.");
+      daemon.addChannel(new runtime.DiscordChannel(token, {
+        defaultAgentId: projectConfig?.channels?.discord?.defaultAgentId ?? agentDefinitions[0].id,
+        autoChannels: projectConfig?.channels?.discord?.autoChannels,
+        teamChannel: projectConfig?.channels?.discord?.teamChannel,
+        editIntervalMs: projectConfig?.channels?.discord?.editIntervalMs
+      }));
     }
-    if (opts.telegram) {
-      const telegramToken = process.env.TELEGRAM_BOT_TOKEN;
-      if (!telegramToken) {
+    if (opts.telegram || projectConfig?.channels?.telegram?.enabled) {
+      const token = process.env.TELEGRAM_BOT_TOKEN;
+      if (!token) {
         error("TELEGRAM_BOT_TOKEN not set. Set it in .env.local");
         process.exit(1);
       }
-      info("Telegram channel not yet implemented.");
+      daemon.addChannel(new runtime.TelegramChannel(token, {
+        defaultAgentId: projectConfig?.channels?.telegram?.defaultAgentId ?? agentDefinitions[0].id,
+        allowedChatIds: projectConfig?.channels?.telegram?.allowedChatIds,
+        editIntervalMs: projectConfig?.channels?.telegram?.editIntervalMs
+      }));
     }
+    await daemon.start();
+    success(`Loaded ${agentDefinitions.length} agent config(s): ${agentDefinitions.map((agent) => agent.name).join(", ")}`);
     success("AgentForge daemon started!");
-    dim(`  HTTP: http://localhost:${port}`);
+    if (!opts.noHttp) {
+      dim(`  HTTP: http://localhost:${projectConfig?.channels?.http?.port ?? port}`);
+    }
     dim("  Press Ctrl+C to stop");
     console.log();
     await keepAlive();
-    await Promise.allSettled(shutdownFns.map((fn) => fn()));
+    await daemon.stop();
   });
 }
+async function fetchAgents(client, requestedAgents) {
+  let agents = await safeCall(
+    () => client.query("agents:list", {}),
+    "Failed to fetch agents from Convex"
+  );
+  if (requestedAgents.length > 0) {
+    agents = agents.filter((agent) => requestedAgents.includes(agent.id));
+    if (agents.length === 0) {
+      error(`No agents found matching: ${requestedAgents.join(", ")}`);
+      process.exit(1);
+    }
+  }
+  if (agents.length === 0) {
+    error("No agents found in Convex.");
+    info("Create an agent first: agentforge agents create");
+    process.exit(1);
+  }
+  return agents;
+}
+async function createRuntimeWorkspace(createWorkspace2, workspaceConfig, cwd, verbose) {
+  if (!workspaceConfig) {
+    return void 0;
+  }
+  const skillsBasePath = resolveWorkspaceSkillsBasePath(cwd);
+  const workspace = createWorkspace2({
+    storage: "local",
+    name: "agentforge-workspace",
+    basePath: path20.resolve(cwd, workspaceConfig.basePath ?? "./workspace"),
+    skillsBasePath,
+    skillsPath: workspaceConfig.skills ?? ["/skills"],
+    bm25: workspaceConfig.search ?? true,
+    autoIndexPaths: workspaceConfig.autoIndexPaths ?? workspaceConfig.skills ?? ["/skills"]
+  });
+  await workspace.init();
+  if (verbose) {
+    info(`Workspace initialized at ${path20.relative(cwd, workspaceConfig.basePath ?? "./workspace") || "."}`);
+    info(`Workspace skills loaded from ${path20.relative(cwd, skillsBasePath) || "."}`);
+  }
+  return workspace;
+}
+function getEnabledChannels(opts, config) {
+  const channels = [];
+  if (!opts.noHttp) channels.push("http");
+  if (opts.discord || config?.channels?.discord?.enabled) channels.push("discord");
+  if (opts.telegram || config?.channels?.telegram?.enabled) channels.push("telegram");
+  return channels;
+}
+function buildModelString(agentConfig, defaultModel) {
+  const normalizeOpenAIModel = (modelId) => {
+    if (modelId === "gpt-5-chat") return "gpt-5-chat-latest";
+    if (modelId === "gpt-5.1-chat") return "gpt-5.1-chat-latest";
+    if (modelId === "gpt-5.2-chat") return "gpt-5.2-chat-latest";
+    if (modelId === "gpt-5.3-chat") return "gpt-5.3-chat-latest";
+    return modelId;
+  };
+  if (agentConfig.provider === "openrouter" && agentConfig.model && String(agentConfig.model).includes("/") && !String(agentConfig.model).startsWith("openrouter/")) {
+    return `openrouter/${agentConfig.model}`;
+  }
+  if (agentConfig.provider && agentConfig.model && !String(agentConfig.model).includes("/")) {
+    const modelId = agentConfig.provider === "openai" ? normalizeOpenAIModel(String(agentConfig.model)) : String(agentConfig.model);
+    return `${agentConfig.provider}/${modelId}`;
+  }
+  const directModel = agentConfig.provider === "openai" && typeof agentConfig.model === "string" ? `openai/${normalizeOpenAIModel(String(agentConfig.model).replace(/^openai\//, ""))}` : agentConfig.model;
+  return directModel ?? defaultModel ?? "moonshotai/kimi-k2.5";
+}
+function buildAgentDefinition(agentConfig, options) {
+  return {
+    id: agentConfig.id ?? agentConfig._id,
+    name: agentConfig.name ?? "Agent",
+    description: agentConfig.description,
+    instructions: agentConfig.instructions ?? "You are a helpful assistant.",
+    model: buildModelString(agentConfig, options.defaultModel),
+    tools: options.tools,
+    workingMemoryTemplate: agentConfig.workingMemoryTemplate,
+    disableMemory: options.disableMemory,
+    workspace: options.workspace
+  };
+}
 async function isPortInUse(port) {
-  return new Promise((resolve4) => {
+  return new Promise((resolve3) => {
     const server = net.createServer();
     server.once("error", (err) => {
-      resolve4(err.code === "EADDRINUSE" || err.code === "EACCES");
+      resolve3(err.code === "EADDRINUSE" || err.code === "EACCES");
     });
     server.once("listening", () => {
       server.close();
-      resolve4(false);
+      resolve3(false);
     });
     server.listen(port);
   });
 }
 async function keepAlive() {
-  return new Promise((resolve4) => {
+  return new Promise((resolve3) => {
     const shutdown = () => {
       console.log();
       info("Shutting down AgentForge daemon...");
-      resolve4();
+      resolve3();
     };
     process.once("SIGINT", shutdown);
     process.once("SIGTERM", shutdown);
@@ -7026,18 +7221,48 @@ async function keepAlive() {
 }
 
 // src/commands/deploy.ts
-import fs17 from "fs-extra";
-import path19 from "path";
+import fs19 from "fs-extra";
+import path21 from "path";
 import { execSync as execSync4 } from "child_process";
+function maskEnvValue(value) {
+  if (value.length <= 8) {
+    return "*".repeat(Math.max(4, value.length));
+  }
+  return `${value.slice(0, 2)}${"*".repeat(Math.max(4, value.length - 4))}${value.slice(-2)}`;
+}
+function parseEnvFile(envPath) {
+  const content = fs19.readFileSync(envPath, "utf-8");
+  const envVars = {};
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+    const separatorIndex = line.indexOf("=");
+    if (separatorIndex === -1) {
+      continue;
+    }
+    const key = line.slice(0, separatorIndex).trim();
+    let value = line.slice(separatorIndex + 1).trim();
+    if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
+      value = value.slice(1, -1);
+    }
+    if (key) {
+      envVars[key] = value;
+    }
+  }
+  return envVars;
+}
 async function deployProject(options) {
   const projectDir = process.cwd();
-  const pkgPath = path19.join(projectDir, "package.json");
-  if (!await fs17.pathExists(pkgPath)) {
+  const realProjectDir = fs19.realpathSync(projectDir);
+  const pkgPath = path21.join(projectDir, "package.json");
+  if (!await fs19.pathExists(pkgPath)) {
     console.error("Error: No package.json found. Are you in an AgentForge project directory?");
     process.exit(1);
   }
-  const convexDir = path19.join(projectDir, "convex");
-  if (!await fs17.pathExists(convexDir)) {
+  const convexDir = path21.join(projectDir, "convex");
+  if (!await fs19.pathExists(convexDir)) {
     console.error("Error: No convex/ directory found. Are you in an AgentForge project directory?");
     process.exit(1);
   }
@@ -7047,7 +7272,7 @@ async function deployProject(options) {
     console.log("\n\u{1F504} Rolling back to previous Convex deployment...\n");
     try {
       execSync4("npx convex deploy --rollback", {
-        cwd: projectDir,
+        cwd: realProjectDir,
         stdio: "inherit"
       });
       console.log("\n  \u2705 Rollback completed successfully.");
@@ -7057,15 +7282,28 @@ async function deployProject(options) {
     }
     return;
   }
-  const envPath = path19.resolve(projectDir, options.env);
-  const envExists = await fs17.pathExists(envPath);
+  const envPath = path21.resolve(projectDir, options.env);
+  const envExists = await fs19.pathExists(envPath);
+  const envVars = envExists ? parseEnvFile(envPath) : {};
   if (options.dryRun) {
     console.log("\n\u{1F50D} Dry run \u2014 previewing deployment plan:\n");
     console.log(`  Project directory: ${projectDir}`);
     console.log(`  Convex directory:  ${convexDir}`);
     console.log(`  Environment file:  ${envExists ? envPath : "(not found)"}`);
+    if (Object.keys(envVars).length > 0) {
+      console.log("  Environment variables:");
+      for (const [key, value] of Object.entries(envVars)) {
+        console.log(`    ${key}=${maskEnvValue(value)}`);
+      }
+    } else {
+      console.log("  No environment variables found in env file.");
+    }
     console.log("\n  \u2139\uFE0F  No changes were made (dry run).\n");
     return;
+  }
+  if (!envExists) {
+    console.error(`Error: Environment file not found: ${options.env}`);
+    process.exit(1);
   }
   if (!options.force) {
     console.log("\n\u{1F680} Ready to deploy Convex backend to production.\n");
@@ -7075,8 +7313,19 @@ async function deployProject(options) {
   }
   console.log("\u{1F4E6} Deploying Convex backend...\n");
   try {
+    for (const [key, value] of Object.entries(envVars)) {
+      try {
+        execSync4(`npx convex env set ${key} "${value.replace(/"/g, '\\"')}"`, {
+          cwd: realProjectDir,
+          stdio: "inherit"
+        });
+      } catch (setError) {
+        const message = setError instanceof Error ? setError.message : String(setError);
+        console.error(`Failed to set ${key}: ${message}`);
+      }
+    }
     execSync4("npx convex deploy", {
-      cwd: projectDir,
+      cwd: realProjectDir,
       stdio: "inherit"
     });
     console.log("\n  \u2705 Deployment completed successfully!");
@@ -7196,18 +7445,25 @@ function registerWorkflowsCommand(program2) {
         "Failed to create workflow run"
       );
       success(`Created run: ${colors.cyan}${runId}${colors.reset}`);
-      dim("Executing workflow steps...");
-      const result = await safeCall(
-        () => client.action("workflowEngine:executeWorkflow", { runId }),
-        "Failed to execute workflow"
-      );
-      if (result && result.success) {
-        success("Workflow completed successfully");
-        if (result.output) {
-          console.log();
-          dim("Output:");
-          console.log(`  ${result.output}`);
+      dim("Dispatching workflow to the daemon...");
+      const projectConfig = await loadProjectConfig(process.cwd());
+      const port = projectConfig?.channels?.http?.port ?? 3001;
+      const response = await fetch(`http://localhost:${port}/v1/workflows/runs/${runId}/execute`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...process.env.AGENTFORGE_API_KEY ? { Authorization: `Bearer ${process.env.AGENTFORGE_API_KEY}` } : {}
         }
+      });
+      const result = await response.json();
+      if (!response.ok || result.status !== "success") {
+        throw new Error(result.error ?? `Daemon returned HTTP ${response.status}`);
+      }
+      success("Workflow completed successfully");
+      if (result.output) {
+        console.log();
+        dim("Output:");
+        console.log(`  ${result.output}`);
       }
     } catch (err) {
       const errMsg = err instanceof Error ? err.message : String(err);
@@ -7253,11 +7509,11 @@ function registerWorkflowsCommand(program2) {
 
 // src/index.ts
 import { readFileSync as readFileSync3 } from "fs";
-import { fileURLToPath as fileURLToPath4 } from "url";
-import { dirname as dirname2, resolve as resolve3 } from "path";
-var __filename4 = fileURLToPath4(import.meta.url);
-var __dirname4 = dirname2(__filename4);
-var pkg = JSON.parse(readFileSync3(resolve3(__dirname4, "..", "package.json"), "utf-8"));
+import { fileURLToPath as fileURLToPath3 } from "url";
+import { dirname, resolve as resolve2 } from "path";
+var __filename3 = fileURLToPath3(import.meta.url);
+var __dirname3 = dirname(__filename3);
+var pkg = JSON.parse(readFileSync3(resolve2(__dirname3, "..", "package.json"), "utf-8"));
 var program = new Command();
 program.name("agentforge").description("AgentForge \u2014 NanoClaw: A minimalist agent framework powered by Mastra + Convex").version(pkg.version);
 program.command("create").argument("<project-name>", "Name of the project to create").description("Create a new AgentForge project").option("-t, --template <template>", "Project template to use", "default").action(async (projectName, options) => {

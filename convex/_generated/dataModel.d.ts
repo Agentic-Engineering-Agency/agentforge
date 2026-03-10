@@ -404,6 +404,7 @@ export type DataModel = {
       originalName: string;
       projectId?: Id<"projects">;
       size: number;
+      storageId?: string;
       uploadedAt: number;
       url: string;
       userId?: string;
@@ -420,6 +421,7 @@ export type DataModel = {
       | "originalName"
       | "projectId"
       | "size"
+      | "storageId"
       | "uploadedAt"
       | "url"
       | "userId";
@@ -613,13 +615,13 @@ export type DataModel = {
   };
   mastra_messages: {
     document: {
-      content: string;
+      content: any;
       createdAt: string;
-      id: string;
+      id?: string;
       resourceId?: string;
-      role: string;
-      thread_id: string;
-      type: string;
+      role?: string;
+      thread_id?: string;
+      type?: string;
       _id: Id<"mastra_messages">;
       _creationTime: number;
     };
@@ -647,8 +649,8 @@ export type DataModel = {
   mastra_resources: {
     document: {
       createdAt: string;
-      id: string;
-      metadata?: any;
+      id?: string;
+      metadata?: string;
       updatedAt: string;
       workingMemory?: string;
       _id: Id<"mastra_resources">;
@@ -684,21 +686,21 @@ export type DataModel = {
       extractStepResult?: any;
       generateReasonPrompt?: string;
       generateScorePrompt?: string;
-      id: string;
-      input: any;
+      id?: string;
+      input?: any;
       metadata?: any;
-      output: any;
+      output?: any;
       preprocessPrompt?: string;
       preprocessStepResult?: any;
       reason?: string;
       reasonPrompt?: string;
       requestContext?: any;
       resourceId?: string;
-      runId: string;
-      score: number;
-      scorer: any;
-      scorerId: string;
-      source: string;
+      runId?: string;
+      score?: number;
+      scorer?: any;
+      scorerId?: string;
+      source?: string;
       spanId?: string;
       threadId?: string;
       traceId?: string;
@@ -754,10 +756,10 @@ export type DataModel = {
   mastra_threads: {
     document: {
       createdAt: string;
-      id: string;
-      metadata?: any;
-      resourceId: string;
-      title: string;
+      id?: string;
+      metadata?: string;
+      resourceId?: string;
+      title?: string;
       updatedAt: string;
       _id: Id<"mastra_threads">;
       _creationTime: number;
@@ -1060,11 +1062,14 @@ export type DataModel = {
     document: {
       agentIds?: Array<string>;
       createdAt: number;
+      defaultModel?: string;
+      defaultProvider?: string;
       deletedAt?: number;
       description?: string;
       isDefault?: boolean;
       name: string;
       settings?: any;
+      systemPrompt?: string;
       updatedAt: number;
       userId?: string;
       _id: Id<"projects">;
@@ -1075,11 +1080,14 @@ export type DataModel = {
       | "_id"
       | "agentIds"
       | "createdAt"
+      | "defaultModel"
+      | "defaultProvider"
       | "deletedAt"
       | "description"
       | "isDefault"
       | "name"
       | "settings"
+      | "systemPrompt"
       | "updatedAt"
       | "userId";
     indexes: {

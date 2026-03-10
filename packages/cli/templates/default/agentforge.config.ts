@@ -17,7 +17,7 @@ export default {
    */
   daemon: {
     /** Default model for agents (format: provider/model-id) */
-    defaultModel: 'moonshotai/kimi-k2.5',
+    defaultModel: 'openai/gpt-5.4',
 
     /** Database URL (for Convex connection) */
     dbUrl: process.env.CONVEX_URL || '',
@@ -93,10 +93,11 @@ export default {
      * Models are tried in order: primary → fallback1 → fallback2 → ...
      */
     defaultChain: [
-      { provider: 'openrouter', model: 'openai/gpt-4o-mini' },
-      { provider: 'openai', model: 'gpt-4o-mini' },
-      { provider: 'anthropic', model: 'claude-3-5-haiku-20241022' },
-      { provider: 'google', model: 'gemini-2.0-flash' },
+      { provider: 'openai', model: 'gpt-5.4' },
+      { provider: 'openai', model: 'gpt-5.1-chat-latest' },
+      { provider: 'openai', model: 'gpt-5.1-codex-mini' },
+      { provider: 'anthropic', model: 'claude-haiku-4-5' },
+      { provider: 'google', model: 'gemini-2.5-flash' },
     ],
 
     /**
@@ -140,7 +141,7 @@ export default {
     {
       id: 'main',
       name: 'Main Agent',
-      model: 'gpt-4o-mini',
+      model: 'gpt-5.4',
       provider: 'openai',
       instructions: `You are a helpful AI assistant.
 

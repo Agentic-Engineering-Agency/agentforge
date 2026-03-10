@@ -9,7 +9,7 @@ import type { Command } from 'commander';
 import fs from 'fs-extra';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
-import { header, success, error, info, dim, colors } from '../lib/display.js';
+import { header, dim } from '../lib/display.js';
 
 /**
  * Options for the deploy command.
@@ -23,6 +23,45 @@ export interface DeployOptions {
   rollback: boolean;
   /** Skip confirmation prompts. */
   force: boolean;
+}
+
+function maskEnvValue(value: string): string {
+  if (value.length <= 8) {
+    return '*'.repeat(Math.max(4, value.length));
+  }
+  return `${value.slice(0, 2)}${'*'.repeat(Math.max(4, value.length - 4))}${value.slice(-2)}`;
+}
+
+export function parseEnvFile(envPath: string): Record<string, string> {
+  const content = fs.readFileSync(envPath, 'utf-8');
+  const envVars: Record<string, string> = {};
+
+  for (const rawLine of content.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) {
+      continue;
+    }
+
+    const separatorIndex = line.indexOf('=');
+    if (separatorIndex === -1) {
+      continue;
+    }
+
+    const key = line.slice(0, separatorIndex).trim();
+    let value = line.slice(separatorIndex + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+
+    if (key) {
+      envVars[key] = value;
+    }
+  }
+
+  return envVars;
 }
 
 /**
@@ -64,6 +103,7 @@ export async function readAgentForgeConfig(projectDir: string): Promise<any | nu
  */
 export async function deployProject(options: DeployOptions): Promise<void> {
   const projectDir = process.cwd();
+  const realProjectDir = fs.realpathSync(projectDir);
 
   // Validate project structure
   const pkgPath = path.join(projectDir, 'package.json');
@@ -86,7 +126,7 @@ export async function deployProject(options: DeployOptions): Promise<void> {
     console.log('\n🔄 Rolling back to previous Convex deployment...\n');
     try {
       execSync('npx convex deploy --rollback', {
-        cwd: projectDir,
+        cwd: realProjectDir,
         stdio: 'inherit',
       });
       console.log('\n  ✅ Rollback completed successfully.');
@@ -100,6 +140,7 @@ export async function deployProject(options: DeployOptions): Promise<void> {
   // Resolve and validate env file
   const envPath = path.resolve(projectDir, options.env);
   const envExists = await fs.pathExists(envPath);
+  const envVars = envExists ? parseEnvFile(envPath) : {};
 
   // Handle dry-run mode
   if (options.dryRun) {
@@ -107,8 +148,21 @@ export async function deployProject(options: DeployOptions): Promise<void> {
     console.log(`  Project directory: ${projectDir}`);
     console.log(`  Convex directory:  ${convexDir}`);
     console.log(`  Environment file:  ${envExists ? envPath : '(not found)'}`);
+    if (Object.keys(envVars).length > 0) {
+      console.log('  Environment variables:');
+      for (const [key, value] of Object.entries(envVars)) {
+        console.log(`    ${key}=${maskEnvValue(value)}`);
+      }
+    } else {
+      console.log('  No environment variables found in env file.');
+    }
     console.log('\n  ℹ️  No changes were made (dry run).\n');
     return;
+  }
+
+  if (!envExists) {
+    console.error(`Error: Environment file not found: ${options.env}`);
+    process.exit(1);
   }
 
   // Confirmation prompt (unless --force)
@@ -122,8 +176,20 @@ export async function deployProject(options: DeployOptions): Promise<void> {
   console.log('📦 Deploying Convex backend...\n');
 
   try {
+    for (const [key, value] of Object.entries(envVars)) {
+      try {
+        execSync(`npx convex env set ${key} "${value.replace(/"/g, '\\"')}"`, {
+          cwd: realProjectDir,
+          stdio: 'inherit',
+        });
+      } catch (setError) {
+        const message = setError instanceof Error ? setError.message : String(setError);
+        console.error(`Failed to set ${key}: ${message}`);
+      }
+    }
+
     execSync('npx convex deploy', {
-      cwd: projectDir,
+      cwd: realProjectDir,
       stdio: 'inherit',
     });
     console.log('\n  ✅ Deployment completed successfully!');
