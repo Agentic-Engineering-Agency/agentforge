@@ -7,7 +7,6 @@ import { Bot, Plus, Edit, Trash2, Search, X, Loader2 } from 'lucide-react';
 import { useModelCatalog, type ProviderCatalogEntry } from '../lib/model-catalog';
 
 export const Route = createFileRoute('/agents')({ component: AgentsPage });
-
 // Validation constraints
 const VALIDATION = {
   name: { maxLength: 100 },

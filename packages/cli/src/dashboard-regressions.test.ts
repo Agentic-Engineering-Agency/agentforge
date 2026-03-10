@@ -14,6 +14,7 @@ describe('dashboard and convex regressions', () => {
     const agentsSource = readFileSync(path.join(templateDashboardRoot, 'agents.tsx'), 'utf-8');
     const settingsSource = readFileSync(path.join(templateDashboardRoot, 'settings.tsx'), 'utf-8');
     const chatSource = readFileSync(path.join(templateDashboardRoot, 'chat.tsx'), 'utf-8');
+    const modelCatalogSource = readFileSync(path.join(repoRoot, 'packages/cli/templates/default/dashboard/app/lib/model-catalog.ts'), 'utf-8');
     const filesSource = readFileSync(path.join(templateDashboardRoot, 'files.tsx'), 'utf-8');
     const projectsSource = readFileSync(path.join(templateDashboardRoot, 'projects.tsx'), 'utf-8');
     const usageSource = readFileSync(path.join(templateDashboardRoot, 'usage.tsx'), 'utf-8');
@@ -25,6 +26,9 @@ describe('dashboard and convex regressions', () => {
     expect(settingsSource).not.toContain('const AI_PROVIDERS = [');
     expect(settingsSource).not.toContain('const FALLBACK: Record<string, string[]> =');
     expect(settingsSource).toContain('useModelCatalog');
+
+    expect(modelCatalogSource).toContain("import { getDaemonUrl } from './runtime';");
+    expect(modelCatalogSource).not.toContain("(window as any).__AGENTFORGE_DAEMON_URL__ ?? 'http://localhost:3001'");
 
     expect(chatSource).not.toContain('currentAgent?.provider === "openai"');
     expect(chatSource).toContain('providerMeta');

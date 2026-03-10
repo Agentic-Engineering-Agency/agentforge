@@ -6,6 +6,16 @@ import path from 'node:path';
 import fs from 'fs-extra';
 import readline from 'node:readline';
 
+function readEnvVarFromContent(content: string, key: string): string | null {
+  const pattern = new RegExp(`^${key}\\s*=\\s*(.+)$`, 'm');
+  const match = content.match(pattern);
+  if (!match) {
+    return null;
+  }
+
+  return match[1].split('#')[0].trim().replace(/^['"]|['"]$/g, '');
+}
+
 export function registerStatusCommand(program: Command) {
   program
     .command('status')
@@ -89,6 +99,8 @@ export function registerStatusCommand(program: Command) {
     .command('dashboard')
     .description('Launch the web dashboard')
     .option('-p, --port <port>', 'Port for the dashboard', '3000')
+    .option('--daemon-port <port>', 'Port for the AgentForge daemon', process.env.AGENTFORGE_DAEMON_PORT || '3001')
+    .option('--daemon-url <url>', 'Base URL for the AgentForge daemon')
     .option('-d, --dir <path>', 'Project directory (defaults to current directory)')
     .option('--install', 'Install dashboard dependencies before starting')
     .action(async (opts) => {
@@ -172,12 +184,24 @@ export function registerStatusCommand(program: Command) {
 
       // Read the Convex URL from .env.local and inject it into the dashboard
       const envPath = path.join(cwd, '.env.local');
+      let daemonUrl = opts.daemonUrl as string | undefined;
       if (fs.existsSync(envPath)) {
         const envContent = fs.readFileSync(envPath, 'utf-8');
-        const convexUrlMatch = envContent.match(/CONVEX_URL=(.+)/);
-        if (convexUrlMatch) {
+        const convexUrl = readEnvVarFromContent(envContent, 'CONVEX_URL');
+        const envDaemonUrl = readEnvVarFromContent(envContent, 'AGENTFORGE_DAEMON_URL');
+        const daemonPort = readEnvVarFromContent(envContent, 'AGENTFORGE_DAEMON_PORT');
+        if (!daemonUrl && envDaemonUrl) {
+          daemonUrl = envDaemonUrl;
+        }
+        if (!daemonUrl && daemonPort) {
+          daemonUrl = `http://localhost:${daemonPort}`;
+        }
+        if (convexUrl) {
           const dashEnvPath = path.join(dashDir, '.env.local');
-          const dashEnvContent = `VITE_CONVEX_URL=${convexUrlMatch[1].trim()}\n`;
+          const resolvedDaemonUrl = daemonUrl || `http://localhost:${opts.daemonPort}`;
+          const dashEnvContent =
+            `VITE_CONVEX_URL=${convexUrl}\n` +
+            `VITE_AGENTFORGE_DAEMON_URL=${resolvedDaemonUrl}\n`;
           fs.writeFileSync(dashEnvPath, dashEnvContent);
         }
       }

@@ -1,6 +1,6 @@
 # @agentforge-ai/core
 
-Core agent primitives, secure sandbox execution, and MCP server for the AgentForge framework.
+Shared AgentForge primitives for agents, sandboxing, channels, MCP, skills, A2A, research, voice, and workflow composition.
 
 ## Installation
 
@@ -8,62 +8,81 @@ Core agent primitives, secure sandbox execution, and MCP server for the AgentFor
 npm install @agentforge-ai/core
 ```
 
-## Quick Start
+## Export Surface
 
-```typescript
-import { Agent, SandboxManager, MCPServer } from '@agentforge-ai/core';
+The package exports are assembled from `src/index.ts`.
 
-// Create an agent
-const agent = new Agent({
-  id: 'my-agent',
-  name: 'My Agent',
-  instructions: 'You are a helpful assistant.',
-  model: 'openai/gpt-4o-mini',
-});
+### Agent And Workspace
 
-// Generate a response
-const response = await agent.generate('Hello, world!');
+- `Agent`
+- `AgentForgeWorkspace`
+- `LocalWorkspaceProvider`
+- `R2WorkspaceProvider`
+- `createWorkspaceProvider`
+- `createWorkspace`
 
-// Execute code securely
-const sandbox = new SandboxManager({ timeout: 10000 });
-const result = await sandbox.runCode('console.log("Hello from sandbox!")');
+### Sandbox And Execution
 
-// Register tools with MCP
-const mcp = new MCPServer();
-mcp.registerTool({
-  name: 'calculator',
-  inputSchema: z.object({ expression: z.string() }),
-  outputSchema: z.string(),
-  handler: async ({ expression }) => eval(expression).toString(),
-});
+- Sandbox manager and providers from `./sandbox`
+- `GitTool`
+- Browser automation helpers:
+  `BrowserSessionManager`, `BrowserActionExecutor`, `createBrowserTool`, `registerBrowserTool`
+
+### MCP And Connectors
+
+- `MCPServer`
+- `MCPExecutor`
+- everything exported from `./mcp`
+- everything exported from `./connectors`
+
+### Channels
+
+- Base channel abstractions:
+  `ChannelAdapter`, `ChannelRegistry`, `MessageNormalizer`
+- Telegram:
+  `TelegramChannel`, `startTelegramChannel`
+- WhatsApp:
+  `WhatsAppChannel`, `startWhatsAppChannel`
+- Discord exports from `./channels/discord`
+- Slack exports from `./channels/slack`
+
+### Multi-Agent And Failover
+
+- `SwarmOrchestrator`, `InMemorySwarmStore`, `SubTaskRunner`, `ResultAggregator`
+- `FailoverChain`, `FailoverExhaustedError`
+- `A2AAgentRegistry`, `A2AClient`, `A2AServer`
+
+### Skills
+
+- Parsing and discovery:
+  `parseSkillManifest`, `discoverSkills`, `fetchSkillFromGitHub`
+- Bundled skill registry exports:
+  `BundledSkillRegistry`, `bundledSkillRegistry`, `BUNDLED_SKILLS`
+- Marketplace client exports:
+  `fetchFeaturedSkills`, `searchSkills`, `getSkill`, `publishSkill`, `installFromMarketplace`
+
+### Voice, Research, Workflows, Streaming
+
+- Voice:
+  `textToSpeech`, `speechToText`, `createVoiceTool`, TTS engine helpers
+- Research:
+  `ResearchOrchestrator`
+- Workflows:
+  `AgentPipeline`
+- Streaming:
+  `SSEStreamParser`, `streamToAsyncIterator`, `consumeStream`
+
+## Intended Role In The Repo
+
+`@agentforge-ai/core` holds shared framework primitives. The persistent Mastra daemon logic lives in `@agentforge-ai/runtime`, while CLI orchestration and scaffolding live in `@agentforge-ai/cli`.
+
+## Development
+
+```bash
+pnpm --filter @agentforge-ai/core build
+pnpm --filter @agentforge-ai/core test
+pnpm --filter @agentforge-ai/core typecheck
 ```
-
-## API Reference
-
-### Agent
-
-The core agent class wrapping Mastra for AI orchestration.
-
-- `new Agent(config)` - Create a new agent
-- `agent.generate(prompt)` - Generate a response
-- `agent.stream(prompt)` - Stream a response
-
-### SandboxManager
-
-Secure code execution via E2B sandboxes.
-
-- `new SandboxManager(config)` - Create a sandbox manager
-- `manager.runCode(code, options)` - Execute code securely
-- `manager.cleanup()` - Clean up resources
-
-### MCPServer
-
-Model Context Protocol server for tool communication.
-
-- `new MCPServer()` - Create an MCP server
-- `server.registerTool(tool)` - Register a tool
-- `server.listTools()` - List all tools
-- `server.callTool(name, input)` - Call a tool
 
 ## License
 
