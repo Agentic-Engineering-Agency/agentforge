@@ -4040,6 +4040,14 @@ import { spawn as spawn2 } from "child_process";
 import path9 from "path";
 import fs8 from "fs-extra";
 import readline11 from "readline";
+function readEnvVarFromContent(content, key) {
+  const pattern = new RegExp(`^${key}\\s*=\\s*(.+)$`, "m");
+  const match = content.match(pattern);
+  if (!match) {
+    return null;
+  }
+  return match[1].split("#")[0].trim().replace(/^['"]|['"]$/g, "");
+}
 function registerStatusCommand(program2) {
   program2.command("status").description("Show system health and connection status").action(async () => {
     header("AgentForge Status");
@@ -4180,19 +4188,19 @@ function registerStatusCommand(program2) {
     let daemonUrl = opts.daemonUrl;
     if (fs8.existsSync(envPath)) {
       const envContent = fs8.readFileSync(envPath, "utf-8");
-      const convexUrlMatch = envContent.match(/CONVEX_URL=(.+)/);
-      const daemonUrlMatch = envContent.match(/AGENTFORGE_DAEMON_URL=(.+)/);
-      const daemonPortMatch = envContent.match(/AGENTFORGE_DAEMON_PORT=(.+)/);
-      if (!daemonUrl && daemonUrlMatch) {
-        daemonUrl = daemonUrlMatch[1].trim();
+      const convexUrl = readEnvVarFromContent(envContent, "CONVEX_URL");
+      const envDaemonUrl = readEnvVarFromContent(envContent, "AGENTFORGE_DAEMON_URL");
+      const daemonPort = readEnvVarFromContent(envContent, "AGENTFORGE_DAEMON_PORT");
+      if (!daemonUrl && envDaemonUrl) {
+        daemonUrl = envDaemonUrl;
       }
-      if (!daemonUrl && daemonPortMatch) {
-        daemonUrl = `http://localhost:${daemonPortMatch[1].trim()}`;
+      if (!daemonUrl && daemonPort) {
+        daemonUrl = `http://localhost:${daemonPort}`;
       }
-      if (convexUrlMatch) {
+      if (convexUrl) {
         const dashEnvPath = path9.join(dashDir, ".env.local");
         const resolvedDaemonUrl = daemonUrl || `http://localhost:${opts.daemonPort}`;
-        const dashEnvContent = `VITE_CONVEX_URL=${convexUrlMatch[1].trim()}
+        const dashEnvContent = `VITE_CONVEX_URL=${convexUrl}
 VITE_AGENTFORGE_DAEMON_URL=${resolvedDaemonUrl}
 `;
         fs8.writeFileSync(dashEnvPath, dashEnvContent);
@@ -6788,6 +6796,16 @@ function getAgentProviders(agentConfigs) {
   }
   return [...providers];
 }
+function getProvidersFromModels(models) {
+  const providers = /* @__PURE__ */ new Set();
+  for (const model of models) {
+    if (!model || !model.includes("/")) {
+      continue;
+    }
+    providers.add(model.split("/")[0]);
+  }
+  return [...providers];
+}
 async function loadProjectInternalApi(projectDir) {
   const apiPath = path18.join(projectDir, "convex", "_generated", "api.js");
   const moduleUrl = pathToFileURL(apiPath).href;
@@ -6812,7 +6830,11 @@ async function hydrateProviderEnvVars(options) {
   const internalApi = options.internalApi ?? await loadProjectInternalApi(options.projectDir);
   for (const provider of options.providers) {
     const envKeys = getProviderEnvKeys(provider);
-    if (envKeys.some((envKey) => process.env[envKey])) {
+    const existingValue = envKeys.map((envKey) => process.env[envKey]).find((value) => Boolean(value));
+    if (existingValue) {
+      for (const envKey of envKeys) {
+        process.env[envKey] ??= existingValue;
+      }
       result.skipped.push(provider);
       continue;
     }
@@ -6834,6 +6856,7 @@ async function hydrateProviderEnvVars(options) {
 
 // src/lib/convex-auth.ts
 import fs17 from "fs-extra";
+import os3 from "os";
 import path19 from "path";
 var CONVEX_API_BASE = "https://api.convex.dev/api";
 function readEnvVarFromFile(filePath, key) {
@@ -6875,7 +6898,7 @@ function loadProjectConvexConfig(projectDir) {
   }
   return { deploymentName, deploymentType, convexUrl };
 }
-function readConvexAccessToken(homeDir = process.env.HOME ?? "") {
+function readConvexAccessToken(homeDir = os3.homedir()) {
   if (!homeDir) return null;
   const configPath = path19.join(homeDir, ".convex", "config.json");
   if (!fs17.existsSync(configPath)) return null;
@@ -7003,12 +7026,14 @@ function registerStartCommand(program2) {
         }
       }
     }
-    const providers = getAgentProviders(
+    const agentProviders = getAgentProviders(
       agents.map((agentConfig) => ({
         provider: agentConfig.provider,
         model: agentConfig.model
       }))
     );
+    const memoryProviders = adminKey ? getProvidersFromModels([runtime.OBSERVER_MODEL, runtime.EMBEDDING_MODEL]) : [];
+    const providers = [.../* @__PURE__ */ new Set([...agentProviders, ...memoryProviders])];
     if (convexUrl && adminKey && providers.length > 0) {
       try {
         const hydration = await hydrateProviderEnvVars({
@@ -7033,6 +7058,13 @@ function registerStartCommand(program2) {
         );
       }
     }
+    const missingMemoryProviders = memoryProviders.filter(
+      (provider) => getProviderEnvKeys(provider).every((envKey) => !process.env[envKey])
+    );
+    const memoryEnabled = Boolean(adminKey) && missingMemoryProviders.length === 0;
+    if (adminKey && !memoryEnabled && opts.dev) {
+      info(`Disabling agent memory because required provider credentials are unavailable: ${missingMemoryProviders.join(", ")}.`);
+    }
     const runtimeDataClient = {
       query: (functionName, args) => client.query(functionName, args),
       mutation: (functionName, args) => client.mutation(functionName, args)
@@ -7052,7 +7084,7 @@ function registerStartCommand(program2) {
         return buildAgentDefinition(agentConfig, {
           defaultModel: projectConfig?.daemon?.defaultModel,
           tools: workspaceSkillTools,
-          disableMemory: !adminKey,
+          disableMemory: !memoryEnabled,
           workspace: runtimeWorkspace
         });
       }
@@ -7061,7 +7093,7 @@ function registerStartCommand(program2) {
       (agentConfig) => buildAgentDefinition(agentConfig, {
         defaultModel: projectConfig?.daemon?.defaultModel,
         tools: workspaceSkillTools,
-        disableMemory: !adminKey,
+        disableMemory: !memoryEnabled,
         workspace: runtimeWorkspace
       })
     );

@@ -3,6 +3,7 @@ import {
   getAgentProviders,
   getProviderEnvKey,
   getProviderEnvKeys,
+  getProvidersFromModels,
   hydrateProviderEnvVars,
 } from './provider-keys.js';
 
@@ -36,6 +37,17 @@ describe('provider-keys', () => {
     ]);
 
     expect(providers).toEqual(['openai', 'anthropic', 'google']);
+  });
+
+  it('collects unique providers from runtime model strings', () => {
+    const providers = getProvidersFromModels([
+      'google/gemini-2.5-flash',
+      'openai/text-embedding-3-small',
+      'openai/gpt-5.4',
+      undefined,
+    ]);
+
+    expect(providers).toEqual(['google', 'openai']);
   });
 
   it('hydrates missing env vars from Convex decrypted keys', async () => {
@@ -84,6 +96,29 @@ describe('provider-keys', () => {
 
     expect(process.env.OPENAI_API_KEY).toBe('already-set');
     expect(result.skipped).toEqual(['openai']);
+    expect(action).not.toHaveBeenCalled();
+  });
+
+  it('backfills missing provider aliases from an existing env var', async () => {
+    process.env.GOOGLE_API_KEY = 'already-set';
+    const action = vi.fn();
+
+    const result = await hydrateProviderEnvVars({
+      convexUrl: 'https://example.convex.cloud',
+      deployKey: 'deploy-key',
+      projectDir: '/tmp/project',
+      providers: ['google'],
+      client: { action },
+      internalApi: {
+        apiKeys: {
+          getDecryptedForProvider: 'internal-api-ref',
+        },
+      },
+    });
+
+    expect(process.env.GOOGLE_API_KEY).toBe('already-set');
+    expect(process.env.GOOGLE_GENERATIVE_AI_API_KEY).toBe('already-set');
+    expect(result.skipped).toEqual(['google']);
     expect(action).not.toHaveBeenCalled();
   });
 

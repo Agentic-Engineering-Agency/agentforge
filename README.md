@@ -20,7 +20,7 @@ agentforge/
 └── tests/e2e/                 # End-to-end test suite
 ```
 
-The scaffolded project template source of truth lives under [`packages/cli/templates/default/`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/templates/default), and Convex template changes must stay synced with the generated copies.
+The scaffolded project template source of truth lives under [`packages/cli/templates/default/`](packages/cli/templates/default/), and Convex template changes must stay synced with the generated copies.
 
 ## What Exists Today
 
@@ -32,7 +32,7 @@ The scaffolded project template source of truth lives under [`packages/cli/templ
 
 ## CLI Surface
 
-The CLI currently registers these command families from [`packages/cli/src/index.ts`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/src/index.ts):
+The CLI currently registers these command families from [`packages/cli/src/index.ts`](packages/cli/src/index.ts):
 
 - Project lifecycle: `create`, `run`, `deploy`, `upgrade`
 - Runtime: `start`
@@ -139,34 +139,34 @@ These requirements are enforced by the current command implementations:
 
 ## Documentation Map
 
-- [Getting Started](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/getting-started.md)
-- [CLI Reference](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/CLI.md)
-- [Architecture](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/architecture.md)
-- [Channels](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/channels.md)
-- [Skills](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/skills.md)
-- [MCP](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/mcp.md)
-- [A2A](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/a2a.md)
-- [Advanced Tools](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/advanced-tools.md)
-- [Multi-Agent Collaboration](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/multi-agent-collaboration.md)
-- [Deployment Guide](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/deployment-guide.md)
-- [Technical Reference](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/TECH-REFERENCE.md)
-- [FinForge Demo](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/finforge-demo.md)
-- [Competitive Positioning](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/docs/competitive-positioning.md)
+- [Getting Started](docs/getting-started.md)
+- [CLI Reference](docs/CLI.md)
+- [Architecture](docs/architecture.md)
+- [Channels](docs/channels.md)
+- [Skills](docs/skills.md)
+- [MCP](docs/mcp.md)
+- [A2A](docs/a2a.md)
+- [Advanced Tools](docs/advanced-tools.md)
+- [Multi-Agent Collaboration](docs/multi-agent-collaboration.md)
+- [Deployment Guide](docs/deployment-guide.md)
+- [Technical Reference](docs/TECH-REFERENCE.md)
+- [FinForge Demo](docs/finforge-demo.md)
+- [Competitive Positioning](docs/competitive-positioning.md)
 
 ## Package Docs
 
-- [CLI package README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/README.md)
-- [Runtime package README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/runtime/README.md)
-- [Core package README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/core/README.md)
-- [Web package README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/web/README.md)
-- [Default template README](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/templates/default/README.md)
+- [CLI package README](packages/cli/README.md)
+- [Runtime package README](packages/runtime/README.md)
+- [Core package README](packages/core/README.md)
+- [Web package README](packages/web/README.md)
+- [Default template README](packages/cli/templates/default/README.md)
 
 ## Testing
 
 - Unit and package tests: `pnpm test`
 - Type checking: `pnpm typecheck`
-- End-to-end suite: see [`tests/e2e/README.md`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/tests/e2e/README.md)
+- End-to-end suite: see [`tests/e2e/README.md`](tests/e2e/README.md)
 
 ## License
 
-[Apache 2.0](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/LICENSE)
+[Apache 2.0](LICENSE)

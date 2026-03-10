@@ -85,4 +85,36 @@ describe('convex-auth', () => {
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
+
+  it('falls back to os.homedir when homeDir is omitted', async () => {
+    await fs.writeFile(
+      path.join(tmpDir, '.env.local'),
+      'CONVEX_DEPLOYMENT=dev:outstanding-dachshund-365\n',
+    );
+
+    const homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue(homeDir);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith('/deployment/outstanding-dachshund-365/team_and_project')) {
+        return new Response(JSON.stringify({
+          team: 'agenticengineering',
+          project: 'agentforge-test-codex-refactor',
+        }), { status: 200 });
+      }
+
+      return new Response(JSON.stringify({
+        adminKey: 'resolved-admin-key',
+        deploymentName: 'outstanding-dachshund-365',
+        url: 'https://outstanding-dachshund-365.convex.cloud',
+      }), { status: 200 });
+    });
+
+    const result = await resolveConvexAdminAuthFromLogin({
+      projectDir: tmpDir,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+    });
+
+    expect(homedirSpy).toHaveBeenCalled();
+    expect(result?.adminKey).toBe('resolved-admin-key');
+  });
 });

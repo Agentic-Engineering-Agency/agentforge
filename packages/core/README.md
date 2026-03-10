@@ -10,7 +10,7 @@ npm install @agentforge-ai/core
 
 ## Export Surface
 
-The package exports are assembled from [`src/index.ts`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/core/src/index.ts).
+The package exports are assembled from `src/index.ts`.
 
 ### Agent And Workspace
 

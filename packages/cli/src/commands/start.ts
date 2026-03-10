@@ -12,6 +12,8 @@ import { header, success, error, info, dim } from '../lib/display.js';
 import {
   getAgentProviders,
   getProviderEnvKey,
+  getProviderEnvKeys,
+  getProvidersFromModels,
   hydrateProviderEnvVars,
 } from '../lib/provider-keys.js';
 import { resolveConvexAdminAuthFromLogin } from '../lib/convex-auth.js';
@@ -83,12 +85,16 @@ export function registerStartCommand(program: Command) {
         }
       }
 
-      const providers = getAgentProviders(
+      const agentProviders = getAgentProviders(
         agents.map((agentConfig: any) => ({
           provider: agentConfig.provider,
           model: agentConfig.model,
         })),
       );
+      const memoryProviders = adminKey
+        ? getProvidersFromModels([runtime.OBSERVER_MODEL, runtime.EMBEDDING_MODEL])
+        : [];
+      const providers = [...new Set([...agentProviders, ...memoryProviders])];
 
       if (convexUrl && adminKey && providers.length > 0) {
         try {
@@ -116,6 +122,14 @@ export function registerStartCommand(program: Command) {
         }
       }
 
+      const missingMemoryProviders = memoryProviders.filter((provider) =>
+        getProviderEnvKeys(provider).every((envKey) => !process.env[envKey]),
+      );
+      const memoryEnabled = Boolean(adminKey) && missingMemoryProviders.length === 0;
+      if (adminKey && !memoryEnabled && opts.dev) {
+        info(`Disabling agent memory because required provider credentials are unavailable: ${missingMemoryProviders.join(', ')}.`);
+      }
+
       const runtimeDataClient = {
         query: (functionName: string, args: Record<string, unknown>) => client.query(functionName as never, args as never),
         mutation: (functionName: string, args: Record<string, unknown>) => client.mutation(functionName as never, args as never),
@@ -137,7 +151,7 @@ export function registerStartCommand(program: Command) {
           return buildAgentDefinition(agentConfig, {
             defaultModel: projectConfig?.daemon?.defaultModel,
             tools: workspaceSkillTools,
-            disableMemory: !adminKey,
+            disableMemory: !memoryEnabled,
             workspace: runtimeWorkspace,
           });
         },
@@ -146,7 +160,7 @@ export function registerStartCommand(program: Command) {
         buildAgentDefinition(agentConfig, {
           defaultModel: projectConfig?.daemon?.defaultModel,
           tools: workspaceSkillTools,
-          disableMemory: !adminKey,
+          disableMemory: !memoryEnabled,
           workspace: runtimeWorkspace,
         }),
       );

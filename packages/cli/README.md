@@ -4,7 +4,7 @@ Command-line interface for scaffolding, starting, and operating AgentForge proje
 
 ## What This Package Does
 
-The CLI entrypoint is defined in [`src/index.ts`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/src/index.ts). It wires together project creation, Convex bootstrap, daemon startup, interactive chat, dashboard launch, deployment helpers, and project management commands.
+The CLI entrypoint is defined in `src/index.ts`. It wires together project creation, Convex bootstrap, daemon startup, interactive chat, dashboard launch, deployment helpers, and project management commands.
 
 ## Installation
 
@@ -96,11 +96,11 @@ Behavior notes from the current implementation:
 - `run` is a Convex/local environment bootstrap command, not the daemon.
 - `start` requires a valid `CONVEX_URL` and at least one agent stored in Convex.
 - `chat` requires the daemon HTTP endpoint to already be reachable.
-- `dashboard` is registered from [`src/commands/status.ts`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/src/commands/status.ts), not from a dedicated dashboard command file.
+- `dashboard` is registered from `src/commands/status.ts`, not from a dedicated dashboard command file.
 
 ## Template Source
 
-The CLI scaffolds from [`templates/default/`](/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/packages/cli/templates/default). If you change template-backed files, make sure the synced copies in the repo stay aligned.
+The CLI scaffolds from `templates/default/`. If you change template-backed files, make sure the synced copies in the repo stay aligned.
 
 ## License
 
