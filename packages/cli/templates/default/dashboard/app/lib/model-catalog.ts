@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { getDaemonUrl } from './runtime';
 
 export interface ProviderCatalogEntry {
   id: string;
@@ -39,7 +40,7 @@ export function useModelCatalog(fallbackProviderIds: string[] = []) {
   const [providers, setProviders] = useState<ProviderCatalogEntry[]>(() => buildFallbackProviders(fallbackProviderIds));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const daemonUrl: string = (window as any).__AGENTFORGE_DAEMON_URL__ ?? 'http://localhost:3001';
+  const daemonUrl = getDaemonUrl();
 
   useEffect(() => {
     const controller = new AbortController();

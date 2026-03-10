@@ -2,12 +2,21 @@ import { Command } from 'commander';
 import fs from 'fs-extra';
 import net from 'node:net';
 import path from 'node:path';
+import type { AgentDefinition } from '@agentforge-ai/runtime';
 import { createClient, safeCall } from '../lib/convex-client.js';
 import { createDaemonWorkflowExecutor } from '../lib/workflow-executor.js';
 import type { AgentForgeProjectConfig } from '../lib/project-config.js';
 import { loadProjectConfig, loadProjectEnv } from '../lib/project-config.js';
 import { resolveWorkspaceSkillsBasePath } from '../lib/runtime-workspace.js';
 import { header, success, error, info, dim } from '../lib/display.js';
+import {
+  getAgentProviders,
+  getProviderEnvKey,
+  getProviderEnvKeys,
+  getProvidersFromModels,
+  hydrateProviderEnvVars,
+} from '../lib/provider-keys.js';
+import { resolveConvexAdminAuthFromLogin } from '../lib/convex-auth.js';
 
 export function registerStartCommand(program: Command) {
   program
@@ -41,23 +50,90 @@ export function registerStartCommand(program: Command) {
         process.exit(1);
       }
 
-  const runtime = await import('@agentforge-ai/runtime');
-  const core = await import('@agentforge-ai/core');
-  const client = await createClient();
-  const runtimeDataClient = {
-    query: (functionName: string, args: Record<string, unknown>) => client.query(functionName as never, args as never),
-    mutation: (functionName: string, args: Record<string, unknown>) => client.mutation(functionName as never, args as never),
-  };
-  const agents = await fetchAgents(client, requestedAgents);
-  const workspace = await createRuntimeWorkspace(core.createWorkspace, projectConfig?.workspace, cwd, opts.dev);
-  const workspaceSkillTools = workspace
-    ? await core.loadExecutableSkillTools(resolveWorkspaceSkillsBasePath(cwd))
-    : undefined;
+      const runtime = await import('@agentforge-ai/runtime');
+      const core = await import('@agentforge-ai/core');
+      const client = await createClient();
+      const agents = await fetchAgents(client, requestedAgents);
+      const workspace = await createRuntimeWorkspace(core.createWorkspace, projectConfig?.workspace, cwd, opts.dev);
+      const runtimeWorkspace = workspace as unknown as AgentDefinition['workspace'];
+      const workspaceSkillTools = workspace
+        ? await core.loadExecutableSkillTools(resolveWorkspaceSkillsBasePath(cwd))
+        : undefined;
 
       const enabledChannels = getEnabledChannels(opts, projectConfig);
       runtime.validateEnv({ channels: enabledChannels });
 
-      const adminKey = process.env.CONVEX_DEPLOY_KEY ?? process.env.CONVEX_ADMIN_KEY;
+      if (process.env.GOOGLE_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+        process.env.GOOGLE_GENERATIVE_AI_API_KEY = process.env.GOOGLE_API_KEY;
+      }
+
+      let adminKey = process.env.CONVEX_DEPLOY_KEY ?? process.env.CONVEX_ADMIN_KEY;
+      if (!adminKey) {
+        try {
+          const resolvedAuth = await resolveConvexAdminAuthFromLogin({ projectDir: cwd });
+          if (resolvedAuth?.adminKey) {
+            adminKey = resolvedAuth.adminKey;
+            process.env.CONVEX_DEPLOY_KEY = resolvedAuth.adminKey;
+            if (opts.dev) {
+              info(`Resolved Convex admin auth from local Convex login for ${resolvedAuth.deploymentName}.`);
+            }
+          }
+        } catch (authError) {
+          if (opts.dev) {
+            info(`Convex admin auth auto-resolution failed: ${authError instanceof Error ? authError.message : String(authError)}`);
+          }
+        }
+      }
+
+      const agentProviders = getAgentProviders(
+        agents.map((agentConfig: any) => ({
+          provider: agentConfig.provider,
+          model: agentConfig.model,
+        })),
+      );
+      const memoryProviders = adminKey
+        ? getProvidersFromModels([runtime.OBSERVER_MODEL, runtime.EMBEDDING_MODEL])
+        : [];
+      const providers = [...new Set([...agentProviders, ...memoryProviders])];
+
+      if (convexUrl && adminKey && providers.length > 0) {
+        try {
+          const hydration = await hydrateProviderEnvVars({
+            convexUrl,
+            deployKey: adminKey,
+            projectDir: cwd,
+            providers,
+          });
+          if (opts.dev && hydration.hydrated.length > 0) {
+            info(`Loaded stored API keys for: ${hydration.hydrated.join(', ')}`);
+          }
+        } catch (hydrationError) {
+          if (opts.dev) {
+            info(`Stored API key hydration failed: ${hydrationError instanceof Error ? hydrationError.message : String(hydrationError)}`);
+          }
+        }
+      } else {
+        const missingEnvProviders = providers.filter((provider) => !process.env[getProviderEnvKey(provider)]);
+        if (missingEnvProviders.length > 0 && opts.dev) {
+          info(
+            `Missing local env vars for provider keys: ${missingEnvProviders.join(', ')}. ` +
+            'Stored Convex API keys require either CONVEX_DEPLOY_KEY or a logged-in local Convex CLI session.',
+          );
+        }
+      }
+
+      const missingMemoryProviders = memoryProviders.filter((provider) =>
+        getProviderEnvKeys(provider).every((envKey) => !process.env[envKey]),
+      );
+      const memoryEnabled = Boolean(adminKey) && missingMemoryProviders.length === 0;
+      if (adminKey && !memoryEnabled && opts.dev) {
+        info(`Disabling agent memory because required provider credentials are unavailable: ${missingMemoryProviders.join(', ')}.`);
+      }
+
+      const runtimeDataClient = {
+        query: (functionName: string, args: Record<string, unknown>) => client.query(functionName as never, args as never),
+        mutation: (functionName: string, args: Record<string, unknown>) => client.mutation(functionName as never, args as never),
+      };
       const daemon = new runtime.AgentForgeDaemon({
         deploymentUrl: convexUrl,
         adminAuthToken: adminKey,
@@ -72,30 +148,22 @@ export function registerStartCommand(program: Command) {
             return null;
           }
 
-          return {
-            id: agentConfig.id ?? agentConfig._id,
-            name: agentConfig.name ?? 'Agent',
-            description: agentConfig.description,
-            instructions: agentConfig.instructions ?? 'You are a helpful assistant.',
-            model: buildModelString(agentConfig, projectConfig?.daemon?.defaultModel),
+          return buildAgentDefinition(agentConfig, {
+            defaultModel: projectConfig?.daemon?.defaultModel,
             tools: workspaceSkillTools,
-            workingMemoryTemplate: agentConfig.workingMemoryTemplate,
-            disableMemory: !adminKey,
-            workspace,
-          };
+            disableMemory: !memoryEnabled,
+            workspace: runtimeWorkspace,
+          });
         },
       });
-      const agentDefinitions = agents.map((agentConfig: any) => ({
-        id: agentConfig.id ?? agentConfig._id,
-        name: agentConfig.name ?? 'Agent',
-        description: agentConfig.description,
-        instructions: agentConfig.instructions ?? 'You are a helpful assistant.',
-        model: buildModelString(agentConfig, projectConfig?.daemon?.defaultModel),
-        tools: workspaceSkillTools,
-        workingMemoryTemplate: agentConfig.workingMemoryTemplate,
-        disableMemory: !adminKey,
-        workspace,
-      }));
+      const agentDefinitions = agents.map((agentConfig: any) =>
+        buildAgentDefinition(agentConfig, {
+          defaultModel: projectConfig?.daemon?.defaultModel,
+          tools: workspaceSkillTools,
+          disableMemory: !memoryEnabled,
+          workspace: runtimeWorkspace,
+        }),
+      );
 
       await daemon.loadAgents(agentDefinitions);
       daemon.setWorkflowExecutor(createDaemonWorkflowExecutor(client, daemon));
@@ -252,6 +320,28 @@ function buildModelString(agentConfig: any, defaultModel?: string): string {
     : agentConfig.model;
 
   return directModel ?? defaultModel ?? 'moonshotai/kimi-k2.5';
+}
+
+function buildAgentDefinition(
+  agentConfig: any,
+  options: {
+    defaultModel?: string;
+    tools?: AgentDefinition['tools'];
+    disableMemory: boolean;
+    workspace?: AgentDefinition['workspace'];
+  },
+): AgentDefinition {
+  return {
+    id: agentConfig.id ?? agentConfig._id,
+    name: agentConfig.name ?? 'Agent',
+    description: agentConfig.description,
+    instructions: agentConfig.instructions ?? 'You are a helpful assistant.',
+    model: buildModelString(agentConfig, options.defaultModel),
+    tools: options.tools,
+    workingMemoryTemplate: agentConfig.workingMemoryTemplate,
+    disableMemory: options.disableMemory,
+    workspace: options.workspace,
+  };
 }
 
 async function isPortInUse(port: number): Promise<boolean> {

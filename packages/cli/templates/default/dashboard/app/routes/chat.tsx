@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import type { Id } from "@convex/_generated/dataModel";
+import { getDaemonUrl } from "../lib/runtime";
 import {
   Send,
   Plus,
@@ -225,7 +226,7 @@ function ChatPageComponent() {
 
       // Send message to runtime daemon via HTTP — daemon handles LLM and stores response.
       // The useQuery subscription above will pick up new messages in real-time.
-      const daemonUrl = (window as any).__AGENTFORGE_DAEMON_URL__ ?? "http://localhost:3001";
+      const daemonUrl = getDaemonUrl();
       const resp = await fetch(`${daemonUrl}/api/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -4,6 +4,7 @@ import { RouterProvider, createRouter } from "@tanstack/react-router";
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 import { routeTree } from "./routeTree.gen";
 import "./styles/globals.css";
+import { initRuntimeConfig } from "./lib/runtime";
 
 // Create router
 const router = createRouter({ routeTree });
@@ -24,6 +25,7 @@ if (!convexUrl) {
   );
 }
 const convex = new ConvexReactClient(convexUrl);
+initRuntimeConfig();
 
 // Render
 const rootElement = document.getElementById("root")!;
