@@ -39,7 +39,7 @@ jobs:
           if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
             TAG="${GITHUB_REF_NAME}"
           else
-            TAG="${{ inputs.version }}"
+            TAG="${{ github.event.inputs.version || '' }}"
           fi
 
           if [[ "$TAG" != v* ]]; then
