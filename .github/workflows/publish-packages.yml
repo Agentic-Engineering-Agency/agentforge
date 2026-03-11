@@ -16,7 +16,6 @@ env:
 
 permissions:
   contents: read
-  id-token: write
 
 jobs:
   publish:
@@ -139,7 +138,7 @@ jobs:
             fi
 
             echo "Publishing ${package_name}@${VERSION}"
-            npm publish --access public --provenance
+            npm publish --access public
           }
 
           (
