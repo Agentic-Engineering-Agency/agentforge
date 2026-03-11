@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import { BundledSkillRegistry, BUNDLED_SKILLS, bundledSkillRegistry } from './bundled-registry.js'
 import { WebSearchSkill, CalculatorSkill, DateTimeSkill, UrlFetchSkill, FileReaderSkill } from './bundled-index.js'
 
@@ -38,10 +38,27 @@ describe('BundledSkillRegistry', () => {
   it('web-search handles search query', async () => {
     const registry = new BundledSkillRegistry()
     const search = registry.get('web-search')!
-    const result = await search.execute({ query: 'test' })
-    const parsed = JSON.parse(result)
-    expect(parsed).toHaveProperty('query', 'test')
-    expect(parsed).toHaveProperty('results')
+
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+      json: async () => ({
+        RelatedTopics: [
+          { Text: 'Test Result - snippet', FirstURL: 'https://example.com' },
+        ],
+      }),
+    } as any)
+
+    try {
+      const result = await search.execute({ query: 'test' })
+      const parsed = JSON.parse(result)
+      expect(parsed).toHaveProperty('query', 'test')
+      expect(parsed).toHaveProperty('results')
+      expect(Array.isArray(parsed.results)).toBe(true)
+    } finally {
+      fetchMock.mockRestore()
+    }
   })
 
   it('url-fetch validates URL input', async () => {

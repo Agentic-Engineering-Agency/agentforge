@@ -107,7 +107,7 @@ export function applyContextStrategy(
  * Summarize oldest context messages when over 80% of token limit.
  * Uses a current low-cost OpenAI model by default to compress history.
  *
- * AGE-158: Triggered automatically in mastraIntegration when strategy is "summarize".
+ * AGE-158: Triggered automatically when strategy is "summarize".
  */
 export const summarizeContext = internalAction({
   args: {

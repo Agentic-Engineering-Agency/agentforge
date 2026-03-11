@@ -12,7 +12,6 @@ function formatDate(ts: number): string {
 
 function maskKey(key: string | undefined | null): string {
   if (!key) return "****";
-  if (!key) return "****";
   if (key.length <= 12) return key.substring(0, 4) + '****';
   return key.substring(0, 8) + '...' + key.substring(key.length - 4);
 }

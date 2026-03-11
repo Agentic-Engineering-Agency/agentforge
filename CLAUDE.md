@@ -142,21 +142,27 @@ url: 'pending-upload'
 
 ---
 
-## Current Status (v0.11.21, March 2026)
+## Current Status (v0.12.21, March 2026)
 
-### Architecture Redesign In Progress
-5 specs written for the migration from Convex-action-Mastra to daemon architecture:
-- **SPEC-020:** `packages/runtime/` package (createStandardAgent, ConvexStore memory, model registry)
-- **SPEC-021:** Channel adapters (HTTP/SSE, Discord, Telegram)
-- **SPEC-022:** Convex data layer cleanup (remove LLM logic, AES-256-GCM encryption)
-- **SPEC-023:** CLI runtime commands (`agentforge start`, `agentforge chat`)
-- **SPEC-024:** Security hardening (auth, rate limiting, env validation)
+### Architecture Redesign Complete
+All 7 specs implementing the daemon architecture have been merged:
+- **SPEC-020:** `packages/runtime/` package — Done ✓
+- **SPEC-021:** Channel adapters (HTTP/Discord/Telegram) — Done ✓
+- **SPEC-022:** Convex data layer cleanup (AES-256-GCM encryption) — Done ✓
+- **SPEC-023:** CLI runtime commands (`agentforge start`, `agentforge chat`) — Done ✓
+- **SPEC-024:** Security hardening (auth guards, rate limiting) — Done ✓
+- **SPEC-025:** ResearchOrchestrator Mastra v1.8 compatibility — Done ✓
+- **SPEC-026:** Dashboard E2E regression fixes — Done ✓
 
-### What Works (v0.11.21)
-- `agentforge create / status / agents / models / keys / tokens / threads / logs / skills / dashboard`
-- All 8 LLM providers for model fetch + chat
-- Convex schema deploys cleanly
-- 757 unit tests passing, 0 TypeScript errors
+### What Works (v0.12.21)
+- Full daemon model: `agentforge start` → persistent Mastra runtime
+- `agentforge create / status / agents / models / keys / tokens / threads / logs / skills / dashboard / chat`
+- HTTP channel with OpenAI-compatible POST /api/chat + GET /api/agents
+- Discord and Telegram channel adapters
+- Dynamic model fetching from all 8 provider APIs
+- Usage token tracking per request
+- AES-256-GCM API key encryption (Node.js only, never crypto.subtle)
+- Convex schema deploys cleanly, 0 TypeScript errors
 
 ### Key Architectural Decisions Made
 - Central daemon model (like OpenClaw, not per-project)

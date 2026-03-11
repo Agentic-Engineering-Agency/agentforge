@@ -114,6 +114,29 @@ describe("RateLimiter", () => {
       // token-2 should still work
       expect(() => limiter.checkLimit("token-2")).not.toThrow();
     });
+
+    test("evicts oldest clients when capacity is exceeded", () => {
+      const limiter = new RateLimiter({
+        burstSize: 1,
+        requestsPerMinute: 100,
+        requestsPerHour: 100,
+        maxClients: 2,
+      });
+
+      limiter.checkLimit("client-1");
+      vi.advanceTimersByTime(10);
+      limiter.checkLimit("client-2");
+
+      // client-1 should be at its burst limit before eviction
+      expect(() => limiter.checkLimit("client-1")).toThrow(RateLimitError);
+
+      // Adding a third client should evict the oldest (client-1)
+      vi.advanceTimersByTime(10);
+      limiter.checkLimit("client-3");
+
+      // After eviction, client-1 should behave like a new client
+      expect(() => limiter.checkLimit("client-1")).not.toThrow();
+    });
   });
 
   describe("reset", () => {

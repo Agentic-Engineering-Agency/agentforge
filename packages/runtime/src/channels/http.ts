@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { streamText } from 'hono/streaming';
 import * as crypto from 'node:crypto';
 import type { Agent } from '@mastra/core/agent';
@@ -6,6 +6,8 @@ import type { ChannelAdapter, AgentDefinition } from '../daemon/types.js';
 import { formatSSEChunk } from './shared.js';
 import { getProviderCatalog } from '../models/catalog.js';
 import { getModel } from '../models/registry.js';
+import { sanitizeHttpInput, InputValidationError } from '../security/input-sanitizer.js';
+import { RateLimiter, RateLimitError } from '../security/rate-limiter.js';
 
 interface DaemonAccess {
   listAgents(): AgentDefinition[];
@@ -59,6 +61,7 @@ export class HttpChannel implements ChannelAdapter {
   private allowedOrigins: string[];
   private dataClient?: HttpDataClient;
   private daemon: DaemonAccess | null = null;
+  private rateLimiter = new RateLimiter();
 
   constructor(config: HttpChannelConfig = {}) {
     this.port = config.port ?? 3001;
@@ -104,6 +107,28 @@ export class HttpChannel implements ChannelAdapter {
       // crypto.timingSafeEqual runs unconditionally (no length-leaking short-circuit).
       // Previously, the length check short-circuited before timingSafeEqual and leaked
       // expected key length via timing differences.
+      const tokenHash = crypto.createHash('sha256').update(token).digest();
+      const keyHash = crypto.createHash('sha256').update(apiKey).digest();
+      const valid = crypto.timingSafeEqual(tokenHash, keyHash);
+      if (!valid) {
+        return c.json({ error: 'Invalid API key' }, 401);
+      }
+      return next();
+    });
+
+    // Auth middleware for /api/* routes (same as /v1/*)
+    this.app.use('/api/*', async (c, next) => {
+      const apiKey = this.apiKey;
+      if (!apiKey) return next();
+
+      const auth = c.req.header('Authorization');
+      if (!auth) {
+        return c.json({ error: 'Missing Authorization header' }, 401);
+      }
+      const [type, token] = auth.split(' ');
+      if (type !== 'Bearer' || !token) {
+        return c.json({ error: 'Invalid API key' }, 401);
+      }
       const tokenHash = crypto.createHash('sha256').update(token).digest();
       const keyHash = crypto.createHash('sha256').update(apiKey).digest();
       const valid = crypto.timingSafeEqual(tokenHash, keyHash);
@@ -181,6 +206,12 @@ export class HttpChannel implements ChannelAdapter {
       if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
       if (!this.dataClient) return c.json({ error: 'Chat persistence is not configured' }, 503);
 
+      // Enforce body size limit (1MB)
+      const contentLength = parseInt(c.req.header('Content-Length') ?? '0', 10);
+      if (contentLength > 1048576) {
+        return c.json({ error: 'Request body too large (max 1MB)' }, 413);
+      }
+
       const body = await c.req.json();
       const {
         agentId,
@@ -198,6 +229,32 @@ export class HttpChannel implements ChannelAdapter {
         return c.json({ error: 'agentId and message are required' }, 400);
       }
 
+      if (fileIds.length > 10) {
+        return c.json({ error: 'Too many file attachments (max 10)' }, 400);
+      }
+
+      // Rate limit by API key or IP
+      const clientId = this.resolveClientId(c);
+      try {
+        this.rateLimiter.checkLimit(clientId);
+      } catch (error) {
+        if (error instanceof RateLimitError) {
+          return c.json({ error: error.message }, 429);
+        }
+        throw error;
+      }
+
+      // Sanitize user input
+      let sanitizedMessage: string;
+      try {
+        sanitizedMessage = sanitizeHttpInput(message);
+      } catch (error) {
+        if (error instanceof InputValidationError) {
+          return c.json({ error: 'Message too long. Please shorten your message.' }, 400);
+        }
+        throw error;
+      }
+
       const resolvedAgent = await daemon.getOrLoadAgentDefinition(agentId);
       if (!resolvedAgent) {
         return c.json({ error: `Agent '${agentId}' not found` }, 404);
@@ -209,8 +266,8 @@ export class HttpChannel implements ChannelAdapter {
       const existingMessages = await this.dataClient.query('messages:getByThread', { threadId })
         .catch(() => []) as Array<{ role?: string; content?: string }> | [];
       const attachments = await this.resolveAttachments(fileIds);
-      const storedUserMessage = this.formatStoredUserMessage(message, attachments);
-      const agentUserMessage = this.formatAgentUserMessage(message, attachments);
+      const storedUserMessage = this.formatStoredUserMessage(sanitizedMessage, attachments);
+      const agentUserMessage = this.formatAgentUserMessage(sanitizedMessage, attachments);
 
       await this.dataClient.mutation('messages:create', {
         threadId,
@@ -218,7 +275,7 @@ export class HttpChannel implements ChannelAdapter {
         content: storedUserMessage,
       });
 
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const sessionId = `session_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
       await this.dataClient.mutation('sessions:create', {
         sessionId,
         threadId,
@@ -292,6 +349,12 @@ export class HttpChannel implements ChannelAdapter {
       const daemon = this.daemon;
       if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
 
+      // Enforce body size limit (1MB)
+      const contentLength = parseInt(c.req.header('Content-Length') ?? '0', 10);
+      if (contentLength > 1048576) {
+        return c.json({ error: { message: 'Request body too large (max 1MB)', type: 'invalid_request_error' } }, 413);
+      }
+
       const body = await c.req.json();
       const {
         model,
@@ -310,6 +373,17 @@ export class HttpChannel implements ChannelAdapter {
         return c.json({ error: { message: "'messages' must not be empty", type: 'invalid_request_error' } }, 400);
       }
 
+      // Rate limit by API key or IP
+      const clientId = this.resolveClientId(c);
+      try {
+        this.rateLimiter.checkLimit(clientId);
+      } catch (error) {
+        if (error instanceof RateLimitError) {
+          return c.json({ error: { message: error.message, type: 'rate_limit_error' } }, 429);
+        }
+        throw error;
+      }
+
       // Get agent by model ID (agent ID)
       const agent = daemon.getAgent(model);
       if (!agent) {
@@ -318,7 +392,17 @@ export class HttpChannel implements ChannelAdapter {
 
       // Convert OpenAI format to Mastra format
       const lastMessage = messages[messages.length - 1];
-      const userMessage = typeof lastMessage.content === 'string' ? lastMessage.content : JSON.stringify(lastMessage.content);
+      let userMessage = typeof lastMessage.content === 'string' ? lastMessage.content : JSON.stringify(lastMessage.content);
+
+      // Sanitize user input
+      try {
+        userMessage = sanitizeHttpInput(userMessage);
+      } catch (error) {
+        if (error instanceof InputValidationError) {
+          return c.json({ error: { message: 'Message too long. Please shorten your message.', type: 'invalid_request_error' } }, 400);
+        }
+        throw error;
+      }
 
       if (!stream) {
         // Non-streaming response
@@ -424,6 +508,31 @@ export class HttpChannel implements ChannelAdapter {
       }
       this.server = undefined;
     }
+  }
+
+  private resolveClientId(c: Context): string {
+    const authHeader = c.req.header('Authorization');
+    if (authHeader) {
+      const parts = authHeader.trim().split(/\s+/);
+      if (parts.length === 2 && /^bearer$/i.test(parts[0])) {
+        return `bearer:${this.hashClientIdentifier(parts[1])}`;
+      }
+      return `auth:${this.hashClientIdentifier(authHeader)}`;
+    }
+
+    const xForwardedFor = c.req.header('X-Forwarded-For');
+    if (xForwardedFor) {
+      const firstIp = xForwardedFor.split(',')[0]?.trim();
+      if (firstIp) {
+        return `ip:${this.hashClientIdentifier(firstIp)}`;
+      }
+    }
+
+    return 'anonymous';
+  }
+
+  private hashClientIdentifier(value: string): string {
+    return crypto.createHash('sha256').update(value).digest('hex');
   }
 
   private resolveOrigin(origin: string | undefined): string {

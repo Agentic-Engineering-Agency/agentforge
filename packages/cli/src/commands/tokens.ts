@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { createClient } from '../lib/convex-client.js';
 import { header, success, error, info, dim, table } from '../lib/display.js';
 import readline from 'node:readline';
-import { randomBytes } from 'node:crypto';
+
 
 function prompt(question: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -19,13 +19,13 @@ export function registerTokensCommand(program: Command) {
     .action(async (opts) => {
       if (!opts.name) { error('--name is required'); process.exit(1); }
       const client = await createClient();
-      const result = await client.mutation('apiAccessTokens:generate' as any, {
+      const result = await client.action('apiAccessTokensActions:generate' as any, {
         name: opts.name,
-      }) as { id: string; token: string };
+      }) as { plaintext: string; name: string };
       success(`Token "${opts.name}" created.`);
-      info(`\n  Token: ${result.token}`);
+      info(`\n  Token: ${result.plaintext}`);
       info(`\n  ⚠️  This token will NOT be shown again. Store it securely.`);
-      dim(`\nUse it as: Authorization: Bearer ${result.token}`);
+      dim(`\nUse it as: Authorization: Bearer ${result.plaintext}`);
     });
 
   tokens
@@ -87,12 +87,11 @@ export function registerTokensCommand(program: Command) {
       }
 
       try {
-        const token = 'agf_' + randomBytes(16).toString('hex');
-        const result = await client.mutation('apiAccessTokens:generate' as any, {
+        const result = await client.action('apiAccessTokensActions:generate' as any, {
           name: opts.name,
           expiresAt,
-        }) as { id: string; token: string };
-        success(`Token created: ${result.token}`);
+        }) as { plaintext: string; name: string };
+        success(`Token created: ${result.plaintext}`);
         info(`Name: ${opts.name} | Expires: ${opts.expires || 'Never'} | Status: Active`);
         info(`\n  ⚠️  This token will NOT be shown again. Store it securely.`);
       } catch (err) {

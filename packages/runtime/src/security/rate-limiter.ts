@@ -14,6 +14,7 @@ export const DEFAULT_RATE_LIMIT_CONFIG = {
   requestsPerMinute: 60,
   requestsPerHour: 1000,
   burstSize: 10,
+  maxClients: 10_000,
 } as const;
 
 /**
@@ -23,6 +24,7 @@ export interface RateLimitConfig {
   requestsPerMinute: number;
   requestsPerHour: number;
   burstSize: number;
+  maxClients: number;
 }
 
 /**
@@ -54,6 +56,7 @@ interface RequestData {
 export class RateLimiter {
   private readonly config: RateLimitConfig;
   private readonly requests: Map<string, RequestData> = new Map();
+  private cleanupCounter = 0;
 
   constructor(config: Partial<RateLimitConfig> = {}) {
     this.config = {
@@ -82,8 +85,19 @@ export class RateLimiter {
       (ts) => ts > hourAgo // Keep only recent hour
     );
 
+    this.evictOldestIfNeeded(now, token);
+
     // Check limits
-    const recentMinute = data.timestamps.filter((ts) => ts > minuteAgo).length;
+
+    // Burst check: limit rapid-fire requests within 1-second window
+    const burstWindow = now - 1000;
+    const recentBurst = data.timestamps.filter(ts => ts > burstWindow).length;
+    if (recentBurst >= this.config.burstSize) {
+      throw new RateLimitError(
+        `Rate limit exceeded: ${this.config.burstSize} burst requests per second`,
+        1
+      );
+    }
 
     if (data.timestamps.length >= this.config.requestsPerHour) {
       throw new RateLimitError(
@@ -92,6 +106,7 @@ export class RateLimiter {
       );
     }
 
+    const recentMinute = data.timestamps.filter((ts) => ts > minuteAgo).length;
     if (recentMinute >= this.config.requestsPerMinute) {
       throw new RateLimitError(
         `Rate limit exceeded: ${this.config.requestsPerMinute} requests per minute`,
@@ -103,16 +118,14 @@ export class RateLimiter {
       );
     }
 
-    if (data.timestamps.length >= this.config.burstSize) {
-      throw new RateLimitError(
-        `Rate limit exceeded: ${this.config.burstSize} burst requests`,
-        this.calculateRetryAfter(data.timestamps, this.config.burstSize, 1000)
-      );
-    }
-
     // Add this request
     data.timestamps.push(now);
     this.requests.set(token, data);
+
+    // Periodic cleanup of stale entries
+    if (++this.cleanupCounter % 100 === 0) {
+      this.cleanup();
+    }
   }
 
   /**
@@ -125,6 +138,19 @@ export class RateLimiter {
       this.requests.delete(token);
     } else {
       this.requests.clear();
+    }
+  }
+
+  /**
+   * Remove stale entries with no recent activity.
+   * Called automatically every 100 requests.
+   */
+  cleanup(): void {
+    const hourAgo = Date.now() - 60 * 60 * 1000;
+    for (const [key, data] of this.requests.entries()) {
+      if (data.timestamps.length === 0 || data.timestamps[data.timestamps.length - 1] <= hourAgo) {
+        this.requests.delete(key);
+      }
     }
   }
 
@@ -148,5 +174,28 @@ export class RateLimiter {
     const retryAt = oldestTimestamp + windowMs;
     const now = Date.now();
     return Math.max(0, Math.ceil((retryAt - now) / 1000));
+  }
+
+  private evictOldestIfNeeded(now: number, currentToken: string): void {
+    if (this.requests.size < this.config.maxClients) return;
+    if (this.requests.has(currentToken)) return;
+
+    let oldestKey: string | null = null;
+    let oldestTimestamp = now;
+
+    for (const [key, data] of this.requests.entries()) {
+      if (key === currentToken) continue;
+      const lastTimestamp = data.timestamps[data.timestamps.length - 1] ?? 0;
+      if (lastTimestamp < oldestTimestamp) {
+        oldestTimestamp = lastTimestamp;
+        oldestKey = key;
+      }
+    }
+
+    if (!oldestKey) {
+      oldestKey = currentToken;
+    }
+
+    this.requests.delete(oldestKey);
   }
 }
