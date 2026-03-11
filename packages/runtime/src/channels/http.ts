@@ -6,6 +6,8 @@ import type { ChannelAdapter, AgentDefinition } from '../daemon/types.js';
 import { formatSSEChunk } from './shared.js';
 import { getProviderCatalog } from '../models/catalog.js';
 import { getModel } from '../models/registry.js';
+import { sanitizeHttpInput, InputValidationError } from '../security/input-sanitizer.js';
+import { RateLimiter, RateLimitError } from '../security/rate-limiter.js';
 
 interface DaemonAccess {
   listAgents(): AgentDefinition[];
@@ -59,6 +61,7 @@ export class HttpChannel implements ChannelAdapter {
   private allowedOrigins: string[];
   private dataClient?: HttpDataClient;
   private daemon: DaemonAccess | null = null;
+  private rateLimiter = new RateLimiter();
 
   constructor(config: HttpChannelConfig = {}) {
     this.port = config.port ?? 3001;
@@ -198,6 +201,28 @@ export class HttpChannel implements ChannelAdapter {
         return c.json({ error: 'agentId and message are required' }, 400);
       }
 
+      // Rate limit by API key or IP
+      const clientId = c.req.header('Authorization') ?? c.req.header('X-Forwarded-For') ?? 'anonymous';
+      try {
+        this.rateLimiter.checkLimit(clientId);
+      } catch (error) {
+        if (error instanceof RateLimitError) {
+          return c.json({ error: error.message }, 429);
+        }
+        throw error;
+      }
+
+      // Sanitize user input
+      let sanitizedMessage: string;
+      try {
+        sanitizedMessage = sanitizeHttpInput(message);
+      } catch (error) {
+        if (error instanceof InputValidationError) {
+          return c.json({ error: 'Message too long. Please shorten your message.' }, 400);
+        }
+        throw error;
+      }
+
       const resolvedAgent = await daemon.getOrLoadAgentDefinition(agentId);
       if (!resolvedAgent) {
         return c.json({ error: `Agent '${agentId}' not found` }, 404);
@@ -209,8 +234,8 @@ export class HttpChannel implements ChannelAdapter {
       const existingMessages = await this.dataClient.query('messages:getByThread', { threadId })
         .catch(() => []) as Array<{ role?: string; content?: string }> | [];
       const attachments = await this.resolveAttachments(fileIds);
-      const storedUserMessage = this.formatStoredUserMessage(message, attachments);
-      const agentUserMessage = this.formatAgentUserMessage(message, attachments);
+      const storedUserMessage = this.formatStoredUserMessage(sanitizedMessage, attachments);
+      const agentUserMessage = this.formatAgentUserMessage(sanitizedMessage, attachments);
 
       await this.dataClient.mutation('messages:create', {
         threadId,
@@ -310,6 +335,17 @@ export class HttpChannel implements ChannelAdapter {
         return c.json({ error: { message: "'messages' must not be empty", type: 'invalid_request_error' } }, 400);
       }
 
+      // Rate limit by API key or IP
+      const clientId = c.req.header('Authorization') ?? c.req.header('X-Forwarded-For') ?? 'anonymous';
+      try {
+        this.rateLimiter.checkLimit(clientId);
+      } catch (error) {
+        if (error instanceof RateLimitError) {
+          return c.json({ error: { message: error.message, type: 'rate_limit_error' } }, 429);
+        }
+        throw error;
+      }
+
       // Get agent by model ID (agent ID)
       const agent = daemon.getAgent(model);
       if (!agent) {
@@ -318,7 +354,17 @@ export class HttpChannel implements ChannelAdapter {
 
       // Convert OpenAI format to Mastra format
       const lastMessage = messages[messages.length - 1];
-      const userMessage = typeof lastMessage.content === 'string' ? lastMessage.content : JSON.stringify(lastMessage.content);
+      let userMessage = typeof lastMessage.content === 'string' ? lastMessage.content : JSON.stringify(lastMessage.content);
+
+      // Sanitize user input
+      try {
+        userMessage = sanitizeHttpInput(userMessage);
+      } catch (error) {
+        if (error instanceof InputValidationError) {
+          return c.json({ error: { message: 'Message too long. Please shorten your message.', type: 'invalid_request_error' } }, 400);
+        }
+        throw error;
+      }
 
       if (!stream) {
         // Non-streaming response
