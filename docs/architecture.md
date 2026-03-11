@@ -1,171 +1,151 @@
 # Architecture
 
-AgentForge is built on three pillars: **Mastra** for LLM orchestration, **Convex** for real-time state, and **Cloudflare** for edge deployment.
+AgentForge is built on three pillars: **Mastra** for LLM orchestration, **Convex** for real-time state, and a persistent **daemon runtime** that separates concerns correctly.
 
 ## System Overview
 
 ```
                     ┌──────────────────────────┐
                     │      User Interfaces      │
-                    │  CLI │ Web │ Channels      │
+                    │  CLI │ Dashboard │ Channels│
                     └───────────┬──────────────┘
                                 │
                     ┌───────────▼──────────────┐
-                    │    Channel Adapters       │
-                    │  Telegram │ WhatsApp      │
-                    │  Slack    │ Discord       │
+                    │   AgentForgeDaemon        │
+                    │   (packages/runtime/)     │
                     │                          │
-                    │  Normalized InboundMsg    │
-                    │  → OutboundMsg pipeline   │
-                    └───────────┬──────────────┘
-                                │
-                    ┌───────────▼──────────────┐
-                    │    Agent Pipeline         │
+                    │  HTTP Channel (Hono/SSE)  │
+                    │  Discord Channel          │
+                    │  Telegram Channel         │
                     │                          │
+                    │  createStandardAgent()    │
                     │  ┌─────────────────────┐ │
                     │  │  Mastra Agent        │ │
                     │  │  (LLM Router)        │ │
                     │  │  8+ providers        │ │
                     │  └──────────┬──────────┘ │
                     │             │             │
-                    │  ┌──────┐ ┌▼─────┐ ┌───┐ │
-                    │  │Skills│ │MCP   │ │A2A│ │
-                    │  │      │ │Tools │ │   │ │
-                    │  └──────┘ └──────┘ └───┘ │
-                    │                          │
-                    │  Voice │ Browser │ Git    │
-                    │  Sandbox │ Workspace      │
+                    │  ┌──────┐ ┌▼─────┐       │
+                    │  │Tools │ │Memory│       │
+                    │  │(MCP) │ │Convex│       │
+                    │  └──────┘ └──────┘       │
                     └───────────┬──────────────┘
                                 │
                     ┌───────────▼──────────────┐
                     │    Convex Backend         │
+                    │   (Data Layer ONLY)       │
                     │                          │
-                    │  Real-time DB (20+ tables)│
-                    │  Serverless Functions     │
-                    │  Subscriptions            │
-                    │  File Storage (R2)        │
+                    │  agents, apiKeys, logs    │
+                    │  threads, messages        │
+                    │  ConvexStore (memory)     │
                     └──────────────────────────┘
 ```
 
 ## Data Flow
 
-A typical message flows through the system like this:
+A typical message flows through the system:
 
-1. **User sends a message** via a channel (Telegram, Slack, CLI, etc.)
-2. **Channel Adapter** normalizes it into a standard `InboundMessage` format
-3. **Agent Pipeline** receives the message and invokes the Mastra Agent
-4. **Mastra** routes to the configured LLM provider (`"provider/model"` format)
-5. **Tools execute** — skills, MCP tools, browser actions, sandbox code, etc.
-6. **Response stored** in Convex (thread, messages, usage tracking)
-7. **OutboundMessage** sent back through the channel adapter to the user
-
-## Config Cascade
-
-Configuration resolves in priority order:
-
-```
-Agent Config  >  Project Config  >  Global Config  >  System Defaults
-```
-
-- **Agent Config** — Per-agent model, instructions, skills, tools
-- **Project Config** — `agentforge.config.ts` in the project root
-- **Global Config** — User-level settings (`agentforge config`)
-- **System Defaults** — Framework defaults (e.g., `openai/gpt-4o`)
+1. **User sends a message** via CLI (`agentforge chat`) or HTTP (`POST /api/chat`)
+2. **HTTP Channel** (Hono server on port 4111) receives the request
+3. **AgentForgeDaemon** routes to the correct Mastra agent
+4. **createStandardAgent()** initializes agent with ConvexStore memory
+5. **Mastra** routes to the configured LLM (`"provider/model"` format), streams response
+6. **Response stored** in Convex (threads, messages, usage tracking)
+7. **SSE stream** flows back to the client
 
 ## Package Structure
 
 ```
 agentforge/
 ├── packages/
-│   ├── core/               # @agentforge-ai/core
-│   │   ├── src/
-│   │   │   ├── agent.ts           # Agent class (Mastra wrapper)
-│   │   │   ├── mcp-server.ts      # MCP server for tool registration
-│   │   │   ├── mcp/
-│   │   │   │   ├── mcp-client.ts       # MCP client (stdio/HTTP/SSE)
-│   │   │   │   └── mcp-dynamic-tools.ts # Dynamic tool loader
-│   │   │   ├── channel-adapter.ts  # Base channel + registry
-│   │   │   ├── channels/
-│   │   │   │   ├── telegram.ts    # Telegram adapter
-│   │   │   │   └── whatsapp.ts    # WhatsApp adapter
-│   │   │   ├── a2a/
-│   │   │   │   ├── a2a-client.ts  # A2A task delegation
-│   │   │   │   ├── a2a-server.ts  # A2A task handler
-│   │   │   │   └── a2a-registry.ts # Agent discovery
-│   │   │   ├── skills/
-│   │   │   │   ├── skill-loader.ts    # Load skill definitions
-│   │   │   │   ├── skill-registry.ts  # Skill management
-│   │   │   │   └── skill-discovery.ts # Discovery mechanisms
-│   │   │   ├── sandbox.ts         # E2B sandbox manager
-│   │   │   ├── workspace.ts       # File workspace (local/R2)
-│   │   │   ├── browser-tool.ts    # Playwright browser automation
-│   │   │   ├── git-tool.ts        # Git operations tool
-│   │   │   └── swarm.ts           # Multi-agent orchestration
-│   │   └── package.json
+│   ├── runtime/            # @agentforge-ai/runtime
+│   │   └── src/
+│   │       ├── agent/           # createStandardAgent() factory
+│   │       ├── channels/        # HTTP (Hono/SSE), Discord, Telegram
+│   │       ├── daemon/          # AgentForgeDaemon class
+│   │       ├── models/registry  # model registry (capabilities, costs)
+│   │       └── tools/           # web-search, read-url, datetime, notes
 │   │
 │   ├── cli/                # @agentforge-ai/cli
-│   │   └── src/
-│   │       ├── index.ts           # CLI entry point (commander)
-│   │       └── commands/          # Individual command handlers
+│   │   ├── src/
+│   │   │   ├── index.ts         # CLI entry point (commander)
+│   │   │   └── commands/        # Individual command handlers
+│   │   └── templates/default/   # CANONICAL scaffold template
+│   │       ├── convex/          # Data layer only (no LLM logic)
+│   │       └── dashboard/       # React UI
 │   │
-│   ├── channels-slack/     # @agentforge-ai/channels-slack
-│   ├── channels-discord/   # @agentforge-ai/channels-discord
-│   ├── tools-voice/        # @agentforge-ai/tools-voice
-│   ├── sandbox/            # @agentforge-ai/sandbox
-│   └── web/                # @agentforge-ai/web (React dashboard)
+│   └── core/               # @agentforge-ai/core (shared types)
 │
-├── convex/                 # Convex serverless backend
-│   ├── schema.ts           # Database schema (20+ tables)
+├── convex/                 # Local dev copy (sync with templates/)
+│   ├── schema.ts           # Database schema
 │   ├── agents.ts           # Agent CRUD
-│   ├── chat.ts             # Chat/generation logic
+│   ├── apiKeys.ts          # Encrypted key storage
 │   ├── threads.ts          # Conversation threads
 │   ├── messages.ts         # Message storage
-│   ├── mastraIntegration.ts # Mastra agent execution
-│   ├── llmProviders.ts     # LLM provider management
-│   ├── skills.ts           # Skills registry
-│   ├── mcpConnections.ts   # MCP server connections
-│   ├── vault.ts            # Secret storage
-│   └── http.ts             # HTTP endpoints
+│   └── http.ts             # HTTP endpoints (data only)
 │
 └── docs/                   # Documentation
 ```
 
 ## Key Design Decisions
 
-### Mastra for LLM routing (not Vercel AI SDK)
+### Mastra runs in packages/runtime/ — never in Convex actions
 
-AgentForge uses Mastra's model router directly. All models use the `"provider/model-name"` format (e.g., `openai/gpt-4o`, `anthropic/claude-sonnet-4-20250514`). This gives us:
+Running Mastra inside Convex Node.js actions produces 10-15s cold starts, no real streaming, and broken crypto. The daemon is a persistent Node.js process that starts once and handles all requests:
 
-- Single dependency for all LLM providers
-- Built-in agent orchestration
-- Tool execution framework
-- No Vercel AI SDK dependency
+```
+✅ packages/runtime/ → Mastra agent runtime (persistent daemon)
+✅ convex/           → data layer only (agents config, apiKeys, logs, threads)
+❌ convex/chat.ts    → DELETED (never put LLM calls in Convex)
+❌ convex/lib/agent.ts → DELETED
+❌ convex/mastraIntegration.ts → DELETED
+```
+
+### Memory: ConvexStore (not LibSQL)
+
+```typescript
+// ✅ Daemon uses @mastra/convex for memory — visible in dashboard
+import { ConvexStore } from '@mastra/convex'
+
+// ❌ LibSQL creates a local SQLite file — wrong for central daemon
+import { LibSQLStore } from '@mastra/libsql'
+```
+
+### HTTP Channel: OpenAI-compatible API
+
+The daemon exposes a Hono server on port 4111 with two key endpoints:
+
+- `GET /api/agents` — list all agents
+- `POST /api/chat` — chat with an agent (SSE streaming)
+
+This OpenAI-compatible format lets any client that speaks HTTP talk to AgentForge agents.
+
+### AES-256-GCM encryption for API keys
+
+API keys are encrypted using Node.js `crypto` (never `crypto.subtle`):
+
+```typescript
+// ✅ Node.js crypto in "use node" internalAction
+import * as crypto from 'node:crypto'
+const cipher = crypto.createCipheriv('aes-256-gcm', key, iv)
+
+// ❌ crypto.subtle in V8 runtime → 10-19s latency
+await crypto.subtle.deriveBits(...)
+```
 
 ### Convex for state (not Postgres)
 
-Convex provides real-time subscriptions out of the box, which means the web dashboard and channel adapters get live updates without polling. The serverless function model also eliminates infrastructure management.
-
-### Channel adapter normalization
-
-All channels share a common message format (`InboundMessage` / `OutboundMessage`). This means agent logic is channel-agnostic — the same agent works across Telegram, Slack, WhatsApp, and Discord without modification.
-
-### Project-scoped multi-tenancy
-
-Every resource (agents, threads, files, skills, etc.) belongs to a `projectId`. This enables:
-
-- Multiple isolated workspaces per user
-- Team collaboration with role-based access (owner/editor/viewer)
-- Clean data boundaries for compliance
+Convex provides real-time subscriptions for the dashboard and eliminates infrastructure management. It is used **only** as a data layer — all LLM logic runs in `packages/runtime/`.
 
 ## Supported LLM Providers
 
 | Provider | Format | Example |
 |----------|--------|---------|
 | OpenAI | `openai/model` | `openai/gpt-4o` |
-| Anthropic | `anthropic/model` | `anthropic/claude-sonnet-4-20250514` |
+| Anthropic | `anthropic/model` | `anthropic/claude-opus-4-6` |
 | Google | `google/model` | `google/gemini-2.0-flash` |
 | Mistral | `mistral/model` | `mistral/mistral-large-latest` |
 | DeepSeek | `deepseek/model` | `deepseek/deepseek-chat` |
 | xAI | `xai/model` | `xai/grok-2` |
 | Cohere | `cohere/model` | `cohere/command-r-plus` |
-| OpenRouter | `openrouter/model` | `openrouter/auto` |
+| MoonshotAI | `moonshotai/model` | `moonshotai/kimi-k2.5` |

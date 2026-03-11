@@ -144,8 +144,10 @@ gh pr create
 
 | Spec | Track | Status | Description |
 |------|-------|--------|-------------|
-| SPEC-020 | A | Ready | `packages/runtime/` — daemon, createStandardAgent, ConvexStore memory, model registry |
-| SPEC-021 | A | Blocked on 020 | Channel adapters: HTTP/SSE, Discord, Telegram |
-| SPEC-022 | B | Ready | Convex data layer: remove LLM, AES-256-GCM encryption, fix data leak |
-| SPEC-023 | B | Blocked on 020+022 | CLI: `agentforge start`, `agentforge chat`, `agentforge deploy` |
-| SPEC-024 | B | Blocked on 022 | Security: auth, rate limiting, env validation |
+| SPEC-020 | A | ✅ Done | `packages/runtime/` — daemon, createStandardAgent, ConvexStore memory, model registry |
+| SPEC-021 | A | ✅ Done | Channel adapters: HTTP/SSE, Discord, Telegram |
+| SPEC-022 | B | ✅ Done | Convex data layer: remove LLM, AES-256-GCM encryption, fix data leak |
+| SPEC-023 | B | ✅ Done | CLI: `agentforge start`, `agentforge chat` |
+| SPEC-024 | B | ✅ Done | Security: auth guards, rate limiting, env validation |
+| SPEC-025 | A | ✅ Done | ResearchOrchestrator Mastra v1.8 compatibility |
+| SPEC-026 | B | ✅ Done | Dashboard E2E regression fixes (settings page crash) |
