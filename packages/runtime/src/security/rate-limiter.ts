@@ -14,6 +14,7 @@ export const DEFAULT_RATE_LIMIT_CONFIG = {
   requestsPerMinute: 60,
   requestsPerHour: 1000,
   burstSize: 10,
+  maxClients: 10_000,
 } as const;
 
 /**
@@ -23,6 +24,7 @@ export interface RateLimitConfig {
   requestsPerMinute: number;
   requestsPerHour: number;
   burstSize: number;
+  maxClients: number;
 }
 
 /**
@@ -82,6 +84,8 @@ export class RateLimiter {
     data.timestamps = data.timestamps.filter(
       (ts) => ts > hourAgo // Keep only recent hour
     );
+
+    this.evictOldestIfNeeded(now, token);
 
     // Check limits
 
@@ -170,5 +174,28 @@ export class RateLimiter {
     const retryAt = oldestTimestamp + windowMs;
     const now = Date.now();
     return Math.max(0, Math.ceil((retryAt - now) / 1000));
+  }
+
+  private evictOldestIfNeeded(now: number, currentToken: string): void {
+    if (this.requests.size < this.config.maxClients) return;
+    if (this.requests.has(currentToken)) return;
+
+    let oldestKey: string | null = null;
+    let oldestTimestamp = now;
+
+    for (const [key, data] of this.requests.entries()) {
+      if (key === currentToken) continue;
+      const lastTimestamp = data.timestamps[data.timestamps.length - 1] ?? 0;
+      if (lastTimestamp < oldestTimestamp) {
+        oldestTimestamp = lastTimestamp;
+        oldestKey = key;
+      }
+    }
+
+    if (!oldestKey) {
+      oldestKey = currentToken;
+    }
+
+    this.requests.delete(oldestKey);
   }
 }

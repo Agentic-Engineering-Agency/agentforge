@@ -65,7 +65,7 @@ npx convex dev
 agentforge start
 ```
 
-The daemon reads `CONVEX_URL` from `.env.local` and boots all agents defined in your Convex database. It exposes an OpenAI-compatible HTTP endpoint on port 4111 by default.
+The daemon reads `CONVEX_URL` from `.env.local` and boots all agents defined in your Convex database. It exposes an OpenAI-compatible HTTP endpoint on port 3001 by default.
 
 ## 7. Start Chatting
 

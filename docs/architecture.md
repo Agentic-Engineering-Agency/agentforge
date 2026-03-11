@@ -45,8 +45,8 @@ AgentForge is built on three pillars: **Mastra** for LLM orchestration, **Convex
 
 A typical message flows through the system:
 
-1. **User sends a message** via CLI (`agentforge chat`) or HTTP (`POST /api/chat`)
-2. **HTTP Channel** (Hono server on port 4111) receives the request
+1. **User sends a message** via CLI (`agentforge chat`) or HTTP (`POST /v1/chat/completions` or `/api/chat`)
+2. **HTTP Channel** (Hono server on port 3001) receives the request
 3. **AgentForgeDaemon** routes to the correct Mastra agent
 4. **createStandardAgent()** initializes agent with ConvexStore memory
 5. **Mastra** routes to the configured LLM (`"provider/model"` format), streams response
@@ -113,10 +113,11 @@ import { LibSQLStore } from '@mastra/libsql'
 
 ### HTTP Channel: OpenAI-compatible API
 
-The daemon exposes a Hono server on port 4111 with two key endpoints:
+The daemon exposes a Hono server on port 3001 with the following endpoints:
 
-- `GET /api/agents` — list all agents
-- `POST /api/chat` — chat with an agent (SSE streaming)
+- `GET /v1/agents` — list all agents
+- `POST /v1/chat/completions` — OpenAI-compatible chat completions (SSE streaming)
+- `POST /api/chat` — dashboard chat endpoint backed by Convex
 
 This OpenAI-compatible format lets any client that speaks HTTP talk to AgentForge agents.
 

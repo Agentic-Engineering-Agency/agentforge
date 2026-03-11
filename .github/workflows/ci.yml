@@ -41,7 +41,7 @@ jobs:
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642195b8c39babe6cc2b8be # v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -66,7 +66,7 @@ jobs:
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642195b8c39babe6cc2b8be # v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -92,7 +92,7 @@ jobs:
         uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@49933ea5288caeca8642195b8c39babe6cc2b8be # v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
