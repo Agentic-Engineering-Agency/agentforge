@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.22] - 2026-03-11
+### Added
+- Publish workflow for automated npm releases on tag push
+- GitHub release automation via `publish-packages.yml`
+
+### Changed
+- CLI build workflow now commits dist directly to main (org restricts Actions PR creation)
+- Publish workflow uses `NPM_ACCESS_TOKEN` secret (aligned with repo secret name)
+
+### Fixed
+- Dashboard chat experience synced with CLI runtime (#212)
+- Daemon workflow and dashboard source refinements (#211)
+- Archived stale specs after GitHub backlog reset (#220)
+
 ## [0.12.21] - 2026-03-10
 ### Fixed
 - Dynamic model fetching, dashboard fixes, usage streaming

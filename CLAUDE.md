@@ -142,7 +142,7 @@ url: 'pending-upload'
 
 ---
 
-## Current Status (v0.12.21, March 2026)
+## Current Status (v0.12.22, March 2026)
 
 ### Architecture Redesign Complete
 All 7 specs implementing the daemon architecture have been merged:
