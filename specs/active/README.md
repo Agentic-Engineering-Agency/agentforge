@@ -15,9 +15,9 @@ Current canonical issues:
 - `#15` MCP Lifecycle Completion
 - `#38` Sandbox Execution Productization
 - `#4` Cloudflare Deployment Modernization
-- `#213` Runtime/CLI Convergence
+- `#213` Runtime/CLI Convergence — _SPEC-029: move direct LLM calls (context.ts, lib/research.ts) to runtime daemon_
 - `#214` Dashboard E2E And Route Reliability
-- `#215` Convex Runtime-Boundary Cleanup
+- `#215` Convex Runtime-Boundary Cleanup — _SPEC-027: crypto.subtle → node:crypto migration; SPEC-028: api.* → internal.* cleanup_
 - `#216` Project configuration bug: cannot select agents
 - `#217` Chat-scoped model override
 - `#218` Settings page hardcoded-state bug

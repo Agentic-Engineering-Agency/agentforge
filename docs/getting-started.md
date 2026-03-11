@@ -33,17 +33,11 @@ Follow the interactive prompts to create a new Convex project. Your schema, func
 
 ## 4. Set Your LLM API Key
 
-In the Convex dashboard (https://dashboard.convex.dev), go to **Settings → Environment Variables** and add:
-
-```
-OPENAI_API_KEY=sk-...
-```
-
-Or add it via CLI after deploying:
-
 ```bash
-npx convex env set OPENAI_API_KEY "sk-..."
+agentforge keys add openai "sk-..."
 ```
+
+Or set it via Convex dashboard → **Settings → Environment Variables**.
 
 ## 5. Create Your First Agent
 
@@ -51,29 +45,49 @@ npx convex env set OPENAI_API_KEY "sk-..."
 agentforge agents create
 ```
 
-Or store a key and create an agent via the dashboard:
+Or use the dashboard:
 
 ```bash
-agentforge keys add openai "sk-..."
 agentforge dashboard
 ```
 
-## 6. Start Chatting
+## 6. Start the Daemon
 
+AgentForge runs as a persistent daemon (not via Convex actions). You need two processes running simultaneously:
+
+**Terminal 1 — Convex backend:**
 ```bash
-agentforge chat <agent-id>
+npx convex dev
+```
+
+**Terminal 2 — AgentForge daemon:**
+```bash
+agentforge start
+```
+
+The daemon reads `CONVEX_URL` from `.env.local` and boots all agents defined in your Convex database. It exposes an OpenAI-compatible HTTP endpoint on port 3001 by default.
+
+## 7. Start Chatting
+
+**Terminal 3 — Chat:**
+```bash
+agentforge chat
+```
+
+Or use the dashboard:
+```bash
+agentforge dashboard
 ```
 
 ## Project Structure
 
 ```
 my-agent-app/
-├── convex/              # Backend — Convex functions
+├── convex/              # Backend — Convex data layer (no LLM logic)
 │   ├── agents.ts        # Agent CRUD
-│   ├── chat.ts          # Chat pipeline with failover
-│   ├── lib/
-│   │   └── agent.ts     # Multi-provider LLM client
-│   └── modelFetcher.ts  # Live model lists from provider APIs
+│   ├── apiKeys.ts       # Encrypted API key storage
+│   ├── threads.ts       # Conversation threads
+│   └── messages.ts      # Message storage
 ├── dashboard/           # Web UI (React + Vite)
 ├── workspace/           # Agent workspace files
 ├── skills/              # Agent skills (SKILL.md files)

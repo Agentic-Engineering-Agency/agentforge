@@ -5,6 +5,93 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.21] - 2026-03-10
+### Fixed
+- Dynamic model fetching, dashboard fixes, usage streaming
+
+## [0.12.20] - 2026-03-06
+### Added
+- Dynamic model fetching from provider APIs (OpenAI, Anthropic, Google, etc.)
+- Usage token tracking per request
+
+## [0.12.19] - 2026-03-06
+### Fixed
+- Dashboard chat message storage
+- Agent edit form regression
+
+## [0.12.18] - 2026-03-06 (SPEC-026)
+### Fixed
+- Settings page crash — key.encryptedKey.substring() on undefined
+
+## [0.12.17] - 2026-03-06
+### Fixed
+- Auto-set AGENTFORGE_KEY_SALT in Convex after agentforge create init
+
+## [0.12.16] - 2026-03-06
+### Fixed
+- Add AGENTFORGE_KEY_SALT setup step to onboarding README
+
+## [0.12.15] - 2026-03-06
+### Fixed
+- Mock Mastra Agent in orchestrator tests — no real API calls in CI
+
+## [0.12.14] - 2026-03-06
+### Changed
+- Merged SPEC-025 ResearchOrchestrator Mastra v1.8 compatibility
+
+## [0.12.13] - 2026-03-06
+### Fixed
+- Read payload.text from Mastra v1.8 stream chunks (streaming fix)
+
+## [0.12.12] - 2026-03-06
+### Fixed
+- agents get: add alias lookup
+- keys list: null guard for missing keys
+
+## [0.12.11] - 2026-03-06
+### Fixed
+- Dashboard: useProviderModels hook syntax error
+
+## [0.12.10] - 2026-03-06
+### Fixed
+- Daemon start: use provider/model format for Mastra model IDs
+
+## [0.12.9] - 2026-03-06
+### Changed
+- Runtime: externalize jsdom/hono/discord.js/grammy to reduce bundle size
+
+## [0.12.8] - 2026-03-06
+### Fixed
+- Daemon start: instantiate real Mastra agents instead of raw Convex records
+
+## [0.12.7] - 2026-03-06
+### Added
+- HTTP channel: GET /api/agents and POST /api/chat endpoints
+
+## [0.12.6] - 2026-03-06
+### Fixed
+- CLI: add http-channel.ts as separate tsup entry point
+
+## [0.12.5] - 2026-03-06
+### Fixed
+- Dashboard: remove stale Convex calls deleted in SPEC-022
+
+## [0.12.4] - 2026-03-06
+### Fixed
+- Template: remove stray agentId from http.ts messages.create call
+
+## [0.12.3] - 2026-03-06
+### Fixed
+- Template: fix 12 TypeScript errors — internal.* → api.*, string[] return types
+
+## [0.12.2] - 2026-03-06
+### Fixed
+- Template: fix 16 TypeScript errors in generated project convex/
+
+## [0.12.1] - 2026-03-06
+### Changed
+- Template: inline @mastra/convex schema tables, remove storage.ts
+
 ## [0.11.21] - 2026-03-05
 
 ### Changed

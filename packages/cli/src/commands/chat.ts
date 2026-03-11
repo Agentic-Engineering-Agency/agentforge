@@ -51,8 +51,9 @@ function parseSseLine(
     if (errorMsg && onError) {
       onError(String(errorMsg));
     }
-  } catch {
-    // Skip malformed JSON
+  } catch (e) {
+    // Skip malformed SSE JSON — log at debug level so it's visible with DEBUG=1
+    if (process.env.DEBUG) console.error('[chat] SSE parse error:', e);
   }
 }
 

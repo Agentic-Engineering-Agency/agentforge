@@ -1,4 +1,4 @@
-# E2E Integration Tests — Framework → Cloud
+# E2E Integration Tests — Framework -> Cloud
 #
 # Runs the full E2E test suite that validates:
 #   1. Local agent execution (unit-level with mocked LLM)
@@ -17,6 +17,7 @@ on:
     paths:
       - 'packages/core/**'
       - 'packages/cli/**'
+      - 'packages/runtime/**'
       - 'convex/**'
       - 'tests/e2e/**'
       - '.github/workflows/e2e.yml'
@@ -25,8 +26,10 @@ on:
     paths:
       - 'packages/core/**'
       - 'packages/cli/**'
+      - 'packages/runtime/**'
       - 'convex/**'
       - 'tests/e2e/**'
+      - '.github/workflows/e2e.yml'
   workflow_dispatch:
     inputs:
       run_cloud_tests:
@@ -34,6 +37,13 @@ on:
         required: false
         default: false
         type: boolean
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
 
 env:
   NODE_VERSION: '22'
@@ -47,13 +57,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -78,19 +88,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: local-tests
-    # Only run cloud tests when manually triggered with run_cloud_tests=true
-    # and when AGENTFORGE_CLOUD_URL is available as a secret
-    if: ${{ github.event.inputs.run_cloud_tests == true }}
+    # FIX: boolean inputs must be compared as strings in GHA expressions
+    if: ${{ github.event.inputs.run_cloud_tests == 'true' }}
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -141,13 +150,13 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -167,7 +176,7 @@ jobs:
           E2E_TEST: '1'
 
       - name: Upload coverage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: e2e-coverage
           path: tests/e2e/coverage/

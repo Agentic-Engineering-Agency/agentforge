@@ -533,9 +533,9 @@ export const LLM_MODELS: LLMModel[] = [
 
 /**
  * Default failover chain for the registry layer.
- * NOTE: Runtime failover in convex/chat.ts and convex/mastraIntegration.ts
- * uses its own {provider, model} pairs. Wire this into the runtime or
- * keep in sync manually when updating models.
+ * NOTE: Runtime failover in the daemon (packages/runtime) uses its own
+ * {provider, model} pairs. Wire this into the runtime or keep in sync
+ * manually when updating models.
  */
 export const DEFAULT_FAILOVER_CHAIN: string[] = [
   "openai/gpt-5.4",

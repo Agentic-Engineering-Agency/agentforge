@@ -9,26 +9,31 @@ on:
       - 'packages/cli/tsup.config.ts'
       - 'packages/cli/package.json'
 
+concurrency:
+  group: cli-build-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
 jobs:
   cli-build:
     name: Rebuild CLI Distribution
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    # Only auto-commit on main branch pushes
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
           cache: 'pnpm'
@@ -36,8 +41,39 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
+
+      - name: Verify template sync (Rule 6)
+        run: |
+          echo "## Template Sync Check" >> $GITHUB_STEP_SUMMARY
+          CANONICAL="packages/cli/templates/default/convex"
+          LOCATIONS=(
+            "packages/cli/dist/default/convex"
+            "templates/default/convex"
+            "convex"
+          )
+          SYNC_OK=true
+          for loc in "${LOCATIONS[@]}"; do
+            if [ -d "$loc" ] && [ -d "$CANONICAL" ]; then
+              if ! diff -rq "$CANONICAL" "$loc" > /dev/null 2>&1; then
+                echo "::warning::Template out of sync: $CANONICAL vs $loc"
+                echo "- DESYNC: \`$CANONICAL\` vs \`$loc\`" >> $GITHUB_STEP_SUMMARY
+                SYNC_OK=false
+              fi
+            fi
+          done
+          if [ "$SYNC_OK" = true ]; then
+            echo "All template locations in sync" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "::warning::Templates are out of sync. Run pnpm sync-templates locally."
+          fi
+
       - name: Build CLI package
         run: pnpm --filter @agentforge-ai/cli build
+
+      - name: Sync templates after build
+        run: pnpm sync-templates || true
 
       - name: Check for changes in dist
         id: check_changes
@@ -49,10 +85,19 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Commit updated dist
+      - name: Create PR with updated dist
         if: steps.check_changes.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          BRANCH="chore/cli-dist-rebuild-$(date +%s)"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$BRANCH"
           git commit -m "chore(cli): rebuild dist from template changes"
-          git push
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore(cli): rebuild dist from template changes" \
+            --body "Auto-generated PR to update CLI dist after template/source changes." \
+            --base main \
+            --head "$BRANCH"

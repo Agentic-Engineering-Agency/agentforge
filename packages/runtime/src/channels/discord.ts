@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, ChannelType, type Message } from 'discord.js
 import type { Agent } from '@mastra/core/agent';
 import type { ChannelAdapter } from '../daemon/types.js';
 import { progressiveStream, splitMessage, generateThreadId } from './shared.js';
+import { sanitizeDiscordInput, InputValidationError } from '../security/input-sanitizer.js';
 
 export interface DiscordChannelConfig {
   defaultAgentId: string;
@@ -69,6 +70,17 @@ export class DiscordChannel implements ChannelAdapter {
       let content = message.content;
       if (isMentioned) {
         content = content.replace(new RegExp(`<@!?${botUser.id}>`), '').trim();
+      }
+
+      // Sanitize input (remove null bytes, control chars, enforce length limit)
+      try {
+        content = sanitizeDiscordInput(content);
+      } catch (error) {
+        if (error instanceof InputValidationError) {
+          await message.reply('Message too long. Please shorten your message.');
+          return;
+        }
+        throw error;
       }
 
       // Generate thread ID per user

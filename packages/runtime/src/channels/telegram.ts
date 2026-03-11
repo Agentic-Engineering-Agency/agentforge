@@ -2,6 +2,7 @@ import { Bot, type Context } from 'grammy';
 import type { Agent } from '@mastra/core/agent';
 import type { ChannelAdapter } from '../daemon/types.js';
 import { progressiveStream, splitMessage, generateThreadId } from './shared.js';
+import { sanitizeTelegramInput, InputValidationError } from '../security/input-sanitizer.js';
 
 export interface TelegramChannelConfig {
   defaultAgentId: string;
@@ -58,7 +59,19 @@ export class TelegramChannel implements ChannelAdapter {
         return;
       }
 
-      const content = ctx.message?.text ?? '';
+      let content = ctx.message?.text ?? '';
+
+      // Sanitize input (remove null bytes, control chars, enforce length limit)
+      try {
+        content = sanitizeTelegramInput(content);
+      } catch (error) {
+        if (error instanceof InputValidationError) {
+          await ctx.reply('Message too long. Please shorten your message.');
+          return;
+        }
+        throw error;
+      }
+
       const threadId = generateThreadId('telegram', chatId.toString());
 
       // Send "thinking" message
