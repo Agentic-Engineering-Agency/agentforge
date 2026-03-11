@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/core",
-  "version": "0.12.18",
+  "version": "0.12.22",
   "description": "Core agent primitives, sandbox integration, and MCP server for AgentForge",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -43,6 +43,9 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
@@ -93,7 +96,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Agentic-Engineering-Agency/agentforge.git",
+    "url": "git+https://github.com/Agentic-Engineering-Agency/agentforge.git",
     "directory": "packages/core"
   }
 }

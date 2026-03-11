@@ -1,0 +1,158 @@
+name: Publish Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Existing release tag or version to publish (for example v0.12.22 or 0.12.22)'
+        required: true
+        type: string
+
+env:
+  NODE_VERSION: '22'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: Publish npm packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            TAG="${GITHUB_REF_NAME}"
+          else
+            TAG="${{ github.event.inputs.version || '' }}"
+          fi
+
+          if [[ "$TAG" != v* ]]; then
+            TAG="v$TAG"
+          fi
+
+          VERSION="${TAG#v}"
+
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release version must be semver, got: $VERSION" >&2
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --tags --force origin
+          git checkout "${{ steps.version.outputs.tag }}"
+
+      - name: Verify npm token is configured
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
+            echo "Missing NPM_TOKEN GitHub secret." >&2
+            exit 1
+          fi
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm build
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Run typecheck
+        run: pnpm typecheck
+
+      - name: Verify release versions
+        shell: bash
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs');
+          const expectedVersion = process.env.EXPECTED_VERSION;
+          const manifests = [
+            'package.json',
+            'packages/cli/package.json',
+            'packages/core/package.json',
+            'packages/runtime/package.json',
+          ];
+
+          for (const manifestPath of manifests) {
+            const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+            if (manifest.version !== expectedVersion) {
+              console.error(`${manifestPath} has version ${manifest.version}, expected ${expectedVersion}`);
+              process.exit(1);
+            }
+          }
+          NODE
+
+      - name: Publish packages
+        shell: bash
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          publish_if_missing() {
+            local package_name
+            package_name="$(node -p "require('./package.json').name")"
+
+            if npm view "${package_name}@${VERSION}" version >/dev/null 2>&1; then
+              echo "Skipping ${package_name}@${VERSION}; already published."
+              return 0
+            fi
+
+            echo "Publishing ${package_name}@${VERSION}"
+            npm publish --access public --provenance
+          }
+
+          (
+            cd packages/core
+            publish_if_missing
+          )
+
+          (
+            cd packages/runtime
+            publish_if_missing
+          )
+
+          (
+            cd packages/cli
+            publish_if_missing
+          )
