@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); fp=d.get('file_path',''); import subprocess; r=subprocess.run(['pnpm','typecheck'],capture_output=True,text=True,cwd='/Users/eduardojaviergarcialopez/AgenticEngineering/agentforge/.claude/worktrees/documentation-update') if fp.endswith(('.ts','.tsx')) else None; print((r.stdout+r.stderr)[-600:]) if r and (r.stdout+r.stderr).strip() else None\" 2>/dev/null"
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); fp=d.get('file_path',''); print('\\u26a0\\ufe0f  TEMPLATE SYNC REQUIRED: Run pnpm sync-templates (CLAUDE.md Rule 6)') if '/convex/' in fp else None\" 2>/dev/null"
+          }
+        ]
+      }
+    ]
+  }
+}
