@@ -15,7 +15,6 @@ concurrency:
 
 permissions:
   contents: write
-  pull-requests: write
 
 jobs:
   cli-build:
@@ -85,19 +84,10 @@ jobs:
             echo "changed=true" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create PR with updated dist
+      - name: Commit updated dist to main
         if: steps.check_changes.outputs.changed == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH="chore/cli-dist-rebuild-$(date +%s)"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$BRANCH"
           git commit -m "chore(cli): rebuild dist from template changes"
-          git push origin "$BRANCH"
-          gh pr create \
-            --title "chore(cli): rebuild dist from template changes" \
-            --body "Auto-generated PR to update CLI dist after template/source changes." \
-            --base main \
-            --head "$BRANCH"
+          git push origin main

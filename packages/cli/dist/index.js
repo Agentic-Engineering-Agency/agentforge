@@ -847,7 +847,8 @@ function parseSseLine(line, onChunk, onError, stream, buffered) {
     if (errorMsg && onError) {
       onError(String(errorMsg));
     }
-  } catch {
+  } catch (e) {
+    if (process.env.DEBUG) console.error("[chat] SSE parse error:", e);
   }
 }
 async function chatViaHttp(agentId, message, port, onChunk, onError, stream = true) {
@@ -3839,7 +3840,6 @@ function formatDate4(ts) {
 }
 function maskKey(key) {
   if (!key) return "****";
-  if (!key) return "****";
   if (key.length <= 12) return key.substring(0, 4) + "****";
   return key.substring(0, 8) + "..." + key.substring(key.length - 4);
 }
@@ -4479,7 +4479,6 @@ Troubleshooting:`);
 
 // src/commands/tokens.ts
 import readline12 from "readline";
-import { randomBytes as randomBytes2 } from "crypto";
 function prompt8(question) {
   const rl = readline12.createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve3) => rl.question(question, (ans) => {
@@ -4495,16 +4494,16 @@ function registerTokensCommand(program2) {
       process.exit(1);
     }
     const client = await createClient();
-    const result = await client.mutation("apiAccessTokens:generate", {
+    const result = await client.action("apiAccessTokensActions:generate", {
       name: opts.name
     });
     success(`Token "${opts.name}" created.`);
     info(`
-  Token: ${result.token}`);
+  Token: ${result.plaintext}`);
     info(`
   \u26A0\uFE0F  This token will NOT be shown again. Store it securely.`);
     dim(`
-Use it as: Authorization: Bearer ${result.token}`);
+Use it as: Authorization: Bearer ${result.plaintext}`);
   });
   tokens.command("list").option("--json", "Output as JSON").description("List all API access tokens").action(async (opts) => {
     const client = await createClient();
@@ -4554,12 +4553,11 @@ Use it as: Authorization: Bearer ${result.token}`);
       }
     }
     try {
-      const token = "agf_" + randomBytes2(16).toString("hex");
-      const result = await client.mutation("apiAccessTokens:generate", {
+      const result = await client.action("apiAccessTokensActions:generate", {
         name: opts.name,
         expiresAt
       });
-      success(`Token created: ${result.token}`);
+      success(`Token created: ${result.plaintext}`);
       info(`Name: ${opts.name} | Expires: ${opts.expires || "Never"} | Status: Active`);
       info(`
   \u26A0\uFE0F  This token will NOT be shown again. Store it securely.`);
