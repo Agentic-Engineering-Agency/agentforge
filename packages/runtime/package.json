@@ -1,6 +1,6 @@
 {
   "name": "@agentforge-ai/runtime",
-  "version": "0.12.18",
+  "version": "0.12.22",
   "description": "Mastra persistent daemon runtime for AgentForge",
   "type": "module",
   "main": "./dist/index.js",
@@ -15,6 +15,9 @@
     "dist",
     "README.md"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsup",
     "test": "vitest run",
@@ -54,7 +57,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Agentic-Engineering-Agency/agentforge.git",
+    "url": "git+https://github.com/Agentic-Engineering-Agency/agentforge.git",
     "directory": "packages/runtime"
   }
 }
