@@ -1,4 +1,4 @@
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { streamText } from 'hono/streaming';
 import * as crypto from 'node:crypto';
 import type { Agent } from '@mastra/core/agent';
@@ -234,7 +234,7 @@ export class HttpChannel implements ChannelAdapter {
       }
 
       // Rate limit by API key or IP
-      const clientId = c.req.header('Authorization') ?? c.req.header('X-Forwarded-For') ?? 'anonymous';
+      const clientId = this.resolveClientId(c);
       try {
         this.rateLimiter.checkLimit(clientId);
       } catch (error) {
@@ -374,7 +374,7 @@ export class HttpChannel implements ChannelAdapter {
       }
 
       // Rate limit by API key or IP
-      const clientId = c.req.header('Authorization') ?? c.req.header('X-Forwarded-For') ?? 'anonymous';
+      const clientId = this.resolveClientId(c);
       try {
         this.rateLimiter.checkLimit(clientId);
       } catch (error) {
@@ -508,6 +508,31 @@ export class HttpChannel implements ChannelAdapter {
       }
       this.server = undefined;
     }
+  }
+
+  private resolveClientId(c: Context): string {
+    const authHeader = c.req.header('Authorization');
+    if (authHeader) {
+      const parts = authHeader.trim().split(/\s+/);
+      if (parts.length === 2 && /^bearer$/i.test(parts[0])) {
+        return `bearer:${this.hashClientIdentifier(parts[1])}`;
+      }
+      return `auth:${this.hashClientIdentifier(authHeader)}`;
+    }
+
+    const xForwardedFor = c.req.header('X-Forwarded-For');
+    if (xForwardedFor) {
+      const firstIp = xForwardedFor.split(',')[0]?.trim();
+      if (firstIp) {
+        return `ip:${firstIp}`;
+      }
+    }
+
+    return 'anonymous';
+  }
+
+  private hashClientIdentifier(value: string): string {
+    return crypto.createHash('sha256').update(value).digest('hex');
   }
 
   private resolveOrigin(origin: string | undefined): string {
