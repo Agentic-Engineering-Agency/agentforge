@@ -32,6 +32,15 @@ vi.mock('../lib/display.js', () => ({
   colors: { cyan: '', dim: '', reset: '' },
 }));
 
+vi.mock('node:readline', () => ({
+  default: {
+    createInterface: vi.fn(() => ({
+      question: vi.fn((_q: string, cb: (ans: string) => void) => cb('sk-test')),
+      close: vi.fn(),
+    })),
+  },
+}));
+
 describe('agentforge config command', () => {
   let program: Command;
   let tmpDir: string;
@@ -163,16 +172,6 @@ describe('agentforge config command', () => {
       const exitSpy = vi.spyOn(process, 'exit').mockImplementation(() => {
         throw new Error('process.exit');
       });
-
-      // Mock readline to return a value so it doesn't hang
-      vi.mock('node:readline', () => ({
-        default: {
-          createInterface: vi.fn(() => ({
-            question: vi.fn((_q: string, cb: (ans: string) => void) => cb('sk-test')),
-            close: vi.fn(),
-          })),
-        },
-      }));
 
       try {
         await program.parseAsync(['node', 'agentforge', 'config', 'provider', 'invalid-provider']);

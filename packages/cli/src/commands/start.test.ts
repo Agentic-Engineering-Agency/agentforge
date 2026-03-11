@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Command } from 'commander';
-import { registerStartCommand } from './start.js';
+import { registerStartCommand, buildModelString } from './start.js';
 
 // ── Mocks ────────────────────────────────────────────────────────────
 
@@ -133,16 +133,34 @@ describe('agentforge start command', () => {
   });
 });
 
-describe('start command helper functions (exported via module)', () => {
-  // We can test the pure helper functions by importing the module internals.
-  // Since they're not exported, we test them indirectly through command behavior.
-  // But we can verify the model string logic expectations.
+describe('buildModelString', () => {
+  it('should prefix openrouter models with slash', () => {
+    const result = buildModelString({ provider: 'openrouter', model: 'meta-llama/llama-3' });
+    expect(result).toBe('openrouter/meta-llama/llama-3');
+  });
 
-  it('should build correct model string for openrouter with slash', () => {
-    // openrouter models with a slash but no openrouter/ prefix
-    // should get prefixed with openrouter/
-    // e.g. "meta-llama/llama-3" → "openrouter/meta-llama/llama-3"
-    // This is tested indirectly through agent definitions
-    expect(true).toBe(true); // placeholder - logic is in non-exported function
+  it('should concatenate provider and model', () => {
+    const result = buildModelString({ provider: 'anthropic', model: 'claude-opus-4-6' });
+    expect(result).toBe('anthropic/claude-opus-4-6');
+  });
+
+  it('should normalize OpenAI model names', () => {
+    const result = buildModelString({ provider: 'openai', model: 'gpt-5-chat' });
+    expect(result).toBe('openai/gpt-5-chat-latest');
+  });
+
+  it('should return default model when no config provided', () => {
+    const result = buildModelString({});
+    expect(result).toBe('moonshotai/kimi-k2.5');
+  });
+
+  it('should use custom default model', () => {
+    const result = buildModelString({}, 'anthropic/claude-sonnet-4-6');
+    expect(result).toBe('anthropic/claude-sonnet-4-6');
+  });
+
+  it('should not double-prefix openrouter models', () => {
+    const result = buildModelString({ provider: 'openrouter', model: 'openrouter/meta-llama/llama-3' });
+    expect(result).not.toBe('openrouter/openrouter/meta-llama/llama-3');
   });
 });

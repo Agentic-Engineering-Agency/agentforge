@@ -290,7 +290,7 @@ function getEnabledChannels(
   return channels;
 }
 
-function buildModelString(agentConfig: any, defaultModel?: string): string {
+export function buildModelString(agentConfig: any, defaultModel?: string): string {
   const normalizeOpenAIModel = (modelId: string) => {
     if (modelId === 'gpt-5-chat') return 'gpt-5-chat-latest';
     if (modelId === 'gpt-5.1-chat') return 'gpt-5.1-chat-latest';

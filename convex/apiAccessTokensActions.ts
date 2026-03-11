@@ -22,13 +22,13 @@ function generatePlaintext(): string {
 }
 
 export const generate = action({
-  args: { name: v.string(), agentId: v.optional(v.string()) },
-  handler: async (ctx, { name, agentId }) => {
+  args: { name: v.string(), agentId: v.optional(v.string()), expiresAt: v.optional(v.number()) },
+  handler: async (ctx, { name, agentId, expiresAt }) => {
     if (!name || name.length < 1 || name.length > 100)
       throw new Error("Token name must be 1-100 characters");
     const plaintext = generatePlaintext();
     const tokenHash = hashToken(plaintext);
-    await ctx.runMutation(internal.apiAccessTokens.insertToken, { token: plaintext, name });
+    await ctx.runMutation(internal.apiAccessTokens.insertToken, { token: plaintext, name, expiresAt });
     return { plaintext, name, agentId };
   },
 });

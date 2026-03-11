@@ -116,6 +116,28 @@ export class HttpChannel implements ChannelAdapter {
       return next();
     });
 
+    // Auth middleware for /api/* routes (same as /v1/*)
+    this.app.use('/api/*', async (c, next) => {
+      const apiKey = this.apiKey;
+      if (!apiKey) return next();
+
+      const auth = c.req.header('Authorization');
+      if (!auth) {
+        return c.json({ error: 'Missing Authorization header' }, 401);
+      }
+      const [type, token] = auth.split(' ');
+      if (type !== 'Bearer' || !token) {
+        return c.json({ error: 'Invalid API key' }, 401);
+      }
+      const tokenHash = crypto.createHash('sha256').update(token).digest();
+      const keyHash = crypto.createHash('sha256').update(apiKey).digest();
+      const valid = crypto.timingSafeEqual(tokenHash, keyHash);
+      if (!valid) {
+        return c.json({ error: 'Invalid API key' }, 401);
+      }
+      return next();
+    });
+
     // Health check
     this.app.get('/health', (c) => {
       const daemon = this.daemon;
@@ -184,6 +206,12 @@ export class HttpChannel implements ChannelAdapter {
       if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
       if (!this.dataClient) return c.json({ error: 'Chat persistence is not configured' }, 503);
 
+      // Enforce body size limit (1MB)
+      const contentLength = parseInt(c.req.header('Content-Length') ?? '0', 10);
+      if (contentLength > 1048576) {
+        return c.json({ error: 'Request body too large (max 1MB)' }, 413);
+      }
+
       const body = await c.req.json();
       const {
         agentId,
@@ -199,6 +227,10 @@ export class HttpChannel implements ChannelAdapter {
 
       if (!agentId || !message?.trim()) {
         return c.json({ error: 'agentId and message are required' }, 400);
+      }
+
+      if (fileIds.length > 10) {
+        return c.json({ error: 'Too many file attachments (max 10)' }, 400);
       }
 
       // Rate limit by API key or IP
@@ -243,7 +275,7 @@ export class HttpChannel implements ChannelAdapter {
         content: storedUserMessage,
       });
 
-      const sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const sessionId = `session_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
       await this.dataClient.mutation('sessions:create', {
         sessionId,
         threadId,
@@ -316,6 +348,12 @@ export class HttpChannel implements ChannelAdapter {
     this.app.post('/v1/chat/completions', async (c) => {
       const daemon = this.daemon;
       if (!daemon) return c.json({ error: 'Daemon not started' }, 503);
+
+      // Enforce body size limit (1MB)
+      const contentLength = parseInt(c.req.header('Content-Length') ?? '0', 10);
+      if (contentLength > 1048576) {
+        return c.json({ error: { message: 'Request body too large (max 1MB)', type: 'invalid_request_error' } }, 413);
+      }
 
       const body = await c.req.json();
       const {

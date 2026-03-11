@@ -2,7 +2,7 @@
  * Tests for the `agentforge tokens` command
  *
  * Covers: generate, create, list, revoke, delete subcommands.
- * Bug found: tokens create generates a local token but never sends it to the mutation.
+ * Token generation uses apiAccessTokensActions:generate action (Node.js crypto.randomBytes).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -13,11 +13,13 @@ import { registerTokensCommand } from './tokens.js';
 
 const mockQuery = vi.fn(() => Promise.resolve([]));
 const mockMutation = vi.fn(() => Promise.resolve({ id: 'tok-1', token: 'agf_generated_token' }));
+const mockAction = vi.fn(() => Promise.resolve({ plaintext: 'agf_generated_token', name: 'test' }));
 
 vi.mock('../lib/convex-client.js', () => ({
   createClient: vi.fn(() => ({
     query: (...args: any[]) => mockQuery(...args),
     mutation: (...args: any[]) => mockMutation(...args),
+    action: (...args: any[]) => mockAction(...args),
   })),
 }));
 
@@ -37,6 +39,7 @@ describe('agentforge tokens command', () => {
     program = new Command();
     registerTokensCommand(program);
     vi.clearAllMocks();
+    mockAction.mockClear();
   });
 
   const getTokensCmd = () => program.commands.find((c) => c.name() === 'tokens');
@@ -70,13 +73,13 @@ describe('agentforge tokens command', () => {
       exitSpy.mockRestore();
     });
 
-    it('should generate token and show it once', async () => {
-      mockMutation.mockResolvedValueOnce({ id: 'tok-1', token: 'agf_abc123' });
+    it('should generate token via action and show it once', async () => {
+      mockAction.mockResolvedValueOnce({ plaintext: 'agf_abc123', name: 'my-app' });
       const { success, info } = await import('../lib/display.js');
 
       await program.parseAsync(['node', 'agentforge', 'tokens', 'generate', '--name', 'my-app']);
 
-      expect(mockMutation).toHaveBeenCalledWith('apiAccessTokens:generate', { name: 'my-app' });
+      expect(mockAction).toHaveBeenCalledWith('apiAccessTokensActions:generate', { name: 'my-app' });
       expect(success).toHaveBeenCalledWith(expect.stringContaining('my-app'));
       expect(info).toHaveBeenCalledWith(expect.stringContaining('agf_abc123'));
     });
@@ -161,13 +164,13 @@ describe('agentforge tokens command', () => {
       exitSpy.mockRestore();
     });
 
-    it('should create token with name', async () => {
-      mockMutation.mockResolvedValueOnce({ id: 'tok-2', token: 'agf_newtoken' });
+    it('should create token with name via action', async () => {
+      mockAction.mockResolvedValueOnce({ plaintext: 'agf_newtoken', name: 'production' });
       const { success } = await import('../lib/display.js');
 
       await program.parseAsync(['node', 'agentforge', 'tokens', 'create', '--name', 'production']);
 
-      expect(mockMutation).toHaveBeenCalledWith('apiAccessTokens:generate', expect.objectContaining({
+      expect(mockAction).toHaveBeenCalledWith('apiAccessTokensActions:generate', expect.objectContaining({
         name: 'production',
       }));
       expect(success).toHaveBeenCalledWith(expect.stringContaining('agf_newtoken'));
@@ -190,30 +193,26 @@ describe('agentforge tokens command', () => {
     });
 
     it('should accept valid YYYY-MM-DD expires date', async () => {
-      mockMutation.mockResolvedValueOnce({ id: 'tok-3', token: 'agf_expiring' });
+      mockAction.mockResolvedValueOnce({ plaintext: 'agf_expiring', name: 'temp' });
 
       await program.parseAsync(['node', 'agentforge', 'tokens', 'create', '--name', 'temp', '--expires', '2027-01-01']);
 
-      expect(mockMutation).toHaveBeenCalledWith('apiAccessTokens:generate', expect.objectContaining({
+      expect(mockAction).toHaveBeenCalledWith('apiAccessTokensActions:generate', expect.objectContaining({
         name: 'temp',
         expiresAt: new Date('2027-01-01').getTime(),
       }));
     });
 
-    // BUG: tokens create generates a local `token` variable with randomBytes
-    // but never passes it to the mutation — the mutation generates its own.
-    // The local token is dead code on line 90.
-    it('[BUG] create generates unused local token (dead code)', async () => {
-      mockMutation.mockResolvedValueOnce({ id: 'tok-4', token: 'agf_server_generated' });
-      const { success } = await import('../lib/display.js');
+    it('should call action (not mutation) for token generation', async () => {
+      mockAction.mockResolvedValueOnce({ plaintext: 'agf_server_generated', name: 'action-test' });
 
-      await program.parseAsync(['node', 'agentforge', 'tokens', 'create', '--name', 'deadcode-test']);
+      await program.parseAsync(['node', 'agentforge', 'tokens', 'create', '--name', 'action-test']);
 
-      // The mutation is called WITHOUT a token field — the server generates it
-      const callArgs = mockMutation.mock.calls[0];
-      expect(callArgs[0]).toBe('apiAccessTokens:generate');
-      // The second arg should NOT contain a 'token' field from client-side generation
-      expect(callArgs[1]).not.toHaveProperty('token');
+      expect(mockAction).toHaveBeenCalledWith('apiAccessTokensActions:generate', expect.objectContaining({
+        name: 'action-test',
+      }));
+      // Mutation should NOT be called for token generation
+      expect(mockMutation).not.toHaveBeenCalledWith('apiAccessTokens:generate', expect.anything());
     });
   });
 
