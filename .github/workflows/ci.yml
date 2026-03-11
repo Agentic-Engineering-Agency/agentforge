@@ -3,27 +3,96 @@ name: CI
 on:
   push:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'convex/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ci.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'packages/**'
+      - 'convex/**'
+      - 'pnpm-lock.yaml'
+      - '.github/workflows/ci.yml'
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
 
 env:
   NODE_VERSION: '22'
 
 jobs:
+  # ── Lint ────────────────────────────────────────────────────────────
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642195b8c39babe6cc2b8be # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+  # ── Security audit ─────────────────────────────────────────────────
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@49933ea5288caeca8642195b8c39babe6cc2b8be # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Audit dependencies
+        run: pnpm audit --audit-level=high
+
+  # ── Build & Test ───────────────────────────────────────────────────
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    needs: [lint]
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642195b8c39babe6cc2b8be # v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'pnpm'
@@ -32,10 +101,24 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build all packages
+        id: build
         run: pnpm build
 
       - name: Run all tests
+        id: test
         run: pnpm test
 
       - name: TypeScript check
+        id: typecheck
         run: pnpm typecheck
+
+      - name: Test summary
+        if: always()
+        run: |
+          echo "## CI Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Build | ${{ steps.build.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tests | ${{ steps.test.outcome }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| TypeScript | ${{ steps.typecheck.outcome }} |" >> $GITHUB_STEP_SUMMARY
