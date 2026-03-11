@@ -524,7 +524,7 @@ export class HttpChannel implements ChannelAdapter {
     if (xForwardedFor) {
       const firstIp = xForwardedFor.split(',')[0]?.trim();
       if (firstIp) {
-        return `ip:${firstIp}`;
+        return `ip:${this.hashClientIdentifier(firstIp)}`;
       }
     }
 

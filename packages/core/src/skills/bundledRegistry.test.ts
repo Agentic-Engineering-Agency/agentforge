@@ -50,13 +50,15 @@ describe('BundledSkillRegistry', () => {
       }),
     } as any)
 
-    const result = await search.execute({ query: 'test' })
-    const parsed = JSON.parse(result)
-    expect(parsed).toHaveProperty('query', 'test')
-    expect(parsed).toHaveProperty('results')
-    expect(Array.isArray(parsed.results)).toBe(true)
-
-    fetchMock.mockRestore()
+    try {
+      const result = await search.execute({ query: 'test' })
+      const parsed = JSON.parse(result)
+      expect(parsed).toHaveProperty('query', 'test')
+      expect(parsed).toHaveProperty('results')
+      expect(Array.isArray(parsed.results)).toBe(true)
+    } finally {
+      fetchMock.mockRestore()
+    }
   })
 
   it('url-fetch validates URL input', async () => {

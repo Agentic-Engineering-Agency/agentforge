@@ -178,6 +178,7 @@ export class RateLimiter {
 
   private evictOldestIfNeeded(now: number, currentToken: string): void {
     if (this.requests.size < this.config.maxClients) return;
+    if (this.requests.has(currentToken)) return;
 
     let oldestKey: string | null = null;
     let oldestTimestamp = now;
