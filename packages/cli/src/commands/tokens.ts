@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import { createClient } from '../lib/convex-client.js';
 import { header, success, error, info, dim, table } from '../lib/display.js';
 import readline from 'node:readline';
-import { randomBytes } from 'node:crypto';
+
 
 function prompt(question: string): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
@@ -87,7 +87,6 @@ export function registerTokensCommand(program: Command) {
       }
 
       try {
-        const token = 'agf_' + randomBytes(16).toString('hex');
         const result = await client.mutation('apiAccessTokens:generate' as any, {
           name: opts.name,
           expiresAt,

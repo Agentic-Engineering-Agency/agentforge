@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState } from 'react';
 import { useAction } from 'convex/react';
-import { api } from '../../../../convex/_generated/api';
+import { api } from '@convex/_generated/api';
 import { Microscope, Play, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 export const Route = createFileRoute('/research')({ component: ResearchPage });

@@ -19,7 +19,6 @@ import {
   Settings2,
   Loader2,
   MessageSquare,
-  Trash2,
   X,
   File,
 } from "lucide-react";
@@ -164,23 +163,20 @@ function ChatPageComponent() {
   }, [currentAgentId, agents, createThread]);
 
   // ── Send message ────────────────────────────────────────────
-  const handleSendMessage = useCallback(
-    async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!input.trim() || !currentAgentId) return;
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!input.trim() || !currentAgentId) return;
 
-      // Check for secrets
-      const detectedSecrets = detectSecrets(input);
-      if (detectedSecrets.length > 0) {
-        setSecretWarning(detectedSecrets);
-        setPendingMessage(input);
-        return;
-      }
+    // Check for secrets
+    const detectedSecrets = detectSecrets(input);
+    if (detectedSecrets.length > 0) {
+      setSecretWarning(detectedSecrets);
+      setPendingMessage(input);
+      return;
+    }
 
-      await sendMessageToChat(input);
-    },
-    [input, currentAgentId, currentThreadId]
-  );
+    await sendMessageToChat(input);
+  };
 
   const sendMessageToChat = async (text: string, secrets?: DetectedSecret[]) => {
     if (!currentAgentId) return;
