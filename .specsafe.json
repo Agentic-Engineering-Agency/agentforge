@@ -1,0 +1,15 @@
+{
+  "name": "agentforge",
+  "version": "1.0.0",
+  "specDir": "specs",
+  "testDir": "tests",
+  "stateFile": "PROJECT_STATE.md",
+  "testFramework": "vitest",
+  "agents": ["claude-code"],
+  "tools": {
+    "lint": "tsc --noEmit",
+    "test": "pnpm test",
+    "audit": "pnpm audit"
+  },
+  "stages": ["SPEC", "TEST", "CODE", "QA", "COMPLETE", "ARCHIVED"]
+}

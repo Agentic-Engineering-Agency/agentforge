@@ -5,7 +5,14 @@
   "language": "typescript",
   "tools": {
     "claude-code": {
-      "files": ["CLAUDE.md"]
+      "files": [
+        "CLAUDE.md"
+      ]
+    }
+  },
+  "agents": {
+    "claude-code": {
+      "enabled": true
     }
   }
 }
