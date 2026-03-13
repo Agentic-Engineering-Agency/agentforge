@@ -431,7 +431,9 @@ describe('HttpChannel dashboard compatibility routes', () => {
       maxSteps: 8,
       toolChoice: 'auto',
     }));
-    expect(dataClient.query).not.toHaveBeenCalledWith('threads:getThread', expect.anything());
+    // Model override (Issue #217) now queries the thread for a stored override.
+    // For newly-created threads the query returns null (caught by .catch), so no override is applied.
+    expect(dataClient.query).toHaveBeenCalledWith('threads:getThread', { threadId: body.threadId });
     expect(dataClient.mutation).toHaveBeenCalledWith('threads:createThread', {
       agentId: 'assistant',
       name: 'Chat with Assistant',
