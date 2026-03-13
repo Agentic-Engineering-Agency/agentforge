@@ -1,6 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
-import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import {
@@ -112,9 +111,9 @@ function SessionDetailPage() {
       <DashboardLayout>
         <div className="space-y-6">
           <div className="flex items-center gap-3 mb-4">
-            <a href="/sessions" className="text-muted-foreground hover:text-foreground transition-colors">
+            <Link to="/sessions" className="text-muted-foreground hover:text-foreground transition-colors">
               <ArrowLeft className="w-5 h-5" />
-            </a>
+            </Link>
             <h1 className="text-3xl font-bold">Session Not Found</h1>
           </div>
           <p className="text-muted-foreground">Session with ID "{sessionId}" could not be found.</p>
@@ -150,9 +149,9 @@ function SessionDetailPage() {
             <div className="flex items-center justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-1">
-                  <a href="/sessions" className="text-muted-foreground hover:text-foreground transition-colors">
+                  <Link to="/sessions" className="text-muted-foreground hover:text-foreground transition-colors">
                     <ArrowLeft className="w-5 h-5" />
-                  </a>
+                  </Link>
                   <h1 className="text-3xl font-bold">Session Details</h1>
                   <span className={statusBadgeClass(session.status)}>{session.status}</span>
                 </div>

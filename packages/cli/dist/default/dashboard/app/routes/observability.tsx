@@ -1,8 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
-import { useState } from "react";
-import { useQuery } from "convex/react";
-import { api } from "@convex/_generated/api";
 import { Activity, DollarSign, Zap, Target } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
 

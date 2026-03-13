@@ -1,6 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
-import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import {
@@ -139,9 +138,9 @@ function AgentRunPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <a href="/chat" className="text-muted-foreground hover:text-foreground transition-colors">
+              <Link to="/chat" className="text-muted-foreground hover:text-foreground transition-colors">
                 <ArrowLeft className="w-5 h-5" />
-              </a>
+              </Link>
               <h1 className="text-3xl font-bold">Agent Run</h1>
               <span className={statusBadgeClass(summary.status)}>{summary.status}</span>
             </div>
