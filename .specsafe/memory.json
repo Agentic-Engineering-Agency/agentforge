@@ -1,0 +1,31 @@
+{
+  "projectId": "agentforge",
+  "specs": [
+    "SPEC-20260313-001",
+    "SPEC-20260313-002",
+    "SPEC-20260313-003"
+  ],
+  "decisions": [],
+  "patterns": [],
+  "constraints": [],
+  "history": [
+    {
+      "timestamp": "2026-03-13T01:07:09.529Z",
+      "specId": "SPEC-20260313-001",
+      "action": "created",
+      "details": "Spec SPEC-20260313-001 added to project memory"
+    },
+    {
+      "timestamp": "2026-03-13T01:07:13.583Z",
+      "specId": "SPEC-20260313-002",
+      "action": "created",
+      "details": "Spec SPEC-20260313-002 added to project memory"
+    },
+    {
+      "timestamp": "2026-03-13T01:07:14.351Z",
+      "specId": "SPEC-20260313-003",
+      "action": "created",
+      "details": "Spec SPEC-20260313-003 added to project memory"
+    }
+  ]
+}
