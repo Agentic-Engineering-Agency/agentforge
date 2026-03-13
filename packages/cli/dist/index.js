@@ -4517,16 +4517,13 @@ Use it as: Authorization: Bearer ${result.plaintext}`);
       dim('No tokens. Create one: agentforge tokens generate --name "my-app"');
       return;
     }
-    table(items.map((t) => {
-      const maskedToken = t.token ? `${t.token.slice(0, 8)}...${t.token.slice(-4)}` : "...";
-      return {
-        Name: t.name,
-        Token: maskedToken,
-        Status: t.isActive ? "Active" : "Revoked",
-        Created: new Date(t.createdAt).toLocaleDateString(),
-        Expires: t.expiresAt ? new Date(t.expiresAt).toLocaleDateString() : "Never"
-      };
-    }));
+    table(items.map((t) => ({
+      Name: t.name,
+      Token: t.tokenPrefix ?? "...",
+      Status: t.isActive ? "Active" : "Revoked",
+      Created: new Date(t.createdAt).toLocaleDateString(),
+      Expires: t.expiresAt ? new Date(t.expiresAt).toLocaleDateString() : "Never"
+    })));
   });
   tokens.command("revoke <id>").description("Revoke an API access token").action(async (id) => {
     const client = await createClient();
@@ -4570,7 +4567,7 @@ Use it as: Authorization: Bearer ${result.plaintext}`);
     const client = await createClient();
     const tokens2 = await client.query("apiAccessTokens:list", {});
     const token = tokens2.find(
-      (t) => t.name === nameOrId || t._id.toString().endsWith(nameOrId) || t.token?.endsWith(nameOrId)
+      (t) => t.name === nameOrId || t._id.toString().endsWith(nameOrId)
     );
     if (!token) {
       error(`Token "${nameOrId}" not found.`);
