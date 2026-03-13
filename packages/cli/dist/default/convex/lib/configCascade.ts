@@ -4,19 +4,16 @@
  * Resolves agent configuration by cascading through multiple levels:
  * Agent Config -> Project Config -> Global Config -> System Defaults
  *
- * Project and global configs can also provide an `instructionPrefix` that
- * is prepended to the agent's instructions to produce the final
- * `systemPrompt`.
+ * Project and global configs can provide a `systemPrompt` (or legacy
+ * `instructionPrefix`) that is prepended to the agent's instructions
+ * to produce the final `systemPrompt`.
  */
 
 /**
  * System defaults for agent configuration
  */
 export const SYSTEM_DEFAULTS = {
-  // openai/gpt-4o is the safe system-wide fallback. The daemon default
-  // (moonshotai/kimi-k2.5) is configured at the runtime level in
-  // packages/runtime/, not here in the config cascade defaults.
-  model: "openai/gpt-4o",
+  model: "openai/gpt-5.4",
   temperature: 0.7,
   maxTokens: 4096,
   instructions: "You are a helpful AI assistant.",
@@ -41,6 +38,9 @@ export interface ProjectSettings {
   defaultTemperature?: number;
   defaultMaxTokens?: number;
   defaultInstructions?: string;
+  /** Primary key for instruction prefix (stored as systemPrompt in DB) */
+  systemPrompt?: string;
+  /** Legacy alias for systemPrompt — used as fallback */
   instructionPrefix?: string;
   failoverModels?: Array<{ provider: string; model: string }>;
 }
@@ -52,6 +52,9 @@ export interface GlobalSettings {
   defaultModel?: string;
   defaultTemperature?: number;
   defaultMaxTokens?: number;
+  /** Primary key for instruction prefix */
+  systemPrompt?: string;
+  /** Legacy alias for systemPrompt — used as fallback */
   instructionPrefix?: string;
 }
 
@@ -68,13 +71,21 @@ export interface ResolvedConfig {
 }
 
 /**
+ * Normalize a string value: treat empty strings as undefined so `||`
+ * cascade falls through correctly (UI "None" selects send "").
+ */
+function normalizeStr(val: string | undefined): string | undefined {
+  return val || undefined;
+}
+
+/**
  * Resolve configuration by cascading through levels.
  *
  * Priority: Agent Config -> Project Config -> Global Config -> System Defaults
  *
- * The `instructionPrefix` from project (or global if project has none) is
- * prepended to the agent instructions, separated by a blank line. The
- * combined result is available as `systemPrompt`.
+ * The `systemPrompt` (or legacy `instructionPrefix`) from project (or global
+ * if project has none) is prepended to the agent instructions, separated by a
+ * blank line. The combined result is available as `systemPrompt`.
  *
  * @param agentConfig - Agent-level configuration
  * @param projectConfig - Project-level settings
@@ -91,21 +102,30 @@ export function resolveConfig(
     projectConfig?.defaultInstructions ??
     SYSTEM_DEFAULTS.instructions;
 
-  // Instruction prefix: project wins over global
+  // Instruction prefix: systemPrompt is the primary key, instructionPrefix
+  // is the legacy fallback. Project wins over global.
   const prefix =
-    projectConfig?.instructionPrefix ||
-    globalConfig?.instructionPrefix ||
+    normalizeStr(projectConfig?.systemPrompt) ||
+    normalizeStr(projectConfig?.instructionPrefix) ||
+    normalizeStr(globalConfig?.systemPrompt) ||
+    normalizeStr(globalConfig?.instructionPrefix) ||
     "";
 
   const systemPrompt = prefix
     ? `${prefix}\n\n${instructions}`
     : instructions;
 
+  // Failover models: agent > project > global (no merging)
+  const failoverModels =
+    agentConfig.failoverModels ??
+    projectConfig?.failoverModels ??
+    [];
+
   return {
     model:
-      agentConfig.model ??
-      projectConfig?.defaultModel ??
-      globalConfig?.defaultModel ??
+      normalizeStr(agentConfig.model) ||
+      normalizeStr(projectConfig?.defaultModel) ||
+      normalizeStr(globalConfig?.defaultModel) ||
       SYSTEM_DEFAULTS.model,
     temperature:
       agentConfig.temperature ??
@@ -119,6 +139,6 @@ export function resolveConfig(
       SYSTEM_DEFAULTS.maxTokens,
     instructions,
     systemPrompt,
-    failoverModels: agentConfig.failoverModels ?? [],
+    failoverModels,
   };
 }

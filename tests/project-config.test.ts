@@ -36,8 +36,9 @@ describe('SPEC-002: convex/projects.ts data contract', () => {
       expect(projectsContent).toContain('export const getAllAgents');
     });
 
-    it('should export getProjectSettings query', () => {
+    it('should export getProjectSettings as internalQuery', () => {
       expect(projectsContent).toContain('export const getProjectSettings');
+      expect(projectsContent).toContain('internalQuery(');
     });
   });
 
@@ -93,6 +94,15 @@ describe('SPEC-002: convex/projects.ts data contract', () => {
       expect(getSettingsBlock).toContain('defaultModel');
       expect(getSettingsBlock).toContain('defaultProvider');
     });
+
+    it('should not coerce missing values to empty strings', () => {
+      const getSettingsBlock = projectsContent.slice(
+        projectsContent.indexOf('export const getProjectSettings'),
+        projectsContent.indexOf('export const updateSettings')
+      );
+      // Should NOT have `?? ""` coercion for settings fields
+      expect(getSettingsBlock).not.toContain('?? ""');
+    });
   });
 
   describe('updateSettings mutation contract', () => {
@@ -100,6 +110,12 @@ describe('SPEC-002: convex/projects.ts data contract', () => {
       expect(projectsContent).toContain('systemPrompt: v.optional(v.string())');
       expect(projectsContent).toContain('defaultModel: v.optional(v.string())');
       expect(projectsContent).toContain('defaultProvider: v.optional(v.string())');
+    });
+
+    it('should accept legacy settings object for backward compatibility', () => {
+      expect(projectsContent).toContain('settings: v.optional(');
+      expect(projectsContent).toContain('const normalizedSettings = {');
+      expect(projectsContent).toContain('...(args.settings ?? {})');
     });
 
     it('should store settings as top-level fields on the project document', () => {
@@ -125,8 +141,8 @@ describe('SPEC-002: Config cascade — resolveConfig', () => {
     SYSTEM_DEFAULTS = mod.SYSTEM_DEFAULTS;
   });
 
-  it('SYSTEM_DEFAULTS.model should be openai/gpt-4o', () => {
-    expect(SYSTEM_DEFAULTS.model).toBe('openai/gpt-4o');
+  it('SYSTEM_DEFAULTS.model should be openai/gpt-5.4', () => {
+    expect(SYSTEM_DEFAULTS.model).toBe('openai/gpt-5.4');
   });
 
   it('should use agent config when all levels provided', () => {
@@ -162,10 +178,28 @@ describe('SPEC-002: Config cascade — resolveConfig', () => {
 
   it('should use system defaults when no other config exists', () => {
     const result = resolveConfig({ instructions: '' }, null, null);
-    expect(result.model).toBe('openai/gpt-4o');
+    expect(result.model).toBe('openai/gpt-5.4');
     expect(result.temperature).toBe(0.7);
     expect(result.maxTokens).toBe(4096);
     expect(result.failoverModels).toEqual([]);
+  });
+
+  it('should treat empty string model as unset and fall through', () => {
+    const result = resolveConfig(
+      { model: '', instructions: 'test' },
+      { defaultModel: '' },
+      { defaultModel: 'google/gemini-2.0-flash' },
+    );
+    expect(result.model).toBe('google/gemini-2.0-flash');
+  });
+
+  it('should fall to system default when all models are empty strings', () => {
+    const result = resolveConfig(
+      { model: '', instructions: 'test' },
+      { defaultModel: '' },
+      { defaultModel: '' },
+    );
+    expect(result.model).toBe('openai/gpt-5.4');
   });
 
   it('should prepend instruction prefix from project to agent instructions', () => {
@@ -177,6 +211,15 @@ describe('SPEC-002: Config cascade — resolveConfig', () => {
     expect(result.systemPrompt).toBe('You work for Acme Corp.\n\nHandle billing.');
   });
 
+  it('should use systemPrompt as the primary prefix key over instructionPrefix', () => {
+    const result = resolveConfig(
+      { instructions: 'Handle billing.' },
+      { systemPrompt: 'Primary prefix.', instructionPrefix: 'Legacy prefix.' },
+      null,
+    );
+    expect(result.systemPrompt).toBe('Primary prefix.\n\nHandle billing.');
+  });
+
   it('should use global instruction prefix if project has none', () => {
     const result = resolveConfig(
       { instructions: 'Be helpful.' },
@@ -184,6 +227,15 @@ describe('SPEC-002: Config cascade — resolveConfig', () => {
       { instructionPrefix: 'Global prefix.' },
     );
     expect(result.systemPrompt).toBe('Global prefix.\n\nBe helpful.');
+  });
+
+  it('should use global systemPrompt prefix if project has none', () => {
+    const result = resolveConfig(
+      { instructions: 'Be helpful.' },
+      {},
+      { systemPrompt: 'Global system prompt.' },
+    );
+    expect(result.systemPrompt).toBe('Global system prompt.\n\nBe helpful.');
   });
 
   it('should not add prefix when none exists', () => {
@@ -205,6 +257,16 @@ describe('SPEC-002: Config cascade — resolveConfig', () => {
     );
     expect(result.failoverModels).toEqual(agentFailover);
   });
+
+  it('should fall through to project failover when agent has none', () => {
+    const projectFailover = [{ provider: 'openai', model: 'gpt-4o-mini' }];
+    const result = resolveConfig(
+      { instructions: '' },
+      { failoverModels: projectFailover },
+      null,
+    );
+    expect(result.failoverModels).toEqual(projectFailover);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -220,27 +282,24 @@ describe('SPEC-002: Template sync — projects.ts in all 4 locations', () => {
   ];
 
   const rootDir = path.resolve(__dirname, '..');
-  const contents: Record<string, string> = {};
 
-  beforeAll(() => {
+  it('all 4 locations must exist', () => {
     for (const loc of locations) {
       const fullPath = path.join(rootDir, loc);
-      if (fs.existsSync(fullPath)) {
-        contents[loc] = fs.readFileSync(fullPath, 'utf-8');
-      }
+      expect(fs.existsSync(fullPath), `${loc} should exist`).toBe(true);
     }
   });
 
-  it('canonical source should exist', () => {
-    expect(contents['packages/cli/templates/default/convex/projects.ts']).toBeTruthy();
-  });
-
   it('all 4 locations should have identical content', () => {
-    const canonical = contents['packages/cli/templates/default/convex/projects.ts'];
+    const canonical = fs.readFileSync(
+      path.join(rootDir, 'packages/cli/templates/default/convex/projects.ts'),
+      'utf-8'
+    );
+    expect(canonical).toBeTruthy();
     for (const loc of locations) {
-      if (contents[loc]) {
-        expect(contents[loc], `${loc} should match canonical`).toBe(canonical);
-      }
+      const fullPath = path.join(rootDir, loc);
+      const content = fs.readFileSync(fullPath, 'utf-8');
+      expect(content, `${loc} should match canonical`).toBe(canonical);
     }
   });
 });

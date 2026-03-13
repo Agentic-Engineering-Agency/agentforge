@@ -133,54 +133,71 @@ export const getProjectSettings = internalQuery({
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.id);
     if (!project) return null;
+    // Return raw optional fields — let consumers apply defaults.
+    // Coercing to "" would break config cascade (empty string looks like
+    // an intentional override).
     return {
-      systemPrompt: project.systemPrompt ?? "",
-      defaultModel: project.defaultModel ?? "",
-      defaultProvider: project.defaultProvider ?? "",
+      systemPrompt: project.systemPrompt,
+      defaultModel: project.defaultModel,
+      defaultProvider: project.defaultProvider,
       settings: project.settings ?? {},
     };
   },
 });
 
 // Mutation: Update project settings
+// Accepts both flat top-level fields AND a legacy `settings` object
+// for backward compatibility with older dashboard payloads.
 export const updateSettings = mutation({
   args: {
     id: v.id("projects"),
     systemPrompt: v.optional(v.string()),
     defaultModel: v.optional(v.string()),
     defaultProvider: v.optional(v.string()),
+    settings: v.optional(
+      v.object({
+        systemPrompt: v.optional(v.string()),
+        defaultModel: v.optional(v.string()),
+        defaultProvider: v.optional(v.string()),
+      })
+    ),
   },
   handler: async (ctx, args) => {
-    const { id, ...settingsFields } = args;
+    const { id, settings: _legacySettings, ...flatSettings } = args;
     const project = await ctx.db.get(id);
     if (!project) {
       throw new Error("Project not found");
     }
 
-    // Build patch with only provided fields
-    const patch: Record<string, unknown> = { updatedAt: Date.now() };
-    if (settingsFields.systemPrompt !== undefined) {
-      patch.systemPrompt = settingsFields.systemPrompt;
-    }
-    if (settingsFields.defaultModel !== undefined) {
-      patch.defaultModel = settingsFields.defaultModel;
-    }
-    if (settingsFields.defaultProvider !== undefined) {
-      patch.defaultProvider = settingsFields.defaultProvider;
+    // Merge legacy settings object with flat fields (flat wins)
+    const normalizedSettings = {
+      ...(args.settings ?? {}),
+      ...Object.fromEntries(
+        Object.entries(flatSettings).filter(([, value]) => value !== undefined)
+      ),
+    };
+
+    // Normalize empty strings to undefined so cascade falls through
+    const cleaned: Record<string, string | undefined> = {};
+    for (const [key, value] of Object.entries(normalizedSettings)) {
+      cleaned[key] = value || undefined;
     }
 
-    // Keep the settings object in sync for backward compatibility
-    const filteredEntries = Object.fromEntries(
-      Object.entries(settingsFields).filter(([, val]) => val !== undefined)
-    );
-    if (Object.keys(filteredEntries).length > 0) {
-      patch.settings = {
-        ...(project.settings ?? {}),
-        ...filteredEntries,
-      };
+    // Only write if there are actual settings to update
+    if (Object.keys(cleaned).length === 0) {
+      return;
     }
 
-    await ctx.db.patch(id, patch);
+    const nextSettings = {
+      ...(project.settings ?? {}),
+      ...cleaned,
+    };
+
+    await ctx.db.patch(id, {
+      ...cleaned,
+      settings: nextSettings,
+      updatedAt: Date.now(),
+    });
   },
 });
 
