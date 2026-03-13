@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { dirname, resolve } from 'path';
+import { fileURLToPath } from 'url';
 
 /**
  * SPEC-20260313-003: Fix Agent Selection in Project Configuration
@@ -10,6 +11,8 @@ import { resolve } from 'path';
  * - detailProject must be derived from the live Convex subscription, not stored as stale state
  * - No manual optimistic setDetailProject calls should exist (Convex handles reactivity)
  */
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const projectsRoutePath = resolve(__dirname, '../packages/web/app/routes/projects.tsx');
 const templateRoutePath = resolve(__dirname, '../packages/cli/templates/default/dashboard/app/routes/projects.tsx');
