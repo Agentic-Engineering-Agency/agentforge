@@ -54,13 +54,15 @@ export const createThread = mutation({
     agentId: v.string(),
     name: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
+    modelOverride: v.optional(v.string()),
   },
-  handler: async (ctx, { agentId, name, projectId }) => {
+  handler: async (ctx, { agentId, name, projectId, modelOverride }) => {
     const now = Date.now();
     const threadId = await ctx.db.insert("threads", {
       agentId,
       name: name ?? "New Chat",
       projectId,
+      modelOverride,
       createdAt: now,
       updatedAt: now,
     });
@@ -89,5 +91,29 @@ export const rename = mutation({
   args: { threadId: v.id("threads"), name: v.string() },
   handler: async (ctx, args) => {
     await ctx.db.patch(args.threadId, { name: args.name });
+  },
+});
+
+/**
+ * Set or clear a chat-scoped model override for a thread (Issue #217).
+ *
+ * When set, the runtime will use this model instead of the agent's default
+ * for all messages in this thread. Pass null/undefined to clear the override
+ * and revert to the agent default.
+ */
+export const setModelOverride = mutation({
+  args: {
+    threadId: v.id("threads"),
+    modelOverride: v.optional(v.string()),
+  },
+  handler: async (ctx, { threadId, modelOverride }) => {
+    const thread = await ctx.db.get(threadId);
+    if (!thread) {
+      throw new Error(`Thread not found: ${threadId}`);
+    }
+    await ctx.db.patch(threadId, {
+      modelOverride: modelOverride ?? undefined,
+      updatedAt: Date.now(),
+    });
   },
 });
