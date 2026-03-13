@@ -12,7 +12,7 @@
 
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 type MessageListInput = Array<{ role: "user" | "assistant" | "system"; content: string }>;
 
@@ -107,7 +107,7 @@ export function applyContextStrategy(
  * Summarize oldest context messages when over 80% of token limit.
  * Uses a current low-cost OpenAI model by default to compress history.
  *
- * AGE-158: Triggered automatically when strategy is "summarize".
+ * AGE-158: Triggered automatically in mastraIntegration when strategy is "summarize".
  */
 export const summarizeContext = internalAction({
   args: {
@@ -119,7 +119,7 @@ export const summarizeContext = internalAction({
   handler: async (ctx, args): Promise<{ summary: string; tokensSaved: number }> => {
     const limit = args.limit ?? DEFAULT_TOKEN_LIMIT;
 
-    const messages = await ctx.runQuery(api.messages.getByThread, { threadId: args.threadId as any });
+    const messages = await ctx.runQuery(internal.messages.getByThread, { threadId: args.threadId as any });
     if (!messages || messages.length === 0) return { summary: "", tokensSaved: 0 };
 
     const typedMessages = messages as Array<{ role: string; content: string }>;

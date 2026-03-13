@@ -2,7 +2,7 @@
 
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 /**
  * Execute a single pending heartbeat task via Mastra.
@@ -16,7 +16,7 @@ export const executeTask = internalAction({
   },
   handler: async (ctx, args): Promise<{ success: boolean; response?: string; error?: string }> => {
     // Load agent config for model/provider
-    const agent = await ctx.runQuery(api.agents.get, { id: args.agentId as any });
+    const agent = await ctx.runQuery(internal.agents.get, { id: args.agentId as any });
     if (!agent) {
       return { success: false, error: `Agent ${args.agentId} not found` };
     }
@@ -24,7 +24,7 @@ export const executeTask = internalAction({
     try {
       // NOTE: LLM execution moved to runtime daemon (SPEC-020).
       // Store the task as a message; daemon processes it asynchronously.
-      await ctx.runMutation(api.messages.create, {
+      await ctx.runMutation(internal.messages.create, {
         threadId: args.threadId as any,
         content: args.task,
         role: "user" as const,

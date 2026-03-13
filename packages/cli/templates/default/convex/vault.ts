@@ -1,90 +1,8 @@
 import { v } from "convex/values";
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 
-// Convex supports process.env but doesn't ship Node types by default
-declare const process: { env: Record<string, string | undefined> };
-
-// ============================================================
-// SECURE VAULT - AES-256-GCM Encrypted secrets management
-// ============================================================
-
-// Helper: Convert string to ArrayBuffer
-function str2ab(str: string): ArrayBuffer {
-  const encoder = new TextEncoder();
-  return encoder.encode(str).buffer;
-}
-
-// Helper: Convert ArrayBuffer to string
-function ab2str(buf: ArrayBuffer): string {
-  const decoder = new TextDecoder();
-  return decoder.decode(buf);
-}
-
-// Helper: Convert base64 to ArrayBuffer
-function base64ToArrayBuffer(base64: string): ArrayBuffer {
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
-// Helper: Convert ArrayBuffer to base64
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.byteLength; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-// Helper: Get or generate per-deployment salt for key derivation
-function getVaultSalt(): ArrayBuffer {
-  const storedSalt = process.env.VAULT_SALT;
-
-  if (storedSalt && storedSalt.length >= 16) {
-    // Use the provided salt from environment variable
-    return str2ab(storedSalt);
-  }
-
-  // Generate a random salt (this should be persisted to VAULT_SALT in production)
-  const randomSalt = crypto.getRandomValues(new Uint8Array(16));
-  console.warn(
-    'WARNING: VAULT_SALT not set or too short. Using ephemeral random salt. ' +
-    'Encrypted data will be inaccessible after restart! ' +
-    'Generate a persistent salt with: openssl rand -base64 16'
-  );
-  return randomSalt.buffer;
-}
-
-// Helper: Derive a cryptographic key from a string
-async function deriveKey(keyString: string): Promise<CryptoKey> {
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    str2ab(keyString),
-    'PBKDF2',
-    false,
-    ['deriveBits', 'deriveKey']
-  );
-
-  // Use a unique per-deployment salt for key derivation
-  const salt = getVaultSalt();
-
-  return crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt: salt,
-      iterations: 100000,
-      hash: 'SHA-256',
-    },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
-}
+// Crypto operations (encrypt/decrypt secrets) are in vaultCrypto.ts ("use node").
+// This file contains only V8-safe queries and mutations — no crypto.subtle.
 
 // Secret pattern detection for auto-capture from chat
 const SECRET_PATTERNS = [
@@ -114,59 +32,6 @@ function maskSecret(value: string): string {
     return value.substring(0, 3) + "..." + value.substring(value.length - 3);
   }
   return value.substring(0, 6) + "..." + value.substring(value.length - 4);
-}
-
-// Encryption key from Convex environment variable.
-// Set VAULT_ENCRYPTION_KEY in your Convex dashboard under Settings > Environment Variables.
-// This is now MANDATORY - the vault will not work without it.
-function getEncryptionKey(): string {
-  const key = process.env.VAULT_ENCRYPTION_KEY;
-  if (!key || key.length < 32) {
-    throw new Error(
-      "VAULT_ENCRYPTION_KEY must be set in environment variables and be at least 32 characters long. " +
-      "Set this in your Convex dashboard under Settings > Environment Variables."
-    );
-  }
-  return key;
-}
-
-// AES-256-GCM encryption for secure secret storage.
-// Each encryption uses a unique IV (Initialization Vector) for security.
-async function encodeSecret(value: string, keyString: string): Promise<{ encrypted: string; iv: string }> {
-  const key = await deriveKey(keyString);
-
-  // Generate a unique IV for each encryption (12 bytes for GCM)
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-
-  // Encrypt the value
-  const encrypted = await crypto.subtle.encrypt(
-    { name: 'AES-GCM', iv: iv },
-    key,
-    str2ab(value)
-  );
-
-  // Return base64-encoded encrypted data and IV
-  return {
-    encrypted: arrayBufferToBase64(encrypted),
-    iv: arrayBufferToBase64(iv.buffer),
-  };
-}
-
-// AES-256-GCM decryption for secure secret retrieval.
-async function decodeSecret(encryptedB64: string, ivB64: string, keyString: string): Promise<string> {
-  const key = await deriveKey(keyString);
-
-  const encrypted = base64ToArrayBuffer(encryptedB64);
-  const iv = new Uint8Array(base64ToArrayBuffer(ivB64));
-
-  // Decrypt the value
-  const decrypted = await crypto.subtle.decrypt(
-    { name: 'AES-GCM', iv: iv },
-    key,
-    encrypted
-  );
-
-  return ab2str(decrypted);
 }
 
 // ---- Queries ----
@@ -227,30 +92,44 @@ export const getAuditLog = query({
   },
 });
 
+/**
+ * Internal: Get raw vault entry including encrypted value.
+ * Only used by vaultCrypto for decryption.
+ */
+export const getRawEntry = internalQuery({
+  args: { id: v.id("vault") },
+  handler: async (ctx, args) => {
+    return await ctx.db.get(args.id);
+  },
+});
+
 // ---- Mutations ----
 
-export const store = mutation({
+/**
+ * Insert an already-encrypted vault entry.
+ * Called by vaultCrypto.encryptAndStore after encryption in Node.js.
+ */
+export const insertEncrypted = internalMutation({
   args: {
     name: v.string(),
     category: v.string(),
     provider: v.optional(v.string()),
-    value: v.string(),
+    encryptedValue: v.string(),
+    iv: v.string(),
+    maskedValue: v.string(),
     userId: v.optional(v.string()),
     expiresAt: v.optional(v.number()),
+    source: v.string(),
   },
   handler: async (ctx, args) => {
-    const key = getEncryptionKey();
-    const { encrypted, iv } = await encodeSecret(args.value, key);
-    const masked = maskSecret(args.value);
     const now = Date.now();
-
     const id = await ctx.db.insert("vault", {
       name: args.name,
       category: args.category,
       provider: args.provider,
-      encryptedValue: encrypted,
-      iv,
-      maskedValue: masked,
+      encryptedValue: args.encryptedValue,
+      iv: args.iv,
+      maskedValue: args.maskedValue,
       isActive: true,
       expiresAt: args.expiresAt,
       accessCount: 0,
@@ -261,8 +140,8 @@ export const store = mutation({
 
     await ctx.db.insert("vaultAuditLog", {
       vaultEntryId: id,
-      action: "created",
-      source: "dashboard",
+      action: args.source === "chat" ? "auto_captured" : "created",
+      source: args.source,
       userId: args.userId,
       timestamp: now,
     });
@@ -271,43 +150,81 @@ export const store = mutation({
   },
 });
 
-export const storeFromChat = mutation({
+/**
+ * Update an encrypted vault entry value.
+ * Called by vaultCrypto.reEncrypt after re-encryption in Node.js.
+ */
+export const updateEncryptedValue = internalMutation({
+  args: {
+    id: v.id("vault"),
+    encryptedValue: v.string(),
+    iv: v.string(),
+    maskedValue: v.string(),
+    userId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    await ctx.db.patch(args.id, {
+      encryptedValue: args.encryptedValue,
+      iv: args.iv,
+      maskedValue: args.maskedValue,
+      updatedAt: Date.now(),
+    });
+
+    await ctx.db.insert("vaultAuditLog", {
+      vaultEntryId: args.id,
+      action: "updated",
+      source: "dashboard",
+      userId: args.userId,
+      timestamp: Date.now(),
+    });
+  },
+});
+
+/**
+ * Record a vault access event (for audit log).
+ * Called by vaultCrypto.decryptSecret after decryption.
+ */
+export const recordAccess = internalMutation({
+  args: {
+    id: v.id("vault"),
+    userId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const entry = await ctx.db.get(args.id);
+    if (!entry) return;
+
+    await ctx.db.patch(args.id, {
+      lastAccessedAt: Date.now(),
+      accessCount: entry.accessCount + 1,
+    });
+
+    await ctx.db.insert("vaultAuditLog", {
+      vaultEntryId: args.id,
+      action: "accessed",
+      source: "agent",
+      userId: args.userId,
+      timestamp: Date.now(),
+    });
+  },
+});
+
+/**
+ * Public mutation stubs kept for backward compatibility.
+ * Encryption must happen in Node.js actions via vaultCrypto.
+ */
+export const store = mutation({
   args: {
     name: v.string(),
     category: v.string(),
     provider: v.optional(v.string()),
     value: v.string(),
     userId: v.optional(v.string()),
+    expiresAt: v.optional(v.number()),
   },
-  handler: async (ctx, args) => {
-    const key = getEncryptionKey();
-    const { encrypted, iv } = await encodeSecret(args.value, key);
-    const masked = maskSecret(args.value);
-    const now = Date.now();
-
-    const id = await ctx.db.insert("vault", {
-      name: args.name,
-      category: args.category,
-      provider: args.provider,
-      encryptedValue: encrypted,
-      iv,
-      maskedValue: masked,
-      isActive: true,
-      accessCount: 0,
-      userId: args.userId,
-      createdAt: now,
-      updatedAt: now,
-    });
-
-    await ctx.db.insert("vaultAuditLog", {
-      vaultEntryId: id,
-      action: "auto_captured",
-      source: "chat",
-      userId: args.userId,
-      timestamp: now,
-    });
-
-    return { id, masked };
+  handler: async (_ctx, _args) => {
+    throw new Error(
+      "Direct vault.store is deprecated. Use vaultCrypto.encryptAndStore internalAction instead."
+    );
   },
 });
 
@@ -324,19 +241,17 @@ export const update = mutation({
     const existing = await ctx.db.get(args.id);
     if (!existing) throw new Error("Vault entry not found");
 
-    const updates: Record<string, unknown> = { updatedAt: Date.now() };
+    if (args.value) {
+      throw new Error(
+        "Cannot re-encrypt in V8 mutation. Use vaultCrypto.reEncrypt internalAction instead."
+      );
+    }
 
+    // Non-crypto updates can proceed in the mutation
+    const updates: Record<string, unknown> = { updatedAt: Date.now() };
     if (args.name !== undefined) updates.name = args.name;
     if (args.isActive !== undefined) updates.isActive = args.isActive;
     if (args.expiresAt !== undefined) updates.expiresAt = args.expiresAt;
-
-    if (args.value) {
-      const key = getEncryptionKey();
-      const { encrypted, iv } = await encodeSecret(args.value, key);
-      updates.encryptedValue = encrypted;
-      updates.iv = iv;
-      updates.maskedValue = maskSecret(args.value);
-    }
 
     await ctx.db.patch(args.id, updates);
 
@@ -368,36 +283,6 @@ export const remove = mutation({
     });
 
     await ctx.db.delete(args.id);
-  },
-});
-
-// Internal-only: Retrieve decrypted value (only callable from other Convex functions)
-export const retrieveSecret = internalMutation({
-  args: {
-    id: v.id("vault"),
-    userId: v.optional(v.string()),
-  },
-  handler: async (ctx, args) => {
-    const entry = await ctx.db.get(args.id);
-    if (!entry) throw new Error("Vault entry not found");
-    if (!entry.isActive) throw new Error("Vault entry is disabled");
-
-    await ctx.db.patch(args.id, {
-      lastAccessedAt: Date.now(),
-      accessCount: entry.accessCount + 1,
-    });
-
-    await ctx.db.insert("vaultAuditLog", {
-      vaultEntryId: args.id,
-      action: "accessed",
-      source: "agent",
-      userId: args.userId,
-      timestamp: Date.now(),
-    });
-
-    const key = getEncryptionKey();
-    const decrypted = await decodeSecret(entry.encryptedValue, entry.iv, key);
-    return decrypted;
   },
 });
 
@@ -434,16 +319,15 @@ export const detectSecrets = query({
   },
 });
 
-// Censor a message by replacing detected secrets with masked versions
-export const censorMessage = mutation({
+// censorMessage is kept as a query-only detection utility.
+// The encryption part must be handled via vaultCrypto.encryptAndStore.
+export const censorMessage = query({
   args: {
     text: v.string(),
-    userId: v.optional(v.string()),
-    autoStore: v.optional(v.boolean()),
   },
-  handler: async (ctx, args) => {
+  handler: async (_ctx, args) => {
     let censoredText = args.text;
-    const storedSecrets: Array<{ name: string; masked: string; id: unknown }> = [];
+    const detectedSecrets: Array<{ name: string; masked: string; category: string; provider: string }> = [];
 
     for (const { pattern, category, provider, name } of SECRET_PATTERNS) {
       const regex = new RegExp(pattern, "g");
@@ -451,45 +335,15 @@ export const censorMessage = mutation({
       while ((match = regex.exec(args.text)) !== null) {
         const secretValue = match[0];
         const masked = maskSecret(secretValue);
-
         censoredText = censoredText.replace(secretValue, `[REDACTED: ${masked}]`);
-
-        if (args.autoStore !== false) {
-          const key = getEncryptionKey();
-          const { encrypted, iv } = await encodeSecret(secretValue, key);
-          const now = Date.now();
-
-          const id = await ctx.db.insert("vault", {
-            name: `${name} (auto-captured)`,
-            category,
-            provider,
-            encryptedValue: encrypted,
-            iv,
-            maskedValue: masked,
-            isActive: true,
-            accessCount: 0,
-            userId: args.userId,
-            createdAt: now,
-            updatedAt: now,
-          });
-
-          await ctx.db.insert("vaultAuditLog", {
-            vaultEntryId: id,
-            action: "auto_captured",
-            source: "chat",
-            userId: args.userId,
-            timestamp: now,
-          });
-
-          storedSecrets.push({ name, masked, id });
-        }
+        detectedSecrets.push({ name, masked, category, provider });
       }
     }
 
     return {
       censoredText,
-      secretsDetected: storedSecrets.length > 0,
-      storedSecrets,
+      secretsDetected: detectedSecrets.length > 0,
+      detectedSecrets,
       originalHadSecrets: censoredText !== args.text,
     };
   },
