@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
 
 // Crypto operations (encrypt/decrypt secrets) are in vaultCrypto.ts ("use node").
 // This file contains only V8-safe queries and mutations — no crypto.subtle.
@@ -288,7 +289,7 @@ export const remove = mutation({
 
 // ---- Secret Detection Utility ----
 
-export const detectSecrets = query({
+export const detectSecrets = internalQuery({
   args: { text: v.string() },
   handler: async (_ctx, args) => {
     const detected: Array<{
@@ -319,15 +320,17 @@ export const detectSecrets = query({
   },
 });
 
-// censorMessage is kept as a query-only detection utility.
-// The encryption part must be handled via vaultCrypto.encryptAndStore.
-export const censorMessage = query({
+// Censor a message by replacing detected secrets with masked versions
+// and scheduling encrypted storage in the vault via vaultCrypto.
+export const censorMessage = mutation({
   args: {
     text: v.string(),
+    userId: v.optional(v.string()),
+    autoStore: v.optional(v.boolean()),
   },
-  handler: async (_ctx, args) => {
+  handler: async (ctx, args) => {
     let censoredText = args.text;
-    const detectedSecrets: Array<{ name: string; masked: string; category: string; provider: string }> = [];
+    const storedSecrets: Array<{ name: string; masked: string }> = [];
 
     for (const { pattern, category, provider, name } of SECRET_PATTERNS) {
       const regex = new RegExp(pattern, "g");
@@ -335,15 +338,29 @@ export const censorMessage = query({
       while ((match = regex.exec(args.text)) !== null) {
         const secretValue = match[0];
         const masked = maskSecret(secretValue);
+
         censoredText = censoredText.replace(secretValue, `[REDACTED: ${masked}]`);
-        detectedSecrets.push({ name, masked, category, provider });
+
+        if (args.autoStore !== false) {
+          // Delegate encryption to Node.js action (fire-and-forget)
+          await ctx.scheduler.runAfter(0, internal.vaultCrypto.encryptAndStore, {
+            name: `${name} (auto-captured)`,
+            category,
+            provider,
+            value: secretValue,
+            userId: args.userId,
+            source: "chat",
+          });
+
+          storedSecrets.push({ name, masked });
+        }
       }
     }
 
     return {
       censoredText,
-      secretsDetected: detectedSecrets.length > 0,
-      detectedSecrets,
+      secretsDetected: storedSecrets.length > 0,
+      storedSecrets,
       originalHadSecrets: censoredText !== args.text,
     };
   },
