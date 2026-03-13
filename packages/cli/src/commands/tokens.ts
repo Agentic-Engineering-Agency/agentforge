@@ -38,17 +38,13 @@ export function registerTokensCommand(program: Command) {
       if (opts.json) { console.log(JSON.stringify(items, null, 2)); return; }
       header('API Access Tokens');
       if (!items.length) { dim('No tokens. Create one: agentforge tokens generate --name "my-app"'); return; }
-      table(items.map((t: any) => {
-        // Mask token: show first 8 chars + ... + last 4 chars
-        const maskedToken = t.token ? `${t.token.slice(0, 8)}...${t.token.slice(-4)}` : '...';
-        return {
+      table(items.map((t: any) => ({
           Name: t.name,
-          Token: maskedToken,
+          Token: t.tokenPrefix ?? '...',
           Status: t.isActive ? 'Active' : 'Revoked',
           Created: new Date(t.createdAt).toLocaleDateString(),
           Expires: t.expiresAt ? new Date(t.expiresAt).toLocaleDateString() : 'Never',
-        };
-      }));
+      })));
     });
 
   tokens
@@ -111,8 +107,7 @@ export function registerTokensCommand(program: Command) {
       const tokens = await client.query('apiAccessTokens:list' as any, {}) as any[];
       const token = tokens.find((t: any) =>
         t.name === nameOrId ||
-        t._id.toString().endsWith(nameOrId) ||
-        t.token?.endsWith(nameOrId)
+        t._id.toString().endsWith(nameOrId)
       );
 
       if (!token) {
