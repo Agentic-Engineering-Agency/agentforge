@@ -5,6 +5,7 @@ import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Id } from '@convex/_generated/dataModel';
 import { FolderKanban, Plus, Trash2, Edit, Search, X, Bot, Settings, Check } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { useModelCatalog } from '../lib/model-catalog';
 
 export const Route = createFileRoute('/projects')({ component: ProjectsPage });
@@ -163,28 +164,29 @@ function ProjectsPage() {
           </div>
         )}
 
-        {isModalOpen && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-md">
-              <div className="flex justify-between items-center p-4 border-b border-border">
-                <h2 className="text-lg font-bold">{editingProject ? 'Edit Project' : 'New Project'}</h2>
-                <button onClick={() => { setIsModalOpen(false); setEditingProject(null); }} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-              </div>
-              <ProjectForm key={editingProject?._id ?? 'create'} initial={editingProject} onSave={handleSave} onClose={() => { setIsModalOpen(false); setEditingProject(null); }} />
-            </div>
-          </div>
-        )}
+        <Dialog open={isModalOpen} onOpenChange={(open) => { if (!open) { setIsModalOpen(false); setEditingProject(null); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>{editingProject ? 'Edit Project' : 'New Project'}</DialogTitle>
+            </DialogHeader>
+            <ProjectForm key={editingProject?._id ?? 'create'} initial={editingProject} onSave={handleSave} onClose={() => { setIsModalOpen(false); setEditingProject(null); }} />
+          </DialogContent>
+        </Dialog>
 
-        {isDetailOpen && detailProject && (
-          <ProjectDetailModal
-            project={detailProject}
-            allAgents={allAgents}
-            onClose={() => { setIsDetailOpen(false); setDetailProjectId(null); setConfirmingUnassignAgentId(null); }}
-            onToggleAgent={handleToggleAgent}
-            onSettingsSave={handleSettingsSave}
-            confirmingUnassignAgentId={confirmingUnassignAgentId}
-          />
-        )}
+        <Dialog open={isDetailOpen && !!detailProject} onOpenChange={(open) => { if (!open) { setIsDetailOpen(false); setDetailProjectId(null); setConfirmingUnassignAgentId(null); } }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+            {detailProject && (
+              <ProjectDetailContent
+                project={detailProject}
+                allAgents={allAgents}
+                onClose={() => { setIsDetailOpen(false); setDetailProjectId(null); setConfirmingUnassignAgentId(null); }}
+                onToggleAgent={handleToggleAgent}
+                onSettingsSave={handleSettingsSave}
+                confirmingUnassignAgentId={confirmingUnassignAgentId}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
@@ -219,7 +221,7 @@ function ProjectForm({ initial, onSave, onClose }: { initial: any; onSave: (data
   );
 }
 
-interface ProjectDetailModalProps {
+interface ProjectDetailContentProps {
   project: any;
   allAgents: any[];
   onClose: () => void;
@@ -228,7 +230,7 @@ interface ProjectDetailModalProps {
   confirmingUnassignAgentId: string | null;
 }
 
-function ProjectDetailModal({ project, allAgents, onClose, onToggleAgent, onSettingsSave, confirmingUnassignAgentId }: ProjectDetailModalProps) {
+function ProjectDetailContent({ project, allAgents, onClose, onToggleAgent, onSettingsSave, confirmingUnassignAgentId }: ProjectDetailContentProps) {
   const [activeTab, setActiveTab] = useState<'agents' | 'settings'>('agents');
   const [systemPrompt, setSystemPrompt] = useState(project.systemPrompt || '');
   const [defaultModel, setDefaultModel] = useState(stripProviderPrefix(project.defaultProvider || '', project.defaultModel || ''));
@@ -246,38 +248,36 @@ function ProjectDetailModal({ project, allAgents, onClose, onToggleAgent, onSett
   const assignedAgents = allAgents.filter((agent) => project.agentIds?.includes(agent.id));
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b border-border">
-          <div className="flex items-center gap-2">
-            <FolderKanban className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-bold">{project.name}</h2>
-          </div>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-        </div>
+    <>
+      <DialogHeader>
+        <DialogTitle className="flex items-center gap-2">
+          <FolderKanban className="w-5 h-5 text-primary" />
+          {project.name}
+        </DialogTitle>
+      </DialogHeader>
 
-        <div className="flex border-b border-border">
-          <button
-            onClick={() => setActiveTab('agents')}
-            className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
-              activeTab === 'agents' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Bot className="w-4 h-4" />
-            Agents ({assignedAgents.length})
-          </button>
-          <button
-            onClick={() => setActiveTab('settings')}
-            className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
-              activeTab === 'settings' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            Settings
-          </button>
-        </div>
+      <div className="flex border-b border-border">
+        <button
+          onClick={() => setActiveTab('agents')}
+          className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
+            activeTab === 'agents' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Bot className="w-4 h-4" />
+          Agents ({assignedAgents.length})
+        </button>
+        <button
+          onClick={() => setActiveTab('settings')}
+          className={`px-4 py-2 text-sm font-medium flex items-center gap-2 ${
+            activeTab === 'settings' ? 'border-b-2 border-primary text-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Settings className="w-4 h-4" />
+          Settings
+        </button>
+      </div>
 
-        <div className="flex-grow overflow-y-auto p-6">
+      <div className="flex-grow overflow-y-auto">
           {activeTab === 'agents' ? (
             <AgentAssignmentSection
               allAgents={allAgents}
@@ -296,9 +296,8 @@ function ProjectDetailModal({ project, allAgents, onClose, onToggleAgent, onSett
               onSubmit={handleSettingsSubmit}
             />
           )}
-        </div>
       </div>
-    </div>
+    </>
   );
 }
 

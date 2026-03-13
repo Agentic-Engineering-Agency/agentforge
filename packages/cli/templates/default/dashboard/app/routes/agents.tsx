@@ -3,7 +3,8 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Bot, Plus, Edit, Trash2, Search, X, Loader2 } from 'lucide-react';
+import { Bot, Plus, Edit, Trash2, Search, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { useModelCatalog, type ProviderCatalogEntry } from '../lib/model-catalog';
 
 export const Route = createFileRoute('/agents')({ component: AgentsPage });
@@ -147,24 +148,26 @@ function AgentsPage() {
           </div>
         )}
 
-        {isModalOpen && (
-          <AgentModal
-            key={editingAgent?._id ?? 'create'}
-            agent={editingAgent}
-            modelsByProvider={modelsByProvider}
-            modelsLoading={catalogLoading}
-            onClose={() => { setIsModalOpen(false); setEditingAgent(null); }}
-            onSave={handleSave}
-            providerIds={providerIds}
-            providersById={providersById}
-          />
-        )}
+        <Dialog open={isModalOpen} onOpenChange={(open) => { if (!open) { setIsModalOpen(false); setEditingAgent(null); } }}>
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
+            <AgentModalContent
+              key={editingAgent?._id ?? 'create'}
+              agent={editingAgent}
+              modelsByProvider={modelsByProvider}
+              modelsLoading={catalogLoading}
+              onClose={() => { setIsModalOpen(false); setEditingAgent(null); }}
+              onSave={handleSave}
+              providerIds={providerIds}
+              providersById={providersById}
+            />
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
 }
 
-function AgentModal({
+function AgentModalContent({
   agent,
   onSave,
   onClose,
@@ -257,13 +260,11 @@ function AgentModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex justify-center items-center p-4">
-      <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col">
-        <div className="flex justify-between items-center p-4 border-b border-border">
-          <h2 className="text-lg font-bold">{agent ? 'Edit Agent' : 'Create Agent'}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-        </div>
-        <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto p-6 space-y-4">
+    <>
+      <DialogHeader>
+        <DialogTitle>{agent ? 'Edit Agent' : 'Create Agent'}</DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="flex-grow overflow-y-auto space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Name {formData.name.length}/{VALIDATION.name.maxLength}</label>
             <input
@@ -361,11 +362,10 @@ function AgentModal({
             </div>
           </div>
         </form>
-        <div className="flex justify-end p-4 border-t border-border gap-2">
-          <button type="button" onClick={onClose} className="bg-background border border-border px-4 py-2 rounded-lg hover:bg-muted">Cancel</button>
-          <button type="submit" onClick={handleSubmit} disabled={!formData.name.trim()} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">Save Agent</button>
-        </div>
-      </div>
-    </div>
+      <DialogFooter>
+        <button type="button" onClick={onClose} className="bg-background border border-border px-4 py-2 rounded-lg hover:bg-muted">Cancel</button>
+        <button type="submit" onClick={handleSubmit} disabled={!formData.name.trim()} className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed">Save Agent</button>
+      </DialogFooter>
+    </>
   );
 }

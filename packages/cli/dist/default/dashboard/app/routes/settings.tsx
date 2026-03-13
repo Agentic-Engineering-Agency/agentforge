@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { AlertTriangle, Check, ExternalLink, Key, Loader2, Plus, Settings, Shield, Trash2, X } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { useModelCatalog, type ProviderCatalogEntry } from '../lib/model-catalog';
 import { deriveGeneralSettings, isSettingsLoaded } from '../lib/settings-helpers';
 
@@ -352,83 +353,81 @@ function SettingsPage() {
           </div>
         )}
 
-        {addingProvider && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-md">
-              <div className="flex justify-between items-center p-4 border-b border-border">
-                <h2 className="text-lg font-bold">Add {addingProvider.name} API Key</h2>
-                <button onClick={() => setAddingProvider(null)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-              </div>
-              <div className="p-6 space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Key Name</label>
-                  <input type="text" value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Production Key" />
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-sm font-medium">API Key</label>
-                    {addingProvider.docsUrl && (
-                      <a href={addingProvider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">Docs <ExternalLink className="w-3 h-3" /></a>
-                    )}
+        <Dialog open={!!addingProvider} onOpenChange={(open) => { if (!open) setAddingProvider(null); }}>
+          <DialogContent className="max-w-md">
+            {addingProvider && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Add {addingProvider.name} API Key</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Key Name</label>
+                    <input type="text" value={newKeyName} onChange={(event) => setNewKeyName(event.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Production Key" />
                   </div>
-                  <input type="password" value={newKeyValue} onChange={(event) => setNewKeyValue(event.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder={`${KEY_PREFIXES[addingProvider.id] ?? ''}xxxxxxxxxxxxxxxxxxxx`} />
+                  <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-sm font-medium">API Key</label>
+                      {addingProvider.docsUrl && (
+                        <a href={addingProvider.docsUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">Docs <ExternalLink className="w-3 h-3" /></a>
+                      )}
+                    </div>
+                    <input type="password" value={newKeyValue} onChange={(event) => setNewKeyValue(event.target.value)} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder={`${KEY_PREFIXES[addingProvider.id] ?? ''}xxxxxxxxxxxxxxxxxxxx`} />
+                  </div>
+                  {newKeyValue && KEY_PREFIXES[addingProvider.id] && !newKeyValue.startsWith(KEY_PREFIXES[addingProvider.id]!) && (
+                    <p className="text-xs text-yellow-500 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Key should start with "{KEY_PREFIXES[addingProvider.id]}"</p>
+                  )}
                 </div>
-                {newKeyValue && KEY_PREFIXES[addingProvider.id] && !newKeyValue.startsWith(KEY_PREFIXES[addingProvider.id]!) && (
-                  <p className="text-xs text-yellow-500 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Key should start with "{KEY_PREFIXES[addingProvider.id]}"</p>
-                )}
-              </div>
-              <div className="p-4 border-t border-border flex justify-end gap-2">
-                <button onClick={() => setAddingProvider(null)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
-                <button onClick={handleAddKey} disabled={!newKeyValue.trim()} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
-                  <Key className="w-4 h-4" /> Save Key
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+                <DialogFooter>
+                  <button onClick={() => setAddingProvider(null)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
+                  <button onClick={handleAddKey} disabled={!newKeyValue.trim()} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
+                    <Key className="w-4 h-4" /> Save Key
+                  </button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
 
-        {addingVaultSecret && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-md">
-              <div className="flex justify-between items-center p-4 border-b border-border">
-                <h2 className="text-lg font-bold">Add Secret to Vault</h2>
-                <button onClick={() => setAddingVaultSecret(false)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
+        <Dialog open={addingVaultSecret} onOpenChange={(open) => { if (!open) setAddingVaultSecret(false); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add Secret to Vault</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Name</label>
+                <input type="text" value={vaultForm.name} onChange={(event) => setVaultForm((prev) => ({ ...prev, name: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Database Password" />
               </div>
-              <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">Name</label>
-                  <input type="text" value={vaultForm.name} onChange={(event) => setVaultForm((prev) => ({ ...prev, name: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. Database Password" />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Category</label>
-                    <select value={vaultForm.category} onChange={(event) => setVaultForm((prev) => ({ ...prev, category: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm">
-                      <option value="api_key">API Key</option>
-                      <option value="token">Token</option>
-                      <option value="credential">Credential</option>
-                      <option value="certificate">Certificate</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Provider</label>
-                    <input type="text" value={vaultForm.provider} onChange={(event) => setVaultForm((prev) => ({ ...prev, provider: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. aws" />
-                  </div>
+                  <label className="block text-sm font-medium mb-1">Category</label>
+                  <select value={vaultForm.category} onChange={(event) => setVaultForm((prev) => ({ ...prev, category: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm">
+                    <option value="api_key">API Key</option>
+                    <option value="token">Token</option>
+                    <option value="credential">Credential</option>
+                    <option value="certificate">Certificate</option>
+                    <option value="other">Other</option>
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Secret Value</label>
-                  <input type="password" value={vaultForm.value} onChange={(event) => setVaultForm((prev) => ({ ...prev, value: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder="Enter the secret value" />
+                  <label className="block text-sm font-medium mb-1">Provider</label>
+                  <input type="text" value={vaultForm.provider} onChange={(event) => setVaultForm((prev) => ({ ...prev, provider: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm" placeholder="e.g. aws" />
                 </div>
               </div>
-              <div className="p-4 border-t border-border flex justify-end gap-2">
-                <button onClick={() => setAddingVaultSecret(false)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
-                <button onClick={handleAddVaultSecret} disabled={!vaultForm.name || !vaultForm.value} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
-                  <Shield className="w-4 h-4" /> Store Secret
-                </button>
+              <div>
+                <label className="block text-sm font-medium mb-1">Secret Value</label>
+                <input type="password" value={vaultForm.value} onChange={(event) => setVaultForm((prev) => ({ ...prev, value: event.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm font-mono" placeholder="Enter the secret value" />
               </div>
             </div>
-          </div>
-        )}
+            <DialogFooter>
+              <button onClick={() => setAddingVaultSecret(false)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
+              <button onClick={handleAddVaultSecret} disabled={!vaultForm.name || !vaultForm.value} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2">
+                <Shield className="w-4 h-4" /> Store Secret
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

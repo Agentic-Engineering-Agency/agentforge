@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useAction } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Plug, Plus, Trash2, Search, X, Check, ExternalLink, Globe, Database, Mail, MessageSquare, FileText, Code, Zap, Shield, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 
 export const Route = createFileRoute('/connections')({ component: ConnectionsPage });
 
@@ -292,44 +293,45 @@ function ConnectionsPage() {
         )}
 
         {/* Connect Modal */}
-        {connectingItem && (
-          <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-lg">
-              <div className="flex justify-between items-center p-4 border-b border-border">
-                <h2 className="text-lg font-bold">Connect {connectingItem.name}</h2>
-                <button onClick={() => setConnectingItem(null)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-              </div>
-              <div className="p-6 space-y-4">
-                <p className="text-sm text-muted-foreground">{connectingItem.description}</p>
-                {connectingItem.authFields.length > 0 ? (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold">Authentication</h3>
-                    {connectingItem.authFields.map(field => (
-                      <div key={field.key}>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-sm font-medium">{field.label}</label>
-                          {field.helpUrl && <a href={field.helpUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">Get token <ExternalLink className="w-3 h-3" /></a>}
+        <Dialog open={!!connectingItem} onOpenChange={(open) => { if (!open) setConnectingItem(null); }}>
+          <DialogContent className="max-w-lg">
+            {connectingItem && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Connect {connectingItem.name}</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">{connectingItem.description}</p>
+                  {connectingItem.authFields.length > 0 ? (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold">Authentication</h3>
+                      {connectingItem.authFields.map(field => (
+                        <div key={field.key}>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-sm font-medium">{field.label}</label>
+                            {field.helpUrl && <a href={field.helpUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline flex items-center gap-1">Get token <ExternalLink className="w-3 h-3" /></a>}
+                          </div>
+                          <input type="password" placeholder={field.placeholder} value={authValues[field.key] || ''} onChange={(e) => setAuthValues(prev => ({ ...prev, [field.key]: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
                         </div>
-                        <input type="password" placeholder={field.placeholder} value={authValues[field.key] || ''} onChange={(e) => setAuthValues(prev => ({ ...prev, [field.key]: e.target.value }))} className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary font-mono" />
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-green-500">No authentication required for this integration.</p>
+                  )}
+                  <div className="bg-muted/50 rounded-lg p-3">
+                    <p className="text-xs text-muted-foreground font-mono">{connectingItem.serverUrl}</p>
                   </div>
-                ) : (
-                  <p className="text-sm text-green-500">No authentication required for this integration.</p>
-                )}
-                <div className="bg-muted/50 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground font-mono">{connectingItem.serverUrl}</p>
                 </div>
-              </div>
-              <div className="p-4 border-t border-border flex justify-end gap-2">
-                <button onClick={() => setConnectingItem(null)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
-                <button onClick={handleConnect} disabled={connectingItem.authFields.length > 0 && connectingItem.authFields.some(f => !authValues[f.key])} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
-                  <Plug className="w-4 h-4" /> Connect
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
+                <DialogFooter>
+                  <button onClick={() => setConnectingItem(null)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Cancel</button>
+                  <button onClick={handleConnect} disabled={connectingItem.authFields.length > 0 && connectingItem.authFields.some(f => !authValues[f.key])} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2">
+                    <Plug className="w-4 h-4" /> Connect
+                  </button>
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
