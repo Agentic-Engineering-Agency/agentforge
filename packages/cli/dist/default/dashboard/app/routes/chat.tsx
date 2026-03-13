@@ -21,6 +21,8 @@ import {
   MessageSquare,
   X,
   File,
+  ChevronDown,
+  RotateCcw,
 } from "lucide-react";
 import { useModelCatalog } from "../lib/model-catalog";
 
@@ -91,6 +93,7 @@ function ChatPageComponent() {
   // ── Convex mutations & actions ──────────────────────────────
   const createThread = useMutation(api.threads.createThread);
   const censorSecretMessage = useMutation(api.vault.censorMessage);
+  const setThreadModelOverride = useMutation(api.threads.setModelOverride);
   // NOTE: chat.sendMessage removed in v0.12 — messages are sent via runtime daemon HTTP API.
 
   // ── Local state ─────────────────────────────────────────────
@@ -105,6 +108,8 @@ function ChatPageComponent() {
   // AGE-144: File attachment state
   const [attachedFiles, setAttachedFiles] = useState<Array<{ id: string; name: string; size: number; mimeType: string }>>([]);
   const [showFilePicker, setShowFilePicker] = useState(false);
+  // Issue #217: Chat-scoped model override
+  const [showModelPicker, setShowModelPicker] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -116,7 +121,14 @@ function ChatPageComponent() {
     api.threads.getThreadMessages,
     currentThreadId ? { threadId: currentThreadId as Id<"threads"> } : "skip"
   ) ?? [];
-  const { providersById } = useModelCatalog(agents.map((agent: any) => agent.provider));
+  const { providersById, providers: catalogProviders } = useModelCatalog(agents.map((agent: any) => agent.provider));
+
+  // Issue #217: Query current thread to get its modelOverride
+  const currentThread = useQuery(
+    api.threads.getThread,
+    currentThreadId ? { threadId: currentThreadId as Id<"threads"> } : "skip"
+  );
+  const threadModelOverride = currentThread?.modelOverride ?? null;
 
   // ── Auto-select first agent ─────────────────────────────────
   useEffect(() => {
@@ -139,6 +151,20 @@ function ChatPageComponent() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isGenerating]);
+
+  // ── Issue #217: Model override handler ──────────────────────
+  const handleModelOverride = useCallback(async (fullModelId: string | null) => {
+    if (!currentThreadId) return;
+    try {
+      await setThreadModelOverride({
+        threadId: currentThreadId as Id<"threads">,
+        modelOverride: fullModelId ?? undefined,
+      });
+      setShowModelPicker(false);
+    } catch (e) {
+      setError(`Failed to set model override: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [currentThreadId, setThreadModelOverride]);
 
   // ── Secret detection as user types ──────────────────────────
   const inputHasSecrets = input.length > 8 ? detectSecrets(input) : [];
@@ -215,6 +241,7 @@ function ChatPageComponent() {
           agentId: currentAgentId,
           threadId: threadId,
           message: messageText,
+          model: threadModelOverride ?? undefined,
           fileIds: attachedFiles.map((f: { id: string }) => f.id),
         }),
       });
@@ -231,7 +258,7 @@ function ChatPageComponent() {
     } finally {
       setIsGenerating(false);
     }
-  }, [attachedFiles, censorSecretMessage, currentAgentId, currentThreadId, agents, createThread]);
+  }, [attachedFiles, censorSecretMessage, currentAgentId, currentThreadId, agents, createThread, threadModelOverride]);
 
   const handleSendMessage = useCallback(
     async (e: React.FormEvent) => {
@@ -320,12 +347,78 @@ function ChatPageComponent() {
                 ))}
               </select>
             </div>
-            <button
-              className="p-2 rounded-lg hover:bg-card border border-border"
-              title="Chat Settings"
-            >
-              <Settings2 className="w-4 h-4 text-muted-foreground" />
-            </button>
+            {/* Issue #217: Model override picker */}
+            <div className="relative">
+              <button
+                onClick={() => setShowModelPicker(!showModelPicker)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm ${
+                  threadModelOverride
+                    ? "bg-primary/10 border-primary text-primary"
+                    : "bg-background border-border text-muted-foreground hover:bg-card"
+                }`}
+                title={threadModelOverride ? `Override: ${threadModelOverride}` : "Change model for this thread"}
+              >
+                <Settings2 className="w-4 h-4" />
+                <span className="hidden sm:inline max-w-[140px] truncate">
+                  {threadModelOverride ?? (currentAgent ? `${currentAgent.provider}/${currentAgent.model}` : "Model")}
+                </span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+
+              {showModelPicker && (
+                <div className="absolute right-0 top-full mt-1 z-50 w-72 bg-card border border-border rounded-lg shadow-xl overflow-hidden">
+                  <div className="p-2 border-b border-border flex items-center justify-between">
+                    <span className="text-xs font-medium text-muted-foreground">Thread Model Override</span>
+                    {threadModelOverride && (
+                      <button
+                        onClick={() => handleModelOverride(null)}
+                        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                        title="Revert to agent default"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        Reset
+                      </button>
+                    )}
+                  </div>
+                  <div className="max-h-64 overflow-y-auto">
+                    {catalogProviders.map((provider) => (
+                      <div key={provider.id}>
+                        <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground bg-muted/50 sticky top-0">
+                          {provider.name}
+                        </div>
+                        {provider.models.map((modelName: string) => {
+                          const fullModelId = `${provider.id}/${modelName}`;
+                          const isActive = threadModelOverride === fullModelId;
+                          const isDefault = currentAgent && `${currentAgent.provider}/${currentAgent.model}` === fullModelId;
+                          return (
+                            <button
+                              key={fullModelId}
+                              onClick={() => handleModelOverride(fullModelId)}
+                              className={`w-full text-left px-3 py-1.5 text-sm hover:bg-muted flex items-center justify-between ${
+                                isActive ? "bg-primary/10 text-primary" : ""
+                              }`}
+                            >
+                              <span className="truncate">{modelName}</span>
+                              {isDefault && !threadModelOverride && (
+                                <span className="text-xs text-muted-foreground ml-2 flex-shrink-0">default</span>
+                              )}
+                              {isActive && (
+                                <span className="text-xs text-primary ml-2 flex-shrink-0">active</span>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))}
+                    {catalogProviders.length === 0 && (
+                      <div className="px-3 py-4 text-sm text-muted-foreground text-center">
+                        No models available. Start the daemon to load provider catalogs.
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </header>
 
