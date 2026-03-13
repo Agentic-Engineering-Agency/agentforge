@@ -12,7 +12,10 @@ script = """
 set -e
 
 # Install pnpm if not available
-command -v pnpm >/dev/null 2>&1 || corepack enable && corepack prepare pnpm@latest --activate
+if ! command -v pnpm >/dev/null 2>&1; then
+  corepack enable 2>/dev/null || npm install -g pnpm
+  corepack prepare pnpm@latest --activate 2>/dev/null || true
+fi
 
 # Install all workspace dependencies
 pnpm install --frozen-lockfile 2>/dev/null || pnpm install
