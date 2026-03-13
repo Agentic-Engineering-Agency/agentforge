@@ -1,5 +1,27 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -c 'cd \"$CLAUDE_PROJECT_DIR\" && pnpm install --frozen-lockfile 2>/dev/null || pnpm install && pnpm sync-templates 2>/dev/null; echo \"AgentForge environment ready ($(node -v), pnpm $(pnpm -v))\"'"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"import json,sys; d=json.load(sys.stdin); cmd=d.get('command',''); print('BLOCK: Use pnpm instead of npm in this monorepo') if cmd.strip().startswith('npm ') and 'npx' not in cmd else None\" 2>/dev/null"
+          }
+        ]
+      }
+    ],
     "PostToolUse": [
       {
         "matcher": "Edit|Write",
