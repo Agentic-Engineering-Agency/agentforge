@@ -2,7 +2,7 @@
 
 > **For coding agents and developers.** Read this before touching any Convex or Mastra code.
 > Referenced by: `CLAUDE.md`, `AGENTS.md`
-> Last updated: 2026-03-05
+> Last updated: 2026-03-13
 > Sources: docs.convex.dev, mastra.ai/docs, github.com/get-convex/mastra, mastra.ai/reference/storage/convex
 
 ---
@@ -125,6 +125,27 @@ The model router auto-detects env vars for each provider (`OPENAI_API_KEY`, `ANT
 For BYOK (Bring Your Own Key), inject via `process.env` before creating the Agent (in Node.js actions):
 ```typescript
 process.env['OPENAI_API_KEY'] = decryptedKey
+```
+
+### Chat-Scoped Model Override (v0.12.23)
+Users can override the model per-thread without mutating the agent's default. The config cascade is:
+```
+request body "model" field > thread-level modelOverride > agent default > daemon default
+```
+Implementation:
+- **Schema:** `threads.modelOverride: v.optional(v.string())` — stored in Convex
+- **Runtime:** `packages/runtime/src/channels/model-override.ts` — `parseModelString()` + `validateModelOverride()`
+- **HTTP:** `/api/chat` accepts optional `model` field, creates a temporary agent (cached agent is never mutated)
+- **Frontend:** Model picker dropdown in chat header, override sent with each request
+
+```typescript
+// ✅ Create a temporary agent with overridden model — never mutate the cached one
+if (effectiveModelId !== definition.model) {
+  activeAgent = createStandardAgent({ ...definition, model: effectiveModelId });
+}
+
+// ❌ Never mutate the cached agent
+agent.model = overrideModel; // WRONG — affects all concurrent threads
 ```
 
 ### Dynamic Instructions
