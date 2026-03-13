@@ -32,7 +32,8 @@ function ProjectsPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
-  const [detailProject, setDetailProject] = useState<any>(null);
+  const [detailProjectId, setDetailProjectId] = useState<Id<'projects'> | null>(null);
+  const detailProject = projects.find((p: any) => p._id === detailProjectId) ?? null;
   const [confirmingDeletingId, setConfirmingDeletingId] = useState<Id<'projects'> | null>(null);
   const [confirmingUnassignAgentId, setConfirmingUnassignAgentId] = useState<string | null>(null);
 
@@ -62,7 +63,7 @@ function ProjectsPage() {
   };
 
   const handleProjectClick = (project: any) => {
-    setDetailProject(project);
+    setDetailProjectId(project._id);
     setIsDetailOpen(true);
   };
 
@@ -73,35 +74,18 @@ function ProjectsPage() {
     if (isAssigned) {
       if (confirmingUnassignAgentId === agentId) {
         await unassignAgent({ id: detailProject._id, agentId });
-        setDetailProject((current: any) =>
-          current
-            ? {
-                ...current,
-                agentIds: (current.agentIds ?? []).filter((id: string) => id !== agentId),
-              }
-            : current,
-        );
         setConfirmingUnassignAgentId(null);
       } else {
         setConfirmingUnassignAgentId(agentId);
       }
     } else {
       await assignAgent({ id: detailProject._id, agentId });
-      setDetailProject((current: any) =>
-        current
-          ? {
-              ...current,
-              agentIds: [...new Set([...(current.agentIds ?? []), agentId])],
-            }
-          : current,
-      );
     }
   };
 
   const handleSettingsSave = async (settings: { systemPrompt?: string; defaultModel?: string; defaultProvider?: string }) => {
     if (!detailProject) return;
     await updateSettings({ id: detailProject._id, ...settings });
-    setDetailProject((current: any) => (current ? { ...current, ...settings } : current));
   };
 
   return (
@@ -195,7 +179,7 @@ function ProjectsPage() {
           <ProjectDetailModal
             project={detailProject}
             allAgents={allAgents}
-            onClose={() => { setIsDetailOpen(false); setDetailProject(null); setConfirmingUnassignAgentId(null); }}
+            onClose={() => { setIsDetailOpen(false); setDetailProjectId(null); setConfirmingUnassignAgentId(null); }}
             onToggleAgent={handleToggleAgent}
             onSettingsSave={handleSettingsSave}
             confirmingUnassignAgentId={confirmingUnassignAgentId}
