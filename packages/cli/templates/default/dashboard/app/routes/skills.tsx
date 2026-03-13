@@ -3,7 +3,8 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { Sparkles, Download, Trash2, Plus, Search, X, Check, Code, Globe, Calculator, FileText, Database, Mail, Wrench } from 'lucide-react';
+import { Sparkles, Download, Trash2, Plus, Search, Check, Code, Globe, Calculator, FileText, Database, Mail, Wrench } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 
 export const Route = createFileRoute('/skills')({ component: SkillsPage });
 
@@ -409,23 +410,24 @@ function SkillsPage() {
         )}
 
         {/* Code Preview Modal */}
-        {selectedSkill && (
-          <div key={selectedSkill.name} className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-            <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] flex flex-col">
-              <div className="flex justify-between items-center p-4 border-b border-border">
-                <h2 className="text-lg font-bold">{selectedSkill.displayName} — Source Code</h2>
-                <button onClick={() => setSelectedSkill(null)} className="text-muted-foreground hover:text-foreground"><X className="h-5 w-5" /></button>
-              </div>
-              <pre className="flex-1 overflow-auto p-4 text-xs font-mono bg-background text-foreground">{selectedSkill.code}</pre>
-              <div className="p-4 border-t border-border flex justify-end gap-2">
-                <button onClick={() => setSelectedSkill(null)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Close</button>
-                {!installedNames.has(selectedSkill.name) && (
-                  <button onClick={() => { handleInstall(selectedSkill); setSelectedSkill(null); }} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90">Install Skill</button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
+        <Dialog open={!!selectedSkill} onOpenChange={(open) => { if (!open) setSelectedSkill(null); }}>
+          <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+            {selectedSkill && (
+              <>
+                <DialogHeader>
+                  <DialogTitle>{selectedSkill.displayName} — Source Code</DialogTitle>
+                </DialogHeader>
+                <pre className="flex-1 overflow-auto p-4 text-xs font-mono bg-background text-foreground">{selectedSkill.code}</pre>
+                <DialogFooter>
+                  <button onClick={() => setSelectedSkill(null)} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">Close</button>
+                  {!installedNames.has(selectedSkill.name) && (
+                    <button onClick={() => { handleInstall(selectedSkill); setSelectedSkill(null); }} className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90">Install Skill</button>
+                  )}
+                </DialogFooter>
+              </>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );

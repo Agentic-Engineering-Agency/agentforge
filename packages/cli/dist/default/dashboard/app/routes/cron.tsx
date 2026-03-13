@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
 import { Clock, Play, Pause, Plus, History, Trash2, Edit, X, AlertCircle, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/dialog';
 
 export const Route = createFileRoute('/cron')({ component: CronPage });
 
@@ -185,12 +186,16 @@ function CronPage() {
           </div>
         )}
 
-        {isCreateModalOpen && (
-          <CronModal agents={agents} onSave={handleCreate} onClose={() => setIsCreateModalOpen(false)} />
-        )}
-        {editingJob && (
-          <CronModal agents={agents} job={editingJob} onSave={handleEdit} onClose={() => setEditingJob(null)} />
-        )}
+        <Dialog open={isCreateModalOpen} onOpenChange={(open) => { if (!open) setIsCreateModalOpen(false); }}>
+          <DialogContent className="max-w-lg">
+            <CronModalContent agents={agents} onSave={handleCreate} onClose={() => setIsCreateModalOpen(false)} />
+          </DialogContent>
+        </Dialog>
+        <Dialog open={!!editingJob} onOpenChange={(open) => { if (!open) setEditingJob(null); }}>
+          <DialogContent className="max-w-lg">
+            {editingJob && <CronModalContent agents={agents} job={editingJob} onSave={handleEdit} onClose={() => setEditingJob(null)} />}
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
@@ -240,7 +245,7 @@ function RunHistoryPanel({ cronJobId, onClose }: { cronJobId: any; onClose: () =
   );
 }
 
-function CronModal({
+function CronModalContent({
   agents,
   job,
   onSave,
@@ -283,15 +288,11 @@ function CronModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
-      <div className="bg-card border border-border rounded-lg shadow-xl w-full max-w-lg">
-        <div className="flex justify-between items-center p-4 border-b border-border">
-          <h2 className="text-lg font-bold">{job ? 'Edit Scheduled Task' : 'New Scheduled Task'}</h2>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+    <>
+      <DialogHeader>
+        <DialogTitle>{job ? 'Edit Scheduled Task' : 'New Scheduled Task'}</DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Name</label>
             <input
@@ -370,19 +371,18 @@ function CronModal({
             />
           </div>
         </form>
-        <div className="p-4 border-t border-border flex justify-end gap-2">
-          <button onClick={onClose} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={!form.name || !form.agentId || !form.prompt}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50"
-          >
-            {job ? 'Update Schedule' : 'Create Schedule'}
-          </button>
-        </div>
-      </div>
-    </div>
+      <DialogFooter>
+        <button onClick={onClose} className="px-4 py-2 rounded-lg bg-muted text-muted-foreground text-sm">
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={!form.name || !form.agentId || !form.prompt}
+          className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:bg-primary/90 disabled:opacity-50"
+        >
+          {job ? 'Update Schedule' : 'Create Schedule'}
+        </button>
+      </DialogFooter>
+    </>
   );
 }
