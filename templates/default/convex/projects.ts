@@ -1,5 +1,5 @@
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalQuery } from "./_generated/server";
 
 // Query: List projects
 export const list = query({
@@ -126,8 +126,9 @@ export const unassignAgent = mutation({
   },
 });
 
-// Query: Get project settings (systemPrompt, defaultModel, defaultProvider)
-export const getProjectSettings = query({
+// Internal query: Get project settings (systemPrompt, defaultModel, defaultProvider)
+// Uses internalQuery because it exposes system prompts and API configs
+export const getProjectSettings = internalQuery({
   args: { id: v.id("projects") },
   handler: async (ctx, args) => {
     const project = await ctx.db.get(args.id);
@@ -169,12 +170,15 @@ export const updateSettings = mutation({
     }
 
     // Keep the settings object in sync for backward compatibility
-    patch.settings = {
-      ...(project.settings ?? {}),
-      ...Object.fromEntries(
-        Object.entries(settingsFields).filter(([, val]) => val !== undefined)
-      ),
-    };
+    const filteredEntries = Object.fromEntries(
+      Object.entries(settingsFields).filter(([, val]) => val !== undefined)
+    );
+    if (Object.keys(filteredEntries).length > 0) {
+      patch.settings = {
+        ...(project.settings ?? {}),
+        ...filteredEntries,
+      };
+    }
 
     await ctx.db.patch(id, patch);
   },

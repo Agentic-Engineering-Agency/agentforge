@@ -116,12 +116,8 @@ describe('SPEC-002: convex/projects.ts data contract', () => {
 // ---------------------------------------------------------------------------
 
 describe('SPEC-002: Config cascade — resolveConfig', () => {
-  let resolveConfig: (
-    agentConfig: Record<string, unknown>,
-    projectConfig: Record<string, unknown> | null,
-    globalConfig: Record<string, unknown> | null,
-  ) => Record<string, unknown>;
-  let SYSTEM_DEFAULTS: Record<string, unknown>;
+  let resolveConfig: typeof import('../convex/lib/configCascade').resolveConfig;
+  let SYSTEM_DEFAULTS: typeof import('../convex/lib/configCascade').SYSTEM_DEFAULTS;
 
   beforeAll(async () => {
     const mod = await import('../convex/lib/configCascade');

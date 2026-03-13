@@ -13,6 +13,9 @@
  * System defaults for agent configuration
  */
 export const SYSTEM_DEFAULTS = {
+  // openai/gpt-4o is the safe system-wide fallback. The daemon default
+  // (moonshotai/kimi-k2.5) is configured at the runtime level in
+  // packages/runtime/, not here in the config cascade defaults.
   model: "openai/gpt-4o",
   temperature: 0.7,
   maxTokens: 4096,
@@ -28,7 +31,6 @@ export interface AgentConfig {
   maxTokens?: number;
   instructions?: string;
   failoverModels?: Array<{ provider: string; model: string }> | string[];
-  [key: string]: unknown;
 }
 
 /**
@@ -41,7 +43,6 @@ export interface ProjectSettings {
   defaultInstructions?: string;
   instructionPrefix?: string;
   failoverModels?: Array<{ provider: string; model: string }>;
-  [key: string]: unknown;
 }
 
 /**
@@ -52,7 +53,6 @@ export interface GlobalSettings {
   defaultTemperature?: number;
   defaultMaxTokens?: number;
   instructionPrefix?: string;
-  [key: string]: unknown;
 }
 
 /**
@@ -82,19 +82,19 @@ export interface ResolvedConfig {
  * @returns Resolved configuration
  */
 export function resolveConfig(
-  agentConfig: Record<string, unknown>,
-  projectConfig: Record<string, unknown> | null,
-  globalConfig: Record<string, unknown> | null,
+  agentConfig: AgentConfig,
+  projectConfig: ProjectSettings | null,
+  globalConfig: GlobalSettings | null,
 ): ResolvedConfig {
   const instructions =
-    (agentConfig.instructions as string | undefined) ??
-    (projectConfig?.defaultInstructions as string | undefined) ??
+    agentConfig.instructions ??
+    projectConfig?.defaultInstructions ??
     SYSTEM_DEFAULTS.instructions;
 
   // Instruction prefix: project wins over global
   const prefix =
-    (projectConfig?.instructionPrefix as string | undefined) ||
-    (globalConfig?.instructionPrefix as string | undefined) ||
+    projectConfig?.instructionPrefix ||
+    globalConfig?.instructionPrefix ||
     "";
 
   const systemPrompt = prefix
@@ -103,22 +103,22 @@ export function resolveConfig(
 
   return {
     model:
-      (agentConfig.model as string | undefined) ??
-      (projectConfig?.defaultModel as string | undefined) ??
-      (globalConfig?.defaultModel as string | undefined) ??
+      agentConfig.model ??
+      projectConfig?.defaultModel ??
+      globalConfig?.defaultModel ??
       SYSTEM_DEFAULTS.model,
     temperature:
-      (agentConfig.temperature as number | undefined) ??
-      (projectConfig?.defaultTemperature as number | undefined) ??
-      (globalConfig?.defaultTemperature as number | undefined) ??
+      agentConfig.temperature ??
+      projectConfig?.defaultTemperature ??
+      globalConfig?.defaultTemperature ??
       SYSTEM_DEFAULTS.temperature,
     maxTokens:
-      (agentConfig.maxTokens as number | undefined) ??
-      (projectConfig?.defaultMaxTokens as number | undefined) ??
-      (globalConfig?.defaultMaxTokens as number | undefined) ??
+      agentConfig.maxTokens ??
+      projectConfig?.defaultMaxTokens ??
+      globalConfig?.defaultMaxTokens ??
       SYSTEM_DEFAULTS.maxTokens,
     instructions,
     systemPrompt,
-    failoverModels: (agentConfig.failoverModels as ResolvedConfig["failoverModels"] | undefined) ?? [],
+    failoverModels: agentConfig.failoverModels ?? [],
   };
 }
