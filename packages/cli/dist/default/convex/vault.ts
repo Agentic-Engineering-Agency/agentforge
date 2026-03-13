@@ -327,7 +327,7 @@ export const censorMessage = query({
   },
   handler: async (_ctx, args) => {
     let censoredText = args.text;
-    const detectedSecrets: Array<{ name: string; masked: string; category: string; provider: string; value: string }> = [];
+    const detectedSecrets: Array<{ name: string; masked: string; category: string; provider: string }> = [];
 
     for (const { pattern, category, provider, name } of SECRET_PATTERNS) {
       const regex = new RegExp(pattern, "g");
@@ -336,7 +336,7 @@ export const censorMessage = query({
         const secretValue = match[0];
         const masked = maskSecret(secretValue);
         censoredText = censoredText.replace(secretValue, `[REDACTED: ${masked}]`);
-        detectedSecrets.push({ name, masked, category, provider, value: secretValue });
+        detectedSecrets.push({ name, masked, category, provider });
       }
     }
 
