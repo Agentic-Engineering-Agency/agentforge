@@ -8,6 +8,8 @@ import { getProviderCatalog } from '../models/catalog.js';
 import { getModel } from '../models/registry.js';
 import { sanitizeHttpInput, InputValidationError } from '../security/input-sanitizer.js';
 import { RateLimiter, RateLimitError } from '../security/rate-limiter.js';
+import { validateModelOverride } from './model-override.js';
+import { createStandardAgent } from '../agent/create-standard-agent.js';
 
 interface DaemonAccess {
   listAgents(): AgentDefinition[];
@@ -217,11 +219,13 @@ export class HttpChannel implements ChannelAdapter {
         agentId,
         threadId: providedThreadId,
         message,
+        model: requestModel,
         fileIds = [],
       } = body as {
         agentId?: string;
         threadId?: string;
         message?: string;
+        model?: string;
         fileIds?: string[];
       };
 
@@ -259,9 +263,47 @@ export class HttpChannel implements ChannelAdapter {
       if (!resolvedAgent) {
         return c.json({ error: `Agent '${agentId}' not found` }, 404);
       }
-      const { agent, definition } = resolvedAgent;
+      const { agent: defaultAgent, definition } = resolvedAgent;
 
       const threadId = await this.resolveThreadId(agentId, definition.name, providedThreadId);
+
+      // Resolve model override: request body > thread-level override > agent default
+      let effectiveModelId = definition.model ?? 'moonshotai/kimi-k2.5';
+      let activeAgent = defaultAgent;
+
+      // Check for model override from request body
+      if (requestModel) {
+        const validation = validateModelOverride(requestModel, []);
+        if (!validation.valid) {
+          return c.json({ error: validation.error }, 400);
+        }
+        effectiveModelId = validation.fullModelId!;
+      } else {
+        // Fall back to thread-level stored override
+        const threadData = await this.dataClient.query('threads:getThread', { threadId })
+          .catch(() => null) as { modelOverride?: string } | null;
+        if (threadData?.modelOverride) {
+          const validation = validateModelOverride(threadData.modelOverride, []);
+          if (validation.valid) {
+            effectiveModelId = validation.fullModelId!;
+          }
+        }
+      }
+
+      // If the effective model differs from the agent's default, create a
+      // temporary agent with the overridden model. The default agent instance
+      // is never mutated — it stays in the daemon cache unchanged.
+      if (effectiveModelId !== (definition.model ?? 'moonshotai/kimi-k2.5')) {
+        activeAgent = createStandardAgent({
+          id: definition.id,
+          name: definition.name,
+          description: definition.description,
+          instructions: definition.instructions,
+          model: effectiveModelId,
+          tools: definition.tools,
+          disableMemory: definition.disableMemory,
+        });
+      }
 
       const existingMessages = await this.dataClient.query('messages:getByThread', { threadId })
         .catch(() => []) as Array<{ role?: string; content?: string }> | [];
@@ -295,7 +337,7 @@ export class HttpChannel implements ChannelAdapter {
       ];
 
       try {
-        const result = await agent.generate(history as any, DEFAULT_AGENT_EXECUTION_OPTIONS);
+        const result = await activeAgent.generate(history as any, DEFAULT_AGENT_EXECUTION_OPTIONS);
         const assistantText = result.text ?? '';
 
         await this.dataClient.mutation('messages:create', {
@@ -304,12 +346,11 @@ export class HttpChannel implements ChannelAdapter {
           content: assistantText,
         });
 
-        const fullModelId = String(definition.model ?? 'moonshotai/kimi-k2.5');
-        const [provider, ...modelParts] = fullModelId.split('/');
-        const model = modelParts.join('/') || fullModelId;
+        const [provider, ...modelParts] = effectiveModelId.split('/');
+        const model = modelParts.join('/') || effectiveModelId;
         const promptTokens = estimateTokens(agentUserMessage);
         const completionTokens = estimateTokens(assistantText);
-        const cost = estimateCost(fullModelId, promptTokens, completionTokens);
+        const cost = estimateCost(effectiveModelId, promptTokens, completionTokens);
 
         await this.dataClient.mutation('usage:record', {
           agentId,
@@ -329,6 +370,7 @@ export class HttpChannel implements ChannelAdapter {
         return c.json({
           threadId,
           sessionId,
+          model: effectiveModelId,
           message: {
             role: 'assistant',
             content: assistantText,

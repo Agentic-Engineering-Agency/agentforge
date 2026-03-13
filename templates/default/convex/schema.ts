@@ -171,6 +171,10 @@ export default defineSchema({
     userId: v.optional(v.string()),
     projectId: v.optional(v.id("projects")),
     metadata: v.optional(v.any()),
+    // Chat-scoped model override (Issue #217).
+    // When set, this thread uses this model instead of the agent's default.
+    // Format: "provider/model-id" (e.g., "openai/gpt-5.1")
+    modelOverride: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
