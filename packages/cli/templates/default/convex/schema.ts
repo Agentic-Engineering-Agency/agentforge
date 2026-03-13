@@ -108,7 +108,8 @@ export default defineSchema({
   // API access tokens for external API authentication
   apiAccessTokens: defineTable({
     name: v.string(),
-    token: v.string(),
+    token: v.string(), // SHA-256 hex hash of the plaintext token (never store plaintext)
+    tokenPrefix: v.optional(v.string()), // Masked display value, e.g. "agf_abc1...ef56"
     createdAt: v.number(),
     expiresAt: v.optional(v.number()),
     isActive: v.boolean(),
