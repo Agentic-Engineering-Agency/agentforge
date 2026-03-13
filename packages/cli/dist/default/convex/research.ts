@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 /**
  * Research module — Parallel multi-agent research orchestration.
@@ -136,7 +136,7 @@ export const start = action({
   handler: async (ctx, args) => {
     const agentCount = args.depth === "shallow" ? 3 : args.depth === "medium" ? 5 : 10;
 
-    const jobId = await ctx.runMutation(api.research.create, {
+    const jobId = await ctx.runMutation(internal.research.create, {
       topic: args.topic,
       depth: args.depth,
       agentCount,
@@ -144,7 +144,7 @@ export const start = action({
       projectId: args.projectId,
     });
 
-    await ctx.runMutation(api.research.update, {
+    await ctx.runMutation(internal.research.update, {
       jobId,
       status: "running",
     });
@@ -155,7 +155,7 @@ export const start = action({
       throw new Error("Research orchestration not yet configured. Extend this action to integrate your orchestrator.");
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
-      await ctx.runMutation(api.research.update, {
+      await ctx.runMutation(internal.research.update, {
         jobId,
         status: "failed",
         error: errorMessage,
