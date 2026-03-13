@@ -3,8 +3,9 @@ import { DashboardLayout } from '../components/DashboardLayout';
 import { useEffect, useMemo, useState } from 'react';
 import { useAction, useMutation, useQuery } from 'convex/react';
 import { api } from '@convex/_generated/api';
-import { AlertTriangle, Check, ExternalLink, Key, Plus, Settings, Shield, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Check, ExternalLink, Key, Loader2, Plus, Settings, Shield, Trash2, X } from 'lucide-react';
 import { useModelCatalog, type ProviderCatalogEntry } from '../lib/model-catalog';
+import { deriveGeneralSettings, isSettingsLoaded } from '../lib/settings-helpers';
 
 export const Route = createFileRoute('/settings')({ component: SettingsPage });
 
@@ -22,7 +23,12 @@ const KEY_PREFIXES: Record<string, string> = {
 function SettingsPage() {
   const apiKeys = useQuery(api.apiKeys.list, {}) ?? [];
   const vaultSecrets = useQuery(api.vault.list, {}) ?? [];
-  const userSettings = useQuery(api.settings.list, { userId: LOCAL_SETTINGS_USER }) ?? [];
+  const userSettingsRaw = useQuery(api.settings.list, { userId: LOCAL_SETTINGS_USER });
+  const settingsLoaded = isSettingsLoaded(userSettingsRaw);
+  const savedGeneral = useMemo(
+    () => deriveGeneralSettings(userSettingsRaw ?? []),
+    [userSettingsRaw],
+  );
   const createApiKey = useAction(api.apiKeys.create);
   const removeApiKey = useMutation(api.apiKeys.remove);
   const toggleApiKey = useMutation(api.apiKeys.toggleActive);
@@ -39,10 +45,12 @@ function SettingsPage() {
   const [vaultForm, setVaultForm] = useState({ name: '', category: 'api_key', provider: '', value: '' });
   const [defaultModel, setDefaultModel] = useState('');
   const [defaultTemperature, setDefaultTemperature] = useState(0.7);
+  const [hasEditedGeneral, setHasEditedGeneral] = useState(false);
   const [confirmingDeleteKeyId, setConfirmingDeleteKeyId] = useState<string | null>(null);
   const [confirmingDeleteSecretId, setConfirmingDeleteSecretId] = useState<string | null>(null);
   const [savingGeneral, setSavingGeneral] = useState(false);
   const [generalSavedMessage, setGeneralSavedMessage] = useState<string | null>(null);
+  const [generalErrorMessage, setGeneralErrorMessage] = useState<string | null>(null);
 
   const keysByProvider = apiKeys.reduce((acc: Record<string, any[]>, key: any) => {
     if (!acc[key.provider]) acc[key.provider] = [];
@@ -65,16 +73,10 @@ function SettingsPage() {
   );
 
   useEffect(() => {
-    const savedDefaultModel = userSettings.find((setting: any) => setting.key === 'defaultModel')?.value;
-    const savedDefaultTemperature = userSettings.find((setting: any) => setting.key === 'defaultTemperature')?.value;
-
-    if (typeof savedDefaultModel === 'string') {
-      setDefaultModel(savedDefaultModel);
-    }
-    if (typeof savedDefaultTemperature === 'number') {
-      setDefaultTemperature(savedDefaultTemperature);
-    }
-  }, [userSettings]);
+    if (!settingsLoaded || hasEditedGeneral) return;
+    setDefaultModel(savedGeneral.defaultModel);
+    setDefaultTemperature(savedGeneral.defaultTemperature);
+  }, [settingsLoaded, savedGeneral, hasEditedGeneral]);
 
   const handleAddKey = async () => {
     if (!addingProvider || !newKeyValue.trim()) return;
@@ -110,6 +112,7 @@ function SettingsPage() {
 
   const handleSaveGeneral = async () => {
     setSavingGeneral(true);
+    setGeneralErrorMessage(null);
 
     try {
       if (defaultModel) {
@@ -131,8 +134,13 @@ function SettingsPage() {
         value: defaultTemperature,
       });
 
+      setHasEditedGeneral(false);
       setGeneralSavedMessage('General settings saved.');
       setTimeout(() => setGeneralSavedMessage(null), 3000);
+    } catch (error) {
+      setGeneralErrorMessage(
+        error instanceof Error ? error.message : 'Failed to save settings. Please try again.',
+      );
     } finally {
       setSavingGeneral(false);
     }
@@ -293,46 +301,54 @@ function SettingsPage() {
 
         {tab === 'general' && (
           <div className="space-y-6">
-            <div className="bg-card border border-border rounded-lg p-6">
-              <h3 className="text-lg font-semibold mb-4">Workspace Configuration</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Default Model</label>
-                  <select
-                    value={defaultModel}
-                    onChange={(event) => setDefaultModel(event.target.value)}
-                    className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="">None (use agent default)</option>
-                    {allModels.map(({ provider, model }) => (
-                      <option key={`${provider}/${model}`} value={`${provider}/${model}`}>
-                        {model} ({provider})
-                      </option>
-                    ))}
-                    {catalogLoading && <option value="" disabled>Loading models…</option>}
-                  </select>
-                  <p className="text-xs text-muted-foreground mt-1">Used when creating new agents without specifying a model.</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Default Temperature</label>
-                  <input
-                    type="number"
-                    value={defaultTemperature}
-                    onChange={(event) => setDefaultTemperature(parseFloat(event.target.value) || 0)}
-                    step={0.1}
-                    min={0}
-                    max={2}
-                    className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm"
-                  />
-                </div>
-                <div className="flex items-center gap-3 pt-2">
-                  <button onClick={handleSaveGeneral} disabled={savingGeneral} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
-                    {savingGeneral ? 'Saving…' : 'Save General Settings'}
-                  </button>
-                  {generalSavedMessage && <span className="text-sm text-green-400">{generalSavedMessage}</span>}
+            {!settingsLoaded ? (
+              <div className="bg-card border border-border rounded-lg p-6 flex items-center justify-center gap-2 text-muted-foreground">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">Loading settings…</span>
+              </div>
+            ) : (
+              <div className="bg-card border border-border rounded-lg p-6">
+                <h3 className="text-lg font-semibold mb-4">Workspace Configuration</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Default Model</label>
+                    <select
+                      value={defaultModel}
+                      onChange={(event) => { setDefaultModel(event.target.value); setHasEditedGeneral(true); }}
+                      className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="">None (use agent default)</option>
+                      {allModels.map(({ provider, model }) => (
+                        <option key={`${provider}/${model}`} value={`${provider}/${model}`}>
+                          {model} ({provider})
+                        </option>
+                      ))}
+                      {catalogLoading && <option value="" disabled>Loading models…</option>}
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">Used when creating new agents without specifying a model.</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Default Temperature</label>
+                    <input
+                      type="number"
+                      value={defaultTemperature}
+                      onChange={(event) => { setDefaultTemperature(parseFloat(event.target.value) || 0); setHasEditedGeneral(true); }}
+                      step={0.1}
+                      min={0}
+                      max={2}
+                      className="w-full max-w-sm bg-background border border-border rounded-md px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 pt-2">
+                    <button onClick={handleSaveGeneral} disabled={savingGeneral} className="rounded-lg bg-primary px-4 py-2 text-sm text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+                      {savingGeneral ? 'Saving…' : 'Save General Settings'}
+                    </button>
+                    {generalSavedMessage && <span className="text-sm text-green-400">{generalSavedMessage}</span>}
+                    {generalErrorMessage && <span className="text-sm text-destructive">{generalErrorMessage}</span>}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
           </div>
         )}
 
