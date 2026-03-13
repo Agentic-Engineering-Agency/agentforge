@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 const http = httpRouter();
 
@@ -71,7 +71,7 @@ http.route({
       });
     }
 
-    const file = await ctx.runQuery(api.files.getDownloadUrl, {
+    const file = await ctx.runQuery(internal.files.getDownloadUrl, {
       id: fileId as any,
     });
 
@@ -276,7 +276,7 @@ http.route({
       async start(controller) {
         try {
           // Get agent configuration
-          const agent = await ctx.runQuery(api.agents.get, { id: agentId });
+          const agent = await ctx.runQuery(internal.agents.get, { id: agentId });
           if (!agent) {
             controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: "error", error: "Agent not found" })}\n\n`));
             controller.close();
@@ -286,13 +286,13 @@ http.route({
           // Create or get thread
           let currentThreadId = threadId as string | undefined;
           if (!currentThreadId) {
-            currentThreadId = await ctx.runMutation(api.threads.createThread, {
+            currentThreadId = await ctx.runMutation(internal.threads.createThread, {
               agentId,
             });
           }
 
           // Add user message to thread
-          await ctx.runMutation(api.messages.add, {
+          await ctx.runMutation(internal.messages.add, {
             threadId: currentThreadId as any,
             role: "user",
             content: message,
@@ -300,7 +300,7 @@ http.route({
 
           // Create session
           const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-          await ctx.runMutation(api.sessions.create, {
+          await ctx.runMutation(internal.sessions.create, {
             sessionId,
             threadId: currentThreadId as any,
             agentId,
@@ -310,7 +310,7 @@ http.route({
 
           // NOTE: LLM streaming moved to runtime daemon (SPEC-020).
           // Store user message; daemon handles response via HTTP channel.
-          await ctx.runMutation(api.messages.create, {
+          await ctx.runMutation(internal.messages.create, {
             threadId: currentThreadId as any,
             content: message,
             role: "user" as const,
@@ -318,7 +318,7 @@ http.route({
           controller.enqueue(
             encoder.encode(`data: ${JSON.stringify({ type: "text-delta", textDelta: "Processing via daemon..." })}\n\n`)
           );
-          await ctx.runMutation(api.sessions.updateStatus, { sessionId, status: "completed" });
+          await ctx.runMutation(internal.sessions.updateStatus, { sessionId, status: "completed" });
           controller.enqueue(encoder.encode(`data: [DONE]\n\n`));
           controller.close();
         } catch (error: unknown) {
@@ -473,7 +473,7 @@ http.route({
     const connectionId = parts[parts.length - 1];
 
     // Get connection data
-    const connection = await ctx.runQuery(api.channelConnections.getById, {
+    const connection = await ctx.runQuery(internal.channelConnections.getById, {
       id: connectionId as any,
     });
 
@@ -542,7 +542,7 @@ http.route({
     let actualThreadId;
 
     // Try to find existing thread by agentId and userId
-    const threads = await ctx.runQuery(api.threads.listThreads, {});
+    const threads = await ctx.runQuery(internal.threads.listThreads, {});
 
     const filtered = threads.filter((t: any) =>
       t.agentId === connection.agentId && t.userId === `telegram-${chatId}`
@@ -552,7 +552,7 @@ http.route({
       actualThreadId = filtered[0]._id;
     } else {
       // Create new thread for this Telegram chat
-      const newThreadId = await ctx.runMutation(api.threads.createThread, {
+      const newThreadId = await ctx.runMutation(internal.threads.createThread, {
         agentId: connection.agentId,
         name: senderName ? `Telegram: ${senderName}` : `Telegram Chat ${chatId}`,
       });
@@ -564,7 +564,7 @@ http.route({
 
     // Execute agent
     // NOTE: LLM execution moved to runtime daemon (SPEC-020).
-    await ctx.runMutation(api.messages.create, {
+    await ctx.runMutation(internal.messages.create, {
       threadId: actualThreadId as any,
       content: text,
       role: "user" as const,
@@ -590,7 +590,7 @@ http.route({
       });
 
       // Update connection activity
-      await ctx.runMutation(api.channelConnections.updateActivity, {
+      await ctx.runMutation(internal.channelConnections.updateActivity, {
         id: connectionId as any,
       });
     } catch (error) {

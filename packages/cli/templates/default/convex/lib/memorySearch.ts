@@ -7,7 +7,7 @@
  */
 
 import { GenericActionCtx } from "convex/server";
-import { api } from "../_generated/api";
+// api import removed — all server-to-server calls use internal.*
 import { generateEmbedding } from "./embeddings";
 
 // BM25 tuning parameters

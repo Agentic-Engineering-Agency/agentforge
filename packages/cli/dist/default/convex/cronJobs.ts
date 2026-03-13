@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action, internalMutation, internalAction } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 /**
  * Parse a cron expression and return the next run timestamp (ms) after `fromMs`.
@@ -330,7 +330,7 @@ export const executeDueJobs = internalMutation({
   args: {},
   handler: async (ctx) => {
     // Get all jobs that are due to run
-    const dueJobs = await ctx.runQuery(api.cronJobs.getDueJobs, {});
+    const dueJobs = await ctx.runQuery(internal.cronJobs.getDueJobs, {});
 
     if (dueJobs.length === 0) {
       return { executed: 0, jobs: [] };
@@ -342,7 +342,7 @@ export const executeDueJobs = internalMutation({
     for (const job of dueJobs) {
       try {
         // Create a run record
-        const runId = await ctx.runMutation(api.cronJobs.recordRun, {
+        const runId = await ctx.runMutation(internal.cronJobs.recordRun, {
           cronJobId: job._id,
           status: "running",
         });
@@ -378,7 +378,7 @@ export const executeJob = internalAction({
   },
   handler: async (ctx, args) => {
     // Get the cron job definition
-    const job = await ctx.runQuery(api.cronJobs.get, { id: args.jobId });
+    const job = await ctx.runQuery(internal.cronJobs.get, { id: args.jobId });
     if (!job) {
       throw new Error(`Cron job not found: ${args.jobId}`);
     }
@@ -390,14 +390,14 @@ export const executeJob = internalAction({
     try {
       // NOTE: LLM execution moved to runtime daemon (SPEC-020).
       // Store the cron task as a thread message; daemon processes it asynchronously.
-      const agent = await ctx.runQuery(api.agents.get, { id: job.agentId });
+      const agent = await ctx.runQuery(internal.agents.get, { id: job.agentId });
       if (!agent) throw new Error(`Agent not found: ${job.agentId}`);
 
-      const thread = await ctx.runMutation(api.threads.createThread, {
+      const thread = await ctx.runMutation(internal.threads.createThread, {
         agentId: job.agentId,
         name: `Cron: ${job.name || args.jobId}`,
       });
-      await ctx.runMutation(api.messages.create, {
+      await ctx.runMutation(internal.messages.create, {
         threadId: thread as any,
         content: job.prompt || "Execute scheduled task.",
         role: "user" as const,
@@ -412,7 +412,7 @@ export const executeJob = internalAction({
     }
 
     // Update the existing run record (avoids creating a duplicate row)
-    await ctx.runMutation(api.cronJobs.updateRun, {
+    await ctx.runMutation(internal.cronJobs.updateRun, {
       runId: args.runId,
       status,
       ...(output && { output }),
@@ -423,7 +423,7 @@ export const executeJob = internalAction({
     const now = Date.now();
     const nextRun = getNextCronRun(job.schedule, now);
 
-    await ctx.runMutation(api.cronJobs.updateLastRun, {
+    await ctx.runMutation(internal.cronJobs.updateLastRun, {
       id: args.jobId,
       nextRun,
     });
@@ -463,7 +463,7 @@ export const triggerNow = mutation({
     const job = await ctx.db.get(args.id);
     if (!job) throw new Error("Cron job not found");
 
-    const runId = await ctx.runMutation(api.cronJobs.recordRun, {
+    const runId = await ctx.runMutation(internal.cronJobs.recordRun, {
       cronJobId: args.id,
       status: "running",
     });

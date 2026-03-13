@@ -8,7 +8,7 @@
  */
 import { v } from "convex/values";
 import { action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 /**
  * Test an MCP connection by attempting to fetch its tool list.
@@ -28,7 +28,7 @@ export const testConnection = action({
   }> => {
     const start = Date.now();
     try {
-      const connection = await ctx.runQuery(api.mcpConnections.get, { id: args.id });
+      const connection = await ctx.runQuery(internal.mcpConnections.get, { id: args.id });
       if (!connection) {
         throw new Error("Connection not found");
       }
@@ -57,7 +57,7 @@ export const testConnection = action({
         connection.serverUrl.startsWith("node ")
       ) {
         // Mark as connected (stdio protocol — cannot probe via HTTP)
-        await ctx.runMutation(api.mcpConnections.updateStatus, {
+        await ctx.runMutation(internal.mcpConnections.updateStatus, {
           id: args.id,
           isConnected: true,
         });
@@ -86,7 +86,7 @@ export const testConnection = action({
       const data = (await resp.json()) as { tools?: Array<{ name: string }> };
       const tools = (data.tools ?? []).map((t: { name: string }) => t.name);
 
-      await ctx.runMutation(api.mcpConnections.updateStatus, {
+      await ctx.runMutation(internal.mcpConnections.updateStatus, {
         id: args.id,
         isConnected: true,
       });
@@ -98,7 +98,7 @@ export const testConnection = action({
       };
     } catch (e) {
       // Mark as disconnected on error
-      await ctx.runMutation(api.mcpConnections.updateStatus, {
+      await ctx.runMutation(internal.mcpConnections.updateStatus, {
         id: args.id,
         isConnected: false,
       });

@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 // Query: Get all agents
 export const list = query({
@@ -211,7 +211,7 @@ export const run = action({
   },
   handler: async (ctx, args): Promise<{ threadId: string; message: string; agentId: string }> => {
     // Get agent configuration
-    const agent = await ctx.runQuery(api.agents.get, { id: args.agentId });
+    const agent = await ctx.runQuery(internal.agents.get, { id: args.agentId });
 
     if (!agent) {
       throw new Error(`Agent with id ${args.agentId} not found`);
@@ -220,7 +220,7 @@ export const run = action({
     // Create or get thread
     let threadId = args.threadId;
     if (!threadId) {
-      const newThreadId = await ctx.runMutation(api.threads.createThread, {
+      const newThreadId = await ctx.runMutation(internal.threads.createThread, {
         agentId: args.agentId,
       });
       if (!newThreadId) {
@@ -232,7 +232,7 @@ export const run = action({
 
     // NOTE: LLM execution is handled by the AgentForge runtime daemon (SPEC-020).
     // Store the user message; the daemon will process and respond asynchronously.
-    await ctx.runMutation(api.messages.create, {
+    await ctx.runMutation(internal.messages.create, {
       threadId: threadId as any,
       content: args.prompt,
       role: "user" as const,
