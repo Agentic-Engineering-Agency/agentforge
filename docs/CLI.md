@@ -91,7 +91,7 @@ Create a new agent interactively, or pass options directly.
 
 ```bash
 agentforge agents create
-agentforge agents create --name "Research Bot" --model "openai:gpt-4o" --instructions "You are a research assistant."
+agentforge agents create --name "Research Bot" --model "openai/gpt-4o" --instructions "You are a research assistant."
 ```
 
 ### `agentforge agents inspect <id>`
@@ -108,7 +108,7 @@ Edit an existing agent.
 
 ```bash
 agentforge agents edit research-bot --name "Research Agent v2"
-agentforge agents edit research-bot --model "openrouter:anthropic/claude-3.5-sonnet"
+agentforge agents edit research-bot --model "openrouter/anthropic/claude-3.5-sonnet"
 ```
 
 ### `agentforge agents delete <id>`
@@ -140,13 +140,26 @@ Start an interactive chat session with an agent.
 ```bash
 agentforge chat                    # Select agent interactively
 agentforge chat research-bot       # Chat with specific agent
-agentforge chat research-bot -s <session-id>  # Resume session
+agentforge chat research-bot --thread <thread-id>  # Continue existing thread
+agentforge chat research-bot -m "Hello"  # Send single message and exit
 ```
+
+**Options:**
+- `--thread <id>` — Continue existing thread (stored in Convex)
+- `-m, --message <text>` — Send a single message and exit (non-interactive)
+- `--port <n>` — Runtime HTTP port (default: 3001)
+- `--no-stream` — Disable streaming (wait for full response)
+
+> **Note:** The deprecated `-s, --session` option is superseded by `--thread`.
 
 **In-chat commands:**
 - `exit` / `quit` — End the session
 - `/new` — Start a new thread
 - `/history` — Show message history
+
+**Model Override (v0.12.23+):**
+
+The dashboard supports per-thread model override via the model picker in the chat header. The config cascade is: request-level > thread override > agent default. Override is stored in Convex and persists across page refreshes.
 
 ---
 
@@ -190,6 +203,14 @@ Show all messages in a thread.
 ### `agentforge threads delete <id>`
 
 Delete a thread and its messages.
+
+### `agentforge threads rename <id> <name>`
+
+Rename a thread.
+
+```bash
+agentforge threads rename thread_abc "Q1 Research"
+```
 
 ---
 
@@ -511,6 +532,77 @@ Check for and resume pending agent tasks.
 agentforge heartbeat
 agentforge heartbeat --agent research-bot
 ```
+
+---
+
+## Channel Management
+
+### `agentforge channel:telegram`
+
+Manage the Telegram messaging channel.
+
+```bash
+agentforge channel:telegram configure    # Configure bot token and settings
+agentforge channel:telegram start        # Start the Telegram bot
+agentforge channel:telegram status       # Check bot configuration and connectivity
+```
+
+### `agentforge channel:whatsapp`
+
+Manage the WhatsApp messaging channel.
+
+```bash
+agentforge channel:whatsapp configure
+agentforge channel:whatsapp start
+agentforge channel:whatsapp status
+```
+
+### `agentforge channel:slack`
+
+Manage the Slack messaging channel.
+
+```bash
+agentforge channel:slack configure
+agentforge channel:slack start
+agentforge channel:slack status
+```
+
+### `agentforge channel:discord`
+
+Manage the Discord messaging channel.
+
+```bash
+agentforge channel:discord configure
+agentforge channel:discord start
+agentforge channel:discord status
+```
+
+> **Note:** All channel commands use colon syntax (`channel:telegram`), not hyphen syntax.
+
+---
+
+## Tokens (API Access)
+
+### `agentforge tokens generate`
+
+Generate a new API access token. The plaintext token is shown **once only** and never persisted (stored as SHA-256 hash in Convex).
+
+```bash
+agentforge tokens generate
+agentforge tokens generate --name "My App"
+```
+
+### `agentforge tokens list`
+
+List all tokens (shows masked prefix only, not the hash).
+
+### `agentforge tokens revoke <id>`
+
+Revoke a token by ID.
+
+### `agentforge tokens delete <nameOrId>`
+
+Delete a token by name or ID.
 
 ---
 

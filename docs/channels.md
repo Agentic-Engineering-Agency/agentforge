@@ -1,15 +1,84 @@
 # Channel Adapters
 
-AgentForge supports four messaging channels out of the box. All channels use a unified adapter architecture — your agent logic stays the same regardless of which channel delivers the message.
+AgentForge supports five channels out of the box. All channels use a unified adapter architecture — your agent logic stays the same regardless of which channel delivers the message.
 
 ## Overview
 
 | Channel | Package | Protocol | Features |
 |---------|---------|----------|----------|
+| HTTP | `@agentforge-ai/runtime` | Hono/SSE (port 3001) | OpenAI-compatible API, Bearer token auth, streaming |
 | Telegram | `@agentforge-ai/core` | Bot API (webhook/polling) | Voice messages, media, groups |
 | WhatsApp | `@agentforge-ai/core` | Cloud API (webhook) | Media, templates, voice notes |
 | Slack | `@agentforge-ai/channels-slack` | Bolt.js (Socket Mode/HTTP) | Block Kit, slash commands, threads |
 | Discord | `@agentforge-ai/channels-discord` | Discord.js v14 (gateway) | Embeds, slash commands, threads, DMs |
+
+## HTTP Channel (Built-in)
+
+The HTTP channel is built into `@agentforge-ai/runtime` and starts automatically with `agentforge start`. It exposes an OpenAI-compatible REST API on port 3001 (configurable).
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/v1/agents` | List all available agents |
+| `POST` | `/v1/chat/completions` | OpenAI-compatible chat completions (SSE streaming) |
+| `POST` | `/api/chat` | Dashboard chat endpoint (backed by Convex threads) |
+| `GET` | `/api/health` | Health check |
+
+### Authentication
+
+The HTTP channel uses Bearer token authentication. Tokens are managed via `agentforge tokens` and stored as SHA-256 hashes (plaintext is returned once at creation, never persisted).
+
+```bash
+# Generate a token
+agentforge tokens generate
+
+# Use in API requests
+curl -H "Authorization: Bearer agf_..." http://localhost:3001/v1/agents
+```
+
+### OpenAI-Compatible Chat
+
+```bash
+curl http://localhost:3001/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer agf_..." \
+  -d '{
+    "model": "openai/gpt-5.1",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "stream": true
+  }'
+```
+
+### Model Override (v0.12.23+)
+
+The `/api/chat` endpoint supports per-request model override without mutating the agent's default. The config cascade is: `request body > thread override > agent default`.
+
+```bash
+curl http://localhost:3001/api/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer agf_..." \
+  -d '{
+    "agentId": "my-agent",
+    "threadId": "thread_123",
+    "message": "Hello",
+    "model": "anthropic/claude-opus-4-6"
+  }'
+```
+
+### Rate Limiting & Security
+
+The HTTP channel includes built-in rate limiting and CORS protection. IP-based rate limiting is enabled by default and configurable via environment variables.
+
+### Configuration
+
+```bash
+# Start daemon on custom port
+agentforge start --port 3002
+
+# Start with custom CORS origins
+CORS_ORIGINS=https://app.example.com agentforge start
+```
 
 ## Telegram
 
@@ -27,7 +96,7 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 3. Configure via CLI:
 
 ```bash
-agentforge channel-telegram configure
+agentforge channel:telegram configure
 ```
 
 ### Webhook vs Polling
@@ -71,7 +140,7 @@ WHATSAPP_VERIFY_TOKEN=your-random-verify-string
 Configure via CLI:
 
 ```bash
-agentforge channel-whatsapp configure
+agentforge channel:whatsapp configure
 ```
 
 ### Webhook setup
