@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { mutation, query, action } from "./_generated/server";
-import { api, internal } from "./_generated/api";
+import { internal } from "./_generated/api";
 
 /**
  * HEARTBEAT System
@@ -278,8 +278,8 @@ export const generateContext = action({
   },
   handler: async (ctx, args) => {
     // Get thread and messages
-    const thread = await ctx.runQuery(api.threads.getThread, { threadId: args.threadId });
-    const messages = await ctx.runQuery(api.messages.getByThread, {
+    const thread = await ctx.runQuery(internal.threads.getThread, { threadId: args.threadId });
+    const messages = await ctx.runQuery(internal.messages.getByThread, {
       threadId: args.threadId as any,
     });
 
@@ -319,7 +319,7 @@ export const processCheck = action({
   },
   handler: async (ctx, args): Promise<{ success: boolean; message?: string; pendingTasks?: number; status?: string }> => {
     // Get heartbeat
-    const heartbeat = await ctx.runQuery(api.heartbeat.get, {
+    const heartbeat = await ctx.runQuery(internal.heartbeat.get, {
       agentId: args.agentId,
       threadId: args.threadId,
     }) as { status: string; pendingTasks: string[]; currentTask?: string } | null;
@@ -339,7 +339,7 @@ export const processCheck = action({
 
       if (result.success) {
         // Remove completed task from pending list
-        await ctx.runMutation(api.heartbeat.removePendingTask, {
+        await ctx.runMutation(internal.heartbeat.removePendingTask, {
           agentId: args.agentId,
           threadId: args.threadId,
           task,
@@ -351,7 +351,7 @@ export const processCheck = action({
     }
 
     // Update last check time
-    await ctx.runMutation(api.heartbeat.updateStatus, {
+    await ctx.runMutation(internal.heartbeat.updateStatus, {
       agentId: args.agentId,
       threadId: args.threadId,
       status: heartbeat.status,
@@ -359,7 +359,7 @@ export const processCheck = action({
     });
 
     if (executedCount > 0) {
-      await ctx.runMutation(api.heartbeat.updateStatus, {
+      await ctx.runMutation(internal.heartbeat.updateStatus, {
         agentId: args.agentId,
         threadId: args.threadId,
         status: "idle",
