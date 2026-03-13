@@ -136,7 +136,7 @@ function WorkflowsPage() {
                     <p className="text-sm text-muted-foreground mb-3">{workflow.description}</p>
                   )}
                   <div className="text-xs text-muted-foreground mb-3">
-                    {JSON.parse(workflow.steps).length} steps • Created {new Date(workflow.createdAt).toLocaleDateString()}
+                    {(() => { try { return JSON.parse(workflow.steps).length; } catch { return 0; } })()} steps • Created {new Date(workflow.createdAt).toLocaleDateString()}
                   </div>
                   <button
                     onClick={() => runWorkflow(workflow._id)}

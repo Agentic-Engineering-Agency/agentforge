@@ -31,20 +31,20 @@ check_drift() {
   # remaining args are --exclude flags for diff
 
   if [ ! -d "$dir_a" ]; then
-    echo "  SKIP $label (source missing: $dir_a)"
+    echo "  FAIL $label (source missing: $dir_a)"
+    DRIFT_FOUND=1
     return
   fi
   if [ ! -d "$dir_b" ]; then
-    echo "  SKIP $label (target missing: $dir_b)"
+    echo "  FAIL $label (target missing: $dir_b)"
+    DRIFT_FOUND=1
     return
   fi
 
   local diff_output
-  diff_output=$(diff -rq "$dir_a" "$dir_b" \
-    --exclude='node_modules' \
-    --exclude='.DS_Store' \
-    --exclude='routeTree.gen.ts' \
-    "$@" 2>&1) || true
+  # Use git diff --no-index for cross-platform compatibility (works on both GNU/Linux and macOS/BSD)
+  diff_output=$(git diff --no-index --stat \
+    -- "$dir_a" "$dir_b" 2>&1 | grep -v 'node_modules\|\.DS_Store\|routeTree\.gen\.ts') || true
 
   if [ -n "$diff_output" ]; then
     echo "  DRIFT in $label:"

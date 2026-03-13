@@ -32,77 +32,6 @@ interface MarketplaceSkill {
   repositoryUrl?: string;
 }
 
-// Mock data for initial UI (will be replaced with Convex queries)
-const MOCK_SKILLS: MarketplaceSkill[] = [
-  {
-    _id: "1",
-    name: "browser-automation",
-    version: "1.0.0",
-    description: "Automate web browsers with Playwright for scraping, testing, and interaction",
-    author: "agentforge-team",
-    category: "automation",
-    tags: ["browser", "playwright", "scraping"],
-    downloads: 342,
-    featured: true,
-    repositoryUrl: "https://github.com/agentforge-ai/browser-automation",
-  },
-  {
-    _id: "2",
-    name: "git-operations",
-    version: "1.0.0",
-    description: "Git workflow automation for commits, branches, PRs, and repository management",
-    author: "agentforge-team",
-    category: "developer-tools",
-    tags: ["git", "github", "version-control"],
-    downloads: 289,
-    featured: true,
-    repositoryUrl: "https://github.com/agentforge-ai/git-operations",
-  },
-  {
-    _id: "3",
-    name: "slack-notifier",
-    version: "1.0.0",
-    description: "Send Slack messages, notifications, and alerts to channels and users",
-    author: "agentforge-team",
-    category: "communication",
-    tags: ["slack", "notifications", "messaging"],
-    downloads: 215,
-    featured: true,
-  },
-  {
-    _id: "4",
-    name: "data-extractor",
-    version: "1.0.0",
-    description: "Extract and transform data from CSV, JSON, XML, and other structured formats",
-    author: "agentforge-team",
-    category: "data",
-    tags: ["csv", "json", "data", "transform"],
-    downloads: 178,
-    featured: false,
-  },
-  {
-    _id: "5",
-    name: "email-sender",
-    version: "1.0.0",
-    description: "Send emails via SMTP with templates, attachments, and HTML support",
-    author: "agentforge-team",
-    category: "communication",
-    tags: ["email", "smtp", "notifications"],
-    downloads: 134,
-    featured: false,
-  },
-  {
-    _id: "6",
-    name: "web-researcher",
-    version: "1.0.0",
-    description: "Search the web, extract content from URLs, and summarize findings",
-    author: "agentforge-team",
-    category: "research",
-    tags: ["web", "search", "summarize"],
-    downloads: 267,
-    featured: true,
-  },
-];
 
 const CATEGORIES = ["all", "automation", "developer-tools", "communication", "data", "research"];
 
@@ -113,7 +42,7 @@ function SkillsMarketplace() {
 
   // Convex queries
   const allSkillsResult = useQuery(api.skillMarketplace.listSkills, {});
-  const allSkills = allSkillsResult ?? MOCK_SKILLS;
+  const allSkills: MarketplaceSkill[] = allSkillsResult ?? [];
 
   const installSkill = useMutation(api.skillMarketplace.install);
 

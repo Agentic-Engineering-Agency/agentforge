@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@convex/_generated/api";
 import {
@@ -69,17 +69,19 @@ function AgentDetailPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle");
 
   // Update form when agent data loads
-  if (agent && settingsForm.name !== agent.name) {
-    setSettingsForm({
-      name: agent.name,
-      description: agent.description || "",
-      instructions: agent.instructions || "",
-      model: agent.model || "",
-      provider: agent.provider || "",
-      temperature: agent.temperature ?? 0.7,
-      maxTokens: agent.maxTokens ?? 4096,
-    });
-  }
+  useEffect(() => {
+    if (agent) {
+      setSettingsForm({
+        name: agent.name,
+        description: agent.description || "",
+        instructions: agent.instructions || "",
+        model: agent.model || "",
+        provider: agent.provider || "",
+        temperature: agent.temperature ?? 0.7,
+        maxTokens: agent.maxTokens ?? 4096,
+      });
+    }
+  }, [agent?.name, agent?.description, agent?.instructions, agent?.model, agent?.provider, agent?.temperature, agent?.maxTokens]);
 
   // Derived state
   const isLoading = agent === undefined;

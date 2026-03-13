@@ -25,7 +25,6 @@ function ResearchPage() {
   const startResearchAction = useAction(api.research.start);
   const [topic, setTopic] = useState('');
   const [depth, setDepth] = useState<ResearchDepth>('medium');
-  const [agentCount, setAgentCount] = useState(5);
   const [jobs, setJobs] = useState<ResearchJob[]>([]);
   const [currentJob, setCurrentJob] = useState<ResearchJob | null>(null);
 
@@ -36,7 +35,7 @@ function ResearchPage() {
       id: `job-${Date.now()}`,
       topic,
       depth,
-      agentCount,
+      agentCount: getAgentCountFromDepth(depth),
       status: 'running',
       createdAt: Date.now(),
     };
@@ -131,22 +130,7 @@ function ResearchPage() {
 
               <div>
                 <label className="block text-sm font-medium mb-1">Parallel Agents</label>
-                <div className="flex gap-2">
-                  {[3, 5, 10].map(count => (
-                    <button
-                      key={count}
-                      type="button"
-                      onClick={() => setAgentCount(count)}
-                      className={`flex-1 py-2 rounded-md border transition-colors ${
-                        agentCount === count
-                          ? 'bg-primary text-primary-foreground border-primary'
-                          : 'bg-background border-border hover:bg-muted'
-                      }`}
-                    >
-                      {count}
-                    </button>
-                  ))}
-                </div>
+                <p className="text-sm text-muted-foreground mt-1">{getAgentCountFromDepth(depth)} agents (derived from depth)</p>
               </div>
             </div>
 

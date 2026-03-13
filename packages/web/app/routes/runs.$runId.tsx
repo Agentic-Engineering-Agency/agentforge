@@ -1,6 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { DashboardLayout } from "../components/DashboardLayout";
-import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@convex/_generated/api";
 import {
@@ -88,17 +87,15 @@ function statusBadgeClass(status: RunSummary["status"]): string {
 function AgentRunPage() {
   const { runId } = Route.useParams();
 
-  // Get all runs and filter by runId (workaround since runId is a string URL param)
-  const runData = useQuery(api.workflows.listRuns, {});
-  const run = runData?.find((r: any) => r._id === runId || r._id.endsWith(runId));
+  // Fetch the specific run directly by ID
+  const run = useQuery(api.workflows.getRun, { id: runId as any });
 
   // Get run steps for this run
   const runSteps = useQuery(api.workflows.getRunSteps,
     run ? { runId: run._id as any } : "skip"
   );
 
-  // For now, show loading state or empty state if run not found
-  const isLoading = runData === undefined;
+  const isLoading = run === undefined;
 
   // Convert run steps to events for the timeline
   const events: RunEvent[] = (runSteps ?? []).map((step: any) => ({
@@ -139,9 +136,9 @@ function AgentRunPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <a href="/chat" className="text-muted-foreground hover:text-foreground transition-colors">
+              <Link to="/chat" className="text-muted-foreground hover:text-foreground transition-colors">
                 <ArrowLeft className="w-5 h-5" />
-              </a>
+              </Link>
               <h1 className="text-3xl font-bold">Agent Run</h1>
               <span className={statusBadgeClass(summary.status)}>{summary.status}</span>
             </div>
