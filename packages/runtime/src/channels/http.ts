@@ -316,6 +316,8 @@ export class HttpChannel implements ChannelAdapter {
           instructions: definition.instructions,
           model: effectiveModelId,
           tools: definition.tools,
+          workspace: definition.workspace,
+          workingMemoryTemplate: definition.workingMemoryTemplate,
           disableMemory: definition.disableMemory,
         });
       }
