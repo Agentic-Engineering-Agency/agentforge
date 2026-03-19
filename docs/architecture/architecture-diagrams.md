@@ -498,10 +498,10 @@ mindmap
       mcp
       sandbox
     Channels
-      channel-telegram
-      channel-whatsapp
-      channel-slack
-      channel-discord
+      channel:telegram
+      channel:whatsapp
+      channel:slack
+      channel:discord
     Configuration
       config
       workspace

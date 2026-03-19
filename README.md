@@ -40,7 +40,7 @@ The CLI currently registers these command families from [`packages/cli/src/index
 - Agent and chat: `agents`, `chat`, `sessions`, `threads`
 - Skills and orchestration: `skills`, `skill`, `cron`, `workflows`, `research`
 - Data and files: `files`, `projects`
-- Integrations: `mcp`, `channel-telegram`, `channel-whatsapp`, `channel-slack`, `channel-discord`
+- Integrations: `mcp`, `channel:telegram`, `channel:whatsapp`, `channel:slack`, `channel:discord`
 - Execution: `sandbox`
 - Dashboard and logs: `dashboard`, `logs` are registered from the status command module
 

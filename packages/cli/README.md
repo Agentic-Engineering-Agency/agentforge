@@ -65,10 +65,10 @@ pnpm --filter @agentforge-ai/cli build
 
 ### Channels
 
-- `agentforge channel-telegram`
-- `agentforge channel-whatsapp`
-- `agentforge channel-slack`
-- `agentforge channel-discord`
+- `agentforge channel:telegram`
+- `agentforge channel:whatsapp`
+- `agentforge channel:slack`
+- `agentforge channel:discord`
 
 ## Local Project Workflow
 
