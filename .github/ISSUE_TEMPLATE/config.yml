@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security Vulnerability
+    url: https://github.com/Agentic-Engineering-Agency/agentforge/blob/main/SECURITY.md
+    about: Please report security vulnerabilities privately -- see SECURITY.md for instructions
+  - name: Documentation
+    url: https://github.com/Agentic-Engineering-Agency/agentforge/blob/main/docs/
+    about: Check existing documentation before opening an issue

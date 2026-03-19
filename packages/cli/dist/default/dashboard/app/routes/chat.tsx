@@ -92,7 +92,7 @@ function ChatPageComponent() {
 
   // ── Convex mutations & actions ──────────────────────────────
   const createThread = useMutation(api.threads.createThread);
-  const censorSecretMessage = useMutation(api.vault.censorMessage);
+  const censorSecretMessage = useMutation(api.vault.censorText);
   const setThreadModelOverride = useMutation(api.threads.setModelOverride);
   // NOTE: chat.sendMessage removed in v0.12 — messages are sent via runtime daemon HTTP API.
 
@@ -197,8 +197,6 @@ function ChatPageComponent() {
       try {
         const result = await censorSecretMessage({
           text,
-          userId: 'local',
-          autoStore: true,
         });
         messageText = result.censoredText;
         setVaultNotification(

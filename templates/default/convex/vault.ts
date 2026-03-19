@@ -322,7 +322,8 @@ export const detectSecrets = internalQuery({
 
 // Censor a message by replacing detected secrets with masked versions
 // and scheduling encrypted storage in the vault via vaultCrypto.
-export const censorMessage = mutation({
+// INTERNAL: contains full pattern details — never expose directly to clients.
+export const censorMessage = internalMutation({
   args: {
     text: v.string(),
     userId: v.optional(v.string()),
@@ -362,6 +363,29 @@ export const censorMessage = mutation({
       secretsDetected: storedSecrets.length > 0,
       storedSecrets,
       originalHadSecrets: censoredText !== args.text,
+    };
+  },
+});
+
+/**
+ * Public thin wrapper for secret censoring.
+ * Returns only the censored text and a boolean — never exposes pattern names
+ * or details about which specific patterns matched.
+ */
+export const censorText = mutation({
+  args: {
+    text: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const result = await ctx.runMutation(internal.vault.censorMessage, {
+      text: args.text,
+      userId: "local",
+      autoStore: true,
+    });
+
+    return {
+      censoredText: result.censoredText,
+      secretsDetected: result.secretsDetected,
     };
   },
 });

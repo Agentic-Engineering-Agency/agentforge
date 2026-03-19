@@ -32,9 +32,9 @@ describe('dashboard and convex regressions', () => {
 
     expect(chatSource).not.toContain('currentAgent?.provider === "openai"');
     expect(chatSource).toContain('providerMeta');
-    expect(chatSource).toContain('useMutation(api.vault.censorMessage)');
-    expect(chatSource).toContain('const censorSecretMessage = useMutation(api.vault.censorMessage);');
-    expect(chatSource).toContain("userId: 'local'");
+    expect(chatSource).toContain('useMutation(api.vault.censorText)');
+    expect(chatSource).toContain('const censorSecretMessage = useMutation(api.vault.censorText);');
+    expect(chatSource).not.toContain('useMutation(api.vault.censorMessage)');
 
     expect(filesSource).toContain('useConvex');
     expect(filesSource).toContain("convex.query(api.files.getFileUrl, { storageId: file.storageId as string })");

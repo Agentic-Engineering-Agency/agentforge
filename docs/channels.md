@@ -1,15 +1,80 @@
 # Channel Adapters
 
-AgentForge supports four messaging channels out of the box. All channels use a unified adapter architecture — your agent logic stays the same regardless of which channel delivers the message.
+AgentForge supports multiple messaging channels out of the box. All channels use a unified adapter architecture — your agent logic stays the same regardless of which channel delivers the message.
 
 ## Overview
 
 | Channel | Package | Protocol | Features |
 |---------|---------|----------|----------|
+| HTTP | `@agentforge-ai/runtime` | REST + SSE | OpenAI-compatible API, Bearer auth, rate limiting |
 | Telegram | `@agentforge-ai/core` | Bot API (webhook/polling) | Voice messages, media, groups |
 | WhatsApp | `@agentforge-ai/core` | Cloud API (webhook) | Media, templates, voice notes |
 | Slack | `@agentforge-ai/channels-slack` | Bolt.js (Socket Mode/HTTP) | Block Kit, slash commands, threads |
 | Discord | `@agentforge-ai/channels-discord` | Discord.js v14 (gateway) | Embeds, slash commands, threads, DMs |
+
+## HTTP
+
+The HTTP channel is the primary interface for the AgentForge daemon. It exposes an OpenAI-compatible REST API for agent interaction.
+
+### Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/health` | Health check (always public, no auth required) |
+| GET | `/v1/agents` | List configured agents |
+| POST | `/v1/chat/completions` | OpenAI-compatible chat completions (streaming + non-streaming) |
+| POST | `/v1/threads` | Create a new thread |
+| GET | `/v1/threads/:id/messages` | List messages in a thread |
+| POST | `/api/chat` | Dashboard chat endpoint |
+| GET | `/api/models` | List available models |
+
+### Authentication
+
+The HTTP channel uses **Bearer token authentication** when `AGENTFORGE_API_KEY` is set:
+
+```env
+AGENTFORGE_API_KEY=your-secret-api-key
+```
+
+All requests to `/v1/*` and `/api/*` routes must include the token:
+
+```bash
+curl -H "Authorization: Bearer your-secret-api-key" http://localhost:3001/v1/agents
+```
+
+The token is validated using constant-time comparison (SHA-256 + `crypto.timingSafeEqual`) to prevent timing attacks.
+
+### Unauthenticated mode (local development)
+
+When `AGENTFORGE_API_KEY` is **not set**, the HTTP channel runs in unauthenticated mode:
+
+- All requests to `/v1/*` and `/api/*` are accepted without Bearer token verification
+- A prominent warning is logged at startup
+- The `/health` endpoint is always public regardless of auth configuration
+
+This mode is designed for **local development only**. For any deployment accessible over a network, always set `AGENTFORGE_API_KEY`.
+
+### Security features
+
+- **Rate limiting**: Per-client rate limiting (by Bearer token hash or IP address)
+- **CORS**: Configurable allowed origins (defaults to localhost development ports)
+- **Input sanitization**: Control characters and null bytes are stripped from user messages
+- **Body size limit**: 1MB maximum request body
+
+### Configuration
+
+```typescript
+const http = new HttpChannel({
+  port: 3001,                    // Default: 3001
+  apiKey: 'your-secret-key',     // Default: process.env.AGENTFORGE_API_KEY
+  allowedOrigins: [              // Default: localhost dev ports
+    'http://localhost:3000',
+    'http://localhost:5173',
+  ],
+});
+```
+
+---
 
 ## Telegram
 
