@@ -1,7 +1,7 @@
 # CLAUDE.md — AgentForge Development Context
 
 > Read this file completely before starting any work. All rules are mandatory.
-> For deep technical reference on Convex + Mastra integration patterns, read: **`docs/TECH-REFERENCE.md`**
+> For deep technical reference on Convex + Mastra integration patterns, read: **`docs/reference/TECH-REFERENCE.md`**
 
 ---
 
@@ -32,7 +32,7 @@ Before writing any code: search the codebase, look for existing implementations.
 4. Fix any failures NOW before moving on
 ```
 
-### 3 · Read docs/TECH-REFERENCE.md Before Every Sprint
+### 3 · Read docs/reference/TECH-REFERENCE.md Before Every Sprint
 Critical rules are documented there. APIs change constantly. Key links:
 - Mastra: https://mastra.ai/docs
 - Convex: https://docs.convex.dev
@@ -142,28 +142,51 @@ url: 'pending-upload'
 
 ---
 
-## Current Status (v0.12.23, March 2026)
+## Security Patterns — Convex Function Visibility
+
+### Sensitive functions MUST be internal
+```typescript
+// ✅ Sensitive operations → internalMutation / internalAction
+export const censorMessage = internalMutation({ ... })  // pattern detection
+export const create = internalAction({ ... })            // API key encryption
+
+// ✅ Public wrappers → strip sensitive fields
+export const censorText = mutation({                     // returns only { censoredText, secretsDetected }
+  handler: async (ctx, args) => {
+    const result = await ctx.runMutation(internal.vault.censorMessage, ...)
+    return { censoredText: result.censoredText, secretsDetected: result.secretsDetected }
+  }
+})
+
+// ❌ Never expose pattern names, storedSecrets, or encryption internals to clients
+```
+
+### Public wrapper naming convention
+| Internal function | Public wrapper | Purpose |
+|---|---|---|
+| `vault.censorMessage` | `vault.censorText` | Strips pattern names |
+| `apiKeys.create` | `apiKeys.createKey` | Delegates to encryption |
+| `apiKeys.update` | `apiKeys.updateKey` | Delegates to encryption |
+
+---
+
+## Current Status (v0.12.24, March 2026)
 
 ### Architecture Redesign Complete
-All 7 specs implementing the daemon architecture have been merged:
-- **SPEC-020:** `packages/runtime/` package — Done ✓
-- **SPEC-021:** Channel adapters (HTTP/Discord/Telegram) — Done ✓
-- **SPEC-022:** Convex data layer cleanup (AES-256-GCM encryption) — Done ✓
-- **SPEC-023:** CLI runtime commands (`agentforge start`, `agentforge chat`) — Done ✓
-- **SPEC-024:** Security hardening (auth guards, rate limiting) — Done ✓
-- **SPEC-025:** ResearchOrchestrator Mastra v1.8 compatibility — Done ✓
-- **SPEC-026:** Dashboard E2E regression fixes — Done ✓
+All 7 specs implementing the daemon architecture have been merged (SPEC-020 through SPEC-026).
 
-### Sprint 2 (v0.12.23) — Security + Dashboard
-- **#235:** API tokens stored as SHA-256 hashes (plaintext never persisted, `validateByHash` internalQuery)
-- **#234:** 26 HTTP channel security integration tests (auth, rate limiting, CORS, sanitization)
-- **#237:** Convex boundary cleanup — `crypto.subtle` → `node:crypto`, 42 `api.*` → `internal.*`
-- **#233:** Settings page wired to real Convex data (replaced hardcoded state)
-- **#240:** Hotfix — `censorMessage` reverted to mutation, `detectSecrets` → `internalQuery`
-- **#241:** All 8 dashboard modals migrated to Radix UI Dialog (outside-click + Escape dismissal)
-- **#242:** Chat-scoped model override — per-thread model picker with config cascade
+### Sprint 3 (v0.12.24) — Public Launch Prep
+- **#253:** Security hardening + community readiness (PR merged)
+  - `censorMessage` → `internalMutation` + `censorText` public wrapper (#239)
+  - `apiKeys.create/update` → `internalAction` + `createKey/updateKey` wrappers
+  - HTTP auth bypass documented with startup warning (#248)
+  - Dependencies patched: undici ≥7.24.0, hono ≥4.12.7, fast-xml-parser ≥5.5.6 (#232)
+  - SECURITY.md, issue/PR templates added
+  - Git history scrubbed of hardcoded API key via `git-filter-repo`
+  - Internal dev files removed (TASK.md, PROJECT_STATE.md, AGENTS.md → docs/development.md)
+  - CONTRIBUTING.md updated: XOR → AES-256-GCM encryption docs
 
-### What Works (v0.12.23)
+### What Works (v0.12.24)
 - Full daemon model: `agentforge start` → persistent Mastra runtime
 - `agentforge create / status / agents / models / keys / tokens / threads / logs / skills / dashboard / chat`
 - HTTP channel with OpenAI-compatible POST /api/chat + GET /api/agents
@@ -172,17 +195,24 @@ All 7 specs implementing the daemon architecture have been merged:
 - Usage token tracking per request
 - AES-256-GCM API key encryption (Node.js only, never crypto.subtle)
 - SHA-256 token hashing — plaintext returned once at creation, validated by hash
-- Chat-scoped model override — per-thread model selection, config cascade: request > thread > agent default
-- Dashboard modals with consistent outside-click and Escape dismissal (Radix Dialog)
-- Settings page with live Convex data, loading/error states
-- Convex schema deploys cleanly, 0 TypeScript errors
+- Chat-scoped model override — per-thread model selection, config cascade
+- All sensitive Convex functions internalized with thin public wrappers
+- `pnpm audit` → 0 vulnerabilities
+- SECURITY.md, issue templates, PR template for community contributions
 
-### Key Architectural Decisions Made
+### Key Architectural Decisions
 - Central daemon model (like OpenClaw, not per-project)
 - Channels v1: HTTP + Discord + Telegram
 - Memory: ConvexStore (not LibSQL) — dashboard visibility
 - Mastra runs in `packages/runtime/` — never in Convex actions
 - Model override: per-thread (not per-agent) — creates temporary agent, never mutates cached agent
+- Sensitive Convex functions: always `internal*`, with thin public wrappers that strip sensitive data
+
+### Known Technical Debt (from multi-model audit)
+- 429 `any` casts in CLI commands (use typed `FunctionReference` instead)
+- 72 unreferenced exports (audit: public API surface vs dead code)
+- 81 untested public exports (priority: `createStandardAgent`, model registry, streaming utils)
+- ~50 silent catch blocks (add structured debug logging)
 
 ---
 
