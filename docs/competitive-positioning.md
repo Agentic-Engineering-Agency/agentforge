@@ -1,3 +1,8 @@
+---
+title: "Why AgentForge?"
+description: "Competitive positioning and value proposition — self-hosted, Mastra-native, real-time, with A2A and MCP support."
+---
+
 # Why AgentForge?
 
 AgentForge is built for teams that need autonomous AI agents without giving up control of their infrastructure or data.

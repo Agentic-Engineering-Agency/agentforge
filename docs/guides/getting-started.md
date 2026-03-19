@@ -1,3 +1,8 @@
+---
+title: "Getting Started"
+description: "Get from zero to a running AgentForge agent in 5 minutes with this quickstart guide."
+---
+
 # Getting Started
 
 Get from zero to a running agent in 5 minutes.
@@ -109,7 +114,7 @@ my-agent-app/
 
 ## Next Steps
 
-- [CLI Reference](./CLI.md) — full list of commands
-- [Architecture](./architecture.md) — how it all fits together
-- [Skills](./skills.md) — extend agents with custom skills
-- [MCP Integration](./mcp.md) — connect MCP servers
+- [CLI Reference](../reference/CLI.md) — full list of commands
+- [Architecture](../architecture/architecture.md) — how it all fits together
+- [Skills](../features/skills.md) — extend agents with custom skills
+- [MCP Integration](../features/mcp.md) — connect MCP servers

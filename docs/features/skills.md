@@ -1,3 +1,8 @@
+---
+title: "Skills"
+description: "Create, install, and manage agent skills — self-contained tool packages with SKILL.md definitions."
+---
+
 # Skills
 
 Skills extend your agent's capabilities. A skill is a self-contained package that defines tools, instructions, and configuration that can be installed into any AgentForge agent.

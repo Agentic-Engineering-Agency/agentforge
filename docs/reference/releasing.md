@@ -1,3 +1,8 @@
+---
+title: "Releasing"
+description: "Release process for publishing synchronized AgentForge npm packages to the registry."
+---
+
 # Releasing AgentForge
 
 AgentForge release tags track the synchronized npm package version for:

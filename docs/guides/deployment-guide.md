@@ -1,3 +1,8 @@
+---
+title: "Deployment Guide"
+description: "Deploy your AgentForge project to production using the CLI, CI/CD, or manual Convex deployment."
+---
+
 # Deployment Guide
 
 This guide covers deploying your AgentForge project to production.

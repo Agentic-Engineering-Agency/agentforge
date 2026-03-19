@@ -1,3 +1,8 @@
+---
+title: "Channel Adapters"
+description: "Configuration and usage of HTTP, Telegram, WhatsApp, Slack, and Discord channel adapters for agent messaging."
+---
+
 # Channel Adapters
 
 AgentForge supports multiple messaging channels out of the box. All channels use a unified adapter architecture — your agent logic stays the same regardless of which channel delivers the message.

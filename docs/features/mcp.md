@@ -1,3 +1,8 @@
+---
+title: "MCP Integration"
+description: "Connect to external MCP servers, expose agent tools via MCP, and use dynamic tool loading with the Model Context Protocol."
+---
+
 # MCP Integration
 
 AgentForge has native support for the [Model Context Protocol (MCP)](https://modelcontextprotocol.io) — both as a client (connecting to external MCP servers) and as a server (exposing tools to other systems).

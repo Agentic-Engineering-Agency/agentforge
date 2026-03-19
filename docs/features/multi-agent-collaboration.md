@@ -1,3 +1,8 @@
+---
+title: "Multi-Agent Collaboration"
+description: "Patterns for building multi-agent systems including coordinator-worker, shared state, and message bus architectures."
+---
+
 # Multi-Agent Collaboration
 
 AgentForge is designed for building both single agents and complex multi-agent systems. This guide explores patterns for enabling collaboration between agents.

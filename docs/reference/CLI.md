@@ -1,3 +1,8 @@
+---
+title: "CLI Reference"
+description: "Complete reference for all AgentForge CLI commands including agent management, chat, skills, configuration, and system operations."
+---
+
 # AgentForge CLI Reference
 
 > **AgentForge** — NanoClaw: A minimalist agent framework powered by Mastra + Convex

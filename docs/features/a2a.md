@@ -1,3 +1,8 @@
+---
+title: "Agent-to-Agent (A2A) Protocol"
+description: "Inter-agent communication with task delegation, streaming results, and multi-agent orchestration patterns."
+---
+
 # Agent-to-Agent (A2A) Protocol
 
 AgentForge implements the A2A protocol for inter-agent communication. Agents can discover each other, delegate tasks, and stream results — enabling multi-agent systems where specialized agents collaborate on complex work.

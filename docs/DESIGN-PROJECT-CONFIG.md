@@ -1,3 +1,8 @@
+---
+title: "Design: Project Configuration"
+description: "Internal design document for global vs project-scoped configuration, migration strategy, and UI implications."
+---
+
 # DESIGN-PROJECT-CONFIG.md — Global vs Project-Scoped Configuration
 
 > **Session:** 0.2 (Track A — Lalo + Puck)

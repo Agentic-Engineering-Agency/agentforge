@@ -1,3 +1,8 @@
+---
+title: "Architecture Diagrams"
+description: "Comprehensive Mermaid diagrams of system architecture, data flow, security layers, CLI command tree, and deployment topology."
+---
+
 # AgentForge Architecture Diagrams
 
 > Generated 2026-03-11 | v0.12.22 | Comprehensive system architecture reference

@@ -1,3 +1,8 @@
+---
+title: "FinForge Demo"
+description: "Step-by-step tutorial building a financial intelligence agent showcasing agents, tools, Convex state, and the CLI."
+---
+
 # Tutorial: Building FinForge — A Financial Intelligence Agent
 
 This tutorial walks you through building **FinForge**, a financial intelligence agent, step by step. By the end, you'll understand how to use every core primitive in the AgentForge framework.

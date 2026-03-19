@@ -1,3 +1,8 @@
+---
+title: "Dependency Optimization"
+description: "Records of dependency optimization decisions including the 71% node_modules reduction from eliminating onnxruntime-node."
+---
+
 # Dependency Optimization
 
 This document records the dependency optimization decisions made for the AgentForge framework, following the NanoClaw philosophy of maintaining a minimal, elegant core.

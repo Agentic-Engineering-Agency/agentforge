@@ -1,6 +1,11 @@
+---
+title: "Development Guide"
+description: "Development workflow, architecture overview, key rules, QA gates, and branch conventions for AgentForge contributors."
+---
+
 # Development Guide
 
-> For AI coding assistants: read `CLAUDE.md` for all project rules and `docs/TECH-REFERENCE.md` for Convex + Mastra technical constraints.
+> For AI coding assistants: read `CLAUDE.md` for all project rules and `docs/reference/TECH-REFERENCE.md` for Convex + Mastra technical constraints.
 
 ---
 

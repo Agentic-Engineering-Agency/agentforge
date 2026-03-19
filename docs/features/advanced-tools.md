@@ -1,3 +1,8 @@
+---
+title: "Advanced MCP Tools"
+description: "Advanced techniques for dynamic tool registration, Zod schema validation, and tool discovery with MCP servers."
+---
+
 # Advanced MCP Tools
 
 AgentForge uses the Model-Context-Protocol (MCP) Server to provide tools to agents. This guide covers advanced techniques for creating and managing tools.

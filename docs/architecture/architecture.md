@@ -1,3 +1,8 @@
+---
+title: "Architecture"
+description: "System architecture overview covering the daemon model, data flow, package structure, and key design decisions."
+---
+
 # Architecture
 
 AgentForge is built on three pillars: **Mastra** for LLM orchestration, **Convex** for real-time state, and a persistent **daemon runtime** that separates concerns correctly.

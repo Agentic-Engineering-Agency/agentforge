@@ -1,3 +1,8 @@
+---
+title: "Usage Guide"
+description: "Core concepts and a step-by-step tutorial for building your first AI agent with AgentForge."
+---
+
 # AgentForge Usage Guide
 
 Welcome to the AgentForge framework! This guide will walk you through the core concepts and provide a step-by-step tutorial for building your first AI agent.

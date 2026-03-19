@@ -1,3 +1,8 @@
+---
+title: "Technical Reference"
+description: "Deep technical reference for Convex and Mastra integration patterns, encryption, memory, channels, and daemon architecture."
+---
+
 # AgentForge — Technical Reference
 
 > **For coding agents and developers.** Read this before touching any Convex or Mastra code.
