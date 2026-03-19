@@ -43,23 +43,23 @@ By contributing, you agree that your contributions will be licensed under its Ap
 
 AgentForge uses several environment variables for security. Regular rotation is recommended for production deployments.
 
-#### AGENTFORGE_KEY_SALT Rotation
+#### VAULT_ENCRYPTION_KEY Rotation
 
-The `AGENTFORGE_KEY_SALT` is used to encrypt API keys stored in Convex. To rotate:
+API keys stored in Convex are encrypted with AES-256-GCM. The key is derived from `VAULT_ENCRYPTION_KEY` via PBKDF2 (100,000 iterations, SHA-256) with `VAULT_SALT` as the salt. See `convex/vaultCrypto.ts` for the implementation. To rotate:
 
-1. **Generate a new salt** (32+ characters, cryptographically random):
+1. **Generate a new encryption key** (32+ characters, cryptographically random):
    ```bash
    openssl rand -base64 32
    ```
 
 2. **Back up your Convex data** (export from dashboard or CLI)
 
-3. **Re-encrypt all API keys** with the new salt:
-   - Update `AGENTFORGE_KEY_SALT` in your environment
-   - For each API key in your database, re-run the encryption process
-   - The XOR-based encryption in the current implementation requires the salt to stay the same for existing encrypted keys
+3. **Re-encrypt all vault entries** with the new key:
+   - Set the new `VAULT_ENCRYPTION_KEY` in your environment
+   - For each encrypted entry, decrypt with the old key and re-encrypt with the new one via the `vaultCrypto.reEncrypt` internal action
+   - `VAULT_SALT` can remain unchanged during key rotation
 
-4. **Important**: Due to the current XOR encryption implementation, **salt rotation requires decrypting and re-encrypting all keys**. Future versions will use AES-256-GCM with key rotation support.
+4. **Important**: Key rotation requires decrypting and re-encrypting all vault entries. The AES-256-GCM auth tag ensures tamper detection during this process.
 
 #### AGENTFORGE_API_KEY Rotation
 

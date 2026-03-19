@@ -38,3 +38,9 @@ test_results_security.md
 tests/e2e/.env.e2e
 tests/e2e/coverage/
 packages/runtime/data/
+
+# Internal development artifacts
+TASK*.md
+PROJECT_STATE.md
+output/
+workspace/
