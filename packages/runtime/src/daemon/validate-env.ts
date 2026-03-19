@@ -94,6 +94,13 @@ export function validateEnv(config: ChannelConfig): void {
     }
   }
 
+  // Explicit warning for unauthenticated HTTP mode
+  if (!process.env.AGENTFORGE_API_KEY) {
+    warnings.push(
+      'AGENTFORGE_API_KEY not set — HTTP channel will run without authentication'
+    );
+  }
+
   // Log warnings
   for (const warning of warnings) {
     console.warn(`[WARN] ${warning}`);

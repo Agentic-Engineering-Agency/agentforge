@@ -71,6 +71,15 @@ export class HttpChannel implements ChannelAdapter {
     this.allowedOrigins = config.allowedOrigins ?? DEFAULT_ALLOWED_ORIGINS;
     this.dataClient = config.dataClient;
     this.app = new Hono();
+
+    if (!this.apiKey) {
+      console.warn(
+        '[HttpChannel] WARNING: No AGENTFORGE_API_KEY configured. HTTP channel is running in UNAUTHENTICATED mode. ' +
+        'All requests will be accepted without Bearer token verification. ' +
+        'Set AGENTFORGE_API_KEY environment variable to enable authentication.'
+      );
+    }
+
     this.setupRoutes();
   }
 
@@ -95,7 +104,10 @@ export class HttpChannel implements ChannelAdapter {
     // Auth middleware
     this.app.use('/v1/*', async (c, next) => {
       const apiKey = this.apiKey;
-      if (!apiKey) return next();
+      if (!apiKey) {
+        // No API key configured — unauthenticated mode (see startup warning)
+        return next();
+      }
 
       const auth = c.req.header('Authorization');
       if (!auth) {
@@ -121,7 +133,10 @@ export class HttpChannel implements ChannelAdapter {
     // Auth middleware for /api/* routes (same as /v1/*)
     this.app.use('/api/*', async (c, next) => {
       const apiKey = this.apiKey;
-      if (!apiKey) return next();
+      if (!apiKey) {
+        // No API key configured — unauthenticated mode (see startup warning)
+        return next();
+      }
 
       const auth = c.req.header('Authorization');
       if (!auth) {

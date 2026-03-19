@@ -30,7 +30,7 @@ function SettingsPage() {
     () => deriveGeneralSettings(userSettingsRaw ?? []),
     [userSettingsRaw],
   );
-  const createApiKey = useAction(api.apiKeys.create);
+  const createApiKey = useAction(api.apiKeys.createKey);
   const removeApiKey = useMutation(api.apiKeys.remove);
   const toggleApiKey = useMutation(api.apiKeys.toggleActive);
   const storeVaultSecret = useMutation(api.vault.store);

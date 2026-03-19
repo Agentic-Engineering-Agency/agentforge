@@ -97,9 +97,10 @@ export const getActiveForProvider = query({
   },
 });
 
-// Action: Create API key (encrypts before storing using AES-256-GCM)
-// Must be an action (not mutation) because it calls ctx.runAction for encryption
-export const create = action({
+// Internal Action: Create API key (encrypts before storing using AES-256-GCM)
+// SECURITY: internalAction — plaintext key must never be exposed to public API surface.
+// Dashboard calls the thin public wrapper `createKey` below.
+export const create = internalAction({
   args: {
     provider: v.string(),
     keyName: v.string(),
@@ -121,6 +122,20 @@ export const create = action({
       version: encrypted.version,
       userId: args.userId,
     });
+  },
+});
+
+// Public Action: Thin wrapper for dashboard to create an API key.
+// Delegates to internal.apiKeys.create — keeps the plaintext-handling logic internal.
+export const createKey = action({
+  args: {
+    provider: v.string(),
+    keyName: v.string(),
+    encryptedKey: v.string(),
+    userId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.runAction(internal.apiKeys.create, args);
   },
 });
 
@@ -150,9 +165,10 @@ export const insertApiKey = internalMutation({
   },
 });
 
-// Action: Update API key (encrypts if key is being updated)
-// Must be an action (not mutation) because it may call ctx.runAction for encryption
-export const update = action({
+// Internal Action: Update API key (encrypts if key is being updated)
+// SECURITY: internalAction — plaintext key must never be exposed to public API surface.
+// Dashboard calls the thin public wrapper `updateKey` below.
+export const update = internalAction({
   args: {
     id: v.id("apiKeys"),
     keyName: v.optional(v.string()),
@@ -183,6 +199,20 @@ export const update = action({
 
     await ctx.runMutation(internal.apiKeys.patchApiKey, { id, updates });
     return id;
+  },
+});
+
+// Public Action: Thin wrapper for dashboard to update an API key.
+// Delegates to internal.apiKeys.update — keeps the plaintext-handling logic internal.
+export const updateKey = action({
+  args: {
+    id: v.id("apiKeys"),
+    keyName: v.optional(v.string()),
+    encryptedKey: v.optional(v.string()),
+    isActive: v.optional(v.boolean()),
+  },
+  handler: async (ctx, args) => {
+    return await ctx.runAction(internal.apiKeys.update, args);
   },
 });
 
