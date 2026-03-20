@@ -354,7 +354,7 @@ export function registerChannelDiscordCommand(program: Command) {
  *
  * This is a fallback for when the channels-discord package isn't available.
  */
-export async function runMinimalDiscordBot(config: {
+async function runMinimalDiscordBot(config: {
   botToken: string;
   clientId: string;
   guildId: string;

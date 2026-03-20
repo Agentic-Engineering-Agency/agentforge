@@ -5,12 +5,12 @@
  *   provider/model-id  (e.g., "openai/gpt-5.1", "anthropic/claude-opus-4-6")
  */
 
-export interface ParsedModel {
+interface ParsedModel {
   provider: string;
   modelId: string;
 }
 
-export interface ModelOverrideResult {
+interface ModelOverrideResult {
   valid: boolean;
   provider?: string;
   modelId?: string;

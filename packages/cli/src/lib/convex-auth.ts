@@ -4,7 +4,7 @@ import path from 'node:path';
 
 const CONVEX_API_BASE = 'https://api.convex.dev/api';
 
-export interface ResolvedConvexAdminAuth {
+interface ResolvedConvexAdminAuth {
   adminKey: string;
   deploymentName: string;
   deploymentType: string | null;

@@ -401,7 +401,7 @@ export function registerChannelSlackCommand(program: Command) {
  * Uses Socket Mode via the Slack Events API if an app token is provided,
  * otherwise falls back to a basic HTTP server for the Events API.
  */
-export async function runMinimalSlackBot(config: {
+async function runMinimalSlackBot(config: {
   botToken: string;
   appToken: string;
   signingSecret: string;

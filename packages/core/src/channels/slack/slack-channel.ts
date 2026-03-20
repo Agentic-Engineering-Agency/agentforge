@@ -23,7 +23,7 @@ import type {
 // Types
 // =====================================================
 
-export interface SlackChannelConfig {
+interface SlackChannelConfig {
   /** Slack Bot Token (xoxb-...) */
   botToken: string;
   /** Slack App-Level Token (xapp-...) for Socket Mode */
