@@ -80,7 +80,7 @@ export default myAgent;
 //   id: 'research-agent',
 //   name: 'Research Agent',
 //   instructions: 'You are a research assistant that helps find and summarize information.',
-//   model: 'openrouter:anthropic/claude-sonnet-4.6',
+//   model: 'openrouter/anthropic/claude-sonnet-4.6',
 //   tools: [
 //     {
 //       name: 'calculator',
