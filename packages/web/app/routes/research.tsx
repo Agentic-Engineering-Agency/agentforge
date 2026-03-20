@@ -1,8 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { DashboardLayout } from '../components/DashboardLayout';
 import { useState } from 'react';
-import { useAction } from 'convex/react';
+import { useMutation } from 'convex/react';
 import { api } from '@convex/_generated/api';
+import { getDaemonUrl } from '../lib/runtime';
 import { Microscope, Play, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react';
 
 export const Route = createFileRoute('/research')({ component: ResearchPage });
@@ -21,8 +22,17 @@ interface ResearchJob {
   completedAt?: number;
 }
 
+/**
+ * Research page — delegates LLM orchestration to the daemon's HTTP API.
+ *
+ * Architecture compliance (CLAUDE.md Rule 5):
+ * This page does NOT call any Convex action that runs LLM/Mastra logic.
+ * Instead it POSTs to the daemon (packages/runtime/) for research execution
+ * and uses Convex mutations only for persisting job status in the data layer.
+ */
 function ResearchPage() {
-  const startResearchAction = useAction(api.research.start);
+  const createJob = useMutation(api.research.create);
+  const updateJob = useMutation(api.research.update);
   const [topic, setTopic] = useState('');
   const [depth, setDepth] = useState<ResearchDepth>('medium');
   const [jobs, setJobs] = useState<ResearchJob[]>([]);
@@ -31,11 +41,13 @@ function ResearchPage() {
   const startResearch = async () => {
     if (!topic.trim()) return;
 
+    const agentCount = getAgentCountFromDepth(depth);
+
     const newJob: ResearchJob = {
       id: `job-${Date.now()}`,
       topic,
       depth,
-      agentCount: getAgentCountFromDepth(depth),
+      agentCount,
       status: 'running',
       createdAt: Date.now(),
     };
@@ -45,12 +57,25 @@ function ResearchPage() {
     setTopic('');
 
     try {
-      await startResearchAction({
-        topic,
-        depth,
+      // Persist job record in Convex (data layer only)
+      const jobId = await createJob({ topic, depth, agentCount });
+
+      // Delegate research execution to the daemon's HTTP API.
+      // The daemon runs Mastra/LLM orchestration in packages/runtime/,
+      // NOT inside a Convex action (CLAUDE.md Rule 5).
+      const daemonUrl = getDaemonUrl();
+      const response = await fetch(`${daemonUrl}/api/research`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic, depth, jobId: String(jobId) }),
       });
+
+      if (!response.ok) {
+        const errorBody = await response.json().catch(() => ({ error: 'Daemon unreachable' }));
+        throw new Error(errorBody.error ?? `Research failed (HTTP ${response.status})`);
+      }
+
       // Research started successfully
-      // In production, you would poll for status updates
       setJobs(prev => prev.map(job =>
         job.id === newJob.id
           ? { ...job, status: 'completed', results: `Research completed on: ${newJob.topic}\n\nResearch task submitted successfully. Check the CLI for detailed results.`, completedAt: Date.now() }
