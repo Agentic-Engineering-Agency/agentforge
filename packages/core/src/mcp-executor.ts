@@ -29,7 +29,7 @@ export interface ToolInfo {
   inputSchema: Record<string, unknown>;
 }
 
-export interface MCPToolResult {
+interface MCPToolResult {
   content: Array<{
     type: 'text' | 'image' | 'resource';
     text?: string;

@@ -28,7 +28,7 @@ function isConvexLoggedIn(): boolean {
 /**
  * Options for the create command.
  */
-export interface CreateOptions {
+interface CreateOptions {
   /** The project template to use. */
   template: string;
 }

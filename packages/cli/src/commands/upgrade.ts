@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 /**
  * Options for the upgrade command.
  */
-export interface UpgradeOptions {
+interface UpgradeOptions {
   /** Skip confirmation prompt */
   yes: boolean;
   /** Preview changes without applying */

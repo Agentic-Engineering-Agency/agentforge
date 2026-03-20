@@ -10,7 +10,6 @@ export default defineConfig({
     'src/workspace.ts',
     'src/workspace-factory.ts',
     'src/providers/r2-provider.ts',
-    'src/providers/s3-signer.ts',
     'src/channels/telegram.ts',
     'src/channels/whatsapp.ts',
     'src/voice/index.ts',

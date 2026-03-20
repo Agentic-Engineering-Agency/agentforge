@@ -32,7 +32,7 @@ function maskEnvValue(value: string): string {
   return `${value.slice(0, 2)}${'*'.repeat(Math.max(4, value.length - 4))}${value.slice(-2)}`;
 }
 
-export function parseEnvFile(envPath: string): Record<string, string> {
+function parseEnvFile(envPath: string): Record<string, string> {
   const content = fs.readFileSync(envPath, 'utf-8');
   const envVars: Record<string, string> = {};
 

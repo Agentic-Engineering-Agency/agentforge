@@ -2,18 +2,18 @@ import { ConvexHttpClient } from 'convex/browser';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-export interface AgentProviderConfig {
+interface AgentProviderConfig {
   provider?: string;
   model?: string;
 }
 
-export interface ProviderKeyHydrationResult {
+interface ProviderKeyHydrationResult {
   hydrated: string[];
   missing: string[];
   skipped: string[];
 }
 
-export interface ProviderKeyClient {
+interface ProviderKeyClient {
   action: (fn: any, args: Record<string, unknown>) => Promise<unknown>;
 }
 

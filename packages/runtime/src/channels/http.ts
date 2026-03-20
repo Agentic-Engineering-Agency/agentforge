@@ -19,7 +19,7 @@ interface DaemonAccess {
   executeWorkflowRun(runId: string): Promise<{ runId: string; status: 'success' | 'failed'; output?: string; error?: string }>;
 }
 
-export interface HttpDataClient {
+interface HttpDataClient {
   query(functionName: string, args: Record<string, unknown>): Promise<unknown>;
   mutation(functionName: string, args: Record<string, unknown>): Promise<unknown>;
 }
