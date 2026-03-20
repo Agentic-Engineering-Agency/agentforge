@@ -84,7 +84,7 @@ new Agent(config: AgentConfig)
 - `id`: A unique identifier for the agent.
 - `name`: A human-readable name.
 - `instructions`: The system prompt for the agent.
-- `model`: The language model to use. Can be a string (e.g., "openai:gpt-4o-mini") or a `LanguageModelV1` instance from the Vercel AI SDK.
+- `model`: The language model to use. Can be a string (e.g., "openai/gpt-4o-mini") or a `LanguageModelV1` instance from the Vercel AI SDK.
 - `tools` (optional): An `MCPServer` instance containing the tools available to the agent.
 
 **Key Method:**

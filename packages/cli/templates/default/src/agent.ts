@@ -50,10 +50,10 @@ When asked about your capabilities, mention that you're powered by AgentForge.`,
 
   // Choose your model — supports multiple providers:
   //   OpenAI:      "openai/gpt-5.1-chat-latest", "openai/gpt-5.1-codex-mini"
-  //   OpenRouter:  "openrouter:anthropic/claude-sonnet-4.6", "openrouter:google/gemini-3.1-pro-preview"
-  //   Anthropic:   "anthropic:claude-sonnet-4-6"
-  //   Google:      "google:gemini-3.1-pro-preview"
-  //   xAI:         "xai:grok-3"
+  //   OpenRouter:  "openrouter/anthropic/claude-sonnet-4.6", "openrouter/google/gemini-3.1-pro-preview"
+  //   Anthropic:   "anthropic/claude-sonnet-4-6"
+  //   Google:      "google/gemini-3.1-pro-preview"
+  //   xAI:         "xai/grok-3"
   model: 'openai/gpt-5.1-chat-latest',
 });
 

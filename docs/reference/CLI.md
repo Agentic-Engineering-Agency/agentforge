@@ -96,7 +96,7 @@ Create a new agent interactively, or pass options directly.
 
 ```bash
 agentforge agents create
-agentforge agents create --name "Research Bot" --model "openai:gpt-4o" --instructions "You are a research assistant."
+agentforge agents create --name "Research Bot" --model "openai/gpt-4o" --instructions "You are a research assistant."
 ```
 
 ### `agentforge agents inspect <id>`
@@ -113,7 +113,7 @@ Edit an existing agent.
 
 ```bash
 agentforge agents edit research-bot --name "Research Agent v2"
-agentforge agents edit research-bot --model "openrouter:anthropic/claude-3.5-sonnet"
+agentforge agents edit research-bot --model "openrouter/anthropic/claude-3.5-sonnet"
 ```
 
 ### `agentforge agents delete <id>`
