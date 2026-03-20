@@ -190,8 +190,8 @@ export async function installFromMarketplace(
   // Best-effort download tracking — don't fail install if this errors
   try {
     await convexQuery(convexUrl, 'skillMarketplace:incrementDownloads', { name });
-  } catch {
-    // intentionally ignored
+  } catch (error) {
+    console.debug('[installSkillFromMarketplace] Failed to increment download count:', error instanceof Error ? error.message : error);
   }
 
   return { skillDir, skill, references };

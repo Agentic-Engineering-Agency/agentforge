@@ -177,7 +177,7 @@ export async function sendTraceToOpik(
       },
       body: JSON.stringify(body),
     });
-  } catch {
-    // Intentionally swallowed — tracing must never throw
+  } catch (error) {
+    console.debug('[tracing] Failed to send trace to Opik:', error instanceof Error ? error.message : error);
   }
 }

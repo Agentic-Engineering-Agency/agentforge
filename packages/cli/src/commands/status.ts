@@ -84,8 +84,8 @@ export function registerStatusCommand(program: Command) {
           const providers = [...new Set(activeKeys.map((k: any) => k.provider))];
           providerStatus = `Configured (${storedKeysCount} key${storedKeysCount > 1 ? 's' : ''}: ${providers.join(', ')})`;
         }
-      } catch {
-        // Fall back to env check if Convex query fails
+      } catch (error) {
+        console.debug('[status] Convex API keys query failed, falling back to env check:', error instanceof Error ? error.message : error);
       }
 
       checks['LLM Provider'] = storedKeysCount > 0 || providerStatus !== 'Not configured'

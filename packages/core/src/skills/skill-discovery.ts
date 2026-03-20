@@ -44,8 +44,8 @@ export async function discoverSkills(
       const content = await fs.readFile(skillMdPath);
       const skill = parseSkillManifest(content);
       skills.push(skill);
-    } catch {
-      // Skip skills that fail to parse
+    } catch (error) {
+      console.debug('[discoverSkills] Failed to parse skill at %s:', skillMdPath, error instanceof Error ? error.message : error);
     }
   }
 

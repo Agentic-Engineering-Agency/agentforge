@@ -88,8 +88,8 @@ async function resolveSkillEntry(skillDir: string): Promise<string | null> {
       if (stat.isFile()) {
         return fullPath;
       }
-    } catch {
-      // Ignore missing candidates.
+    } catch (error) {
+      console.debug('[resolveSkillEntry] Candidate not found %s:', candidate, error instanceof Error ? error.message : error);
     }
   }
 

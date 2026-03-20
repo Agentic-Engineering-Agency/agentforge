@@ -142,8 +142,8 @@ function readSkillsLock(skillsDir: string): SkillsLock {
   if (fs.existsSync(lockPath)) {
     try {
       return JSON.parse(fs.readFileSync(lockPath, 'utf-8'));
-    } catch {
-      // Corrupted lock file, start fresh
+    } catch (error) {
+      console.debug('[readSkillsLock] Corrupted lock file, starting fresh:', error instanceof Error ? error.message : error);
     }
   }
   return { version: 1, skills: {} };
@@ -1491,8 +1491,8 @@ export function registerSkillsCommand(program: Command) {
           await client.mutation('skills:remove' as any, { id: skill._id });
           dim('  Skill removed from Convex database.');
         }
-      } catch {
-        // Convex not available — that's fine
+      } catch (error) {
+        console.debug('[skills:remove] Convex not available for skill removal:', error instanceof Error ? error.message : error);
       }
 
       info('Skill removed. Agents will no longer discover it.');

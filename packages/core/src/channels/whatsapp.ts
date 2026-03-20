@@ -421,8 +421,8 @@ export class WhatsAppChannel {
     // Mark message as read (WhatsApp's equivalent of typing indicator)
     try {
       await this.adapter.addReaction(message.platformMessageId, message.chatId, '👀');
-    } catch {
-      // Non-critical
+    } catch (error) {
+      console.debug('[WhatsAppChannel.routeToAgent] Failed to add read reaction:', error instanceof Error ? error.message : error);
     }
 
     // Get or create thread for this chat
@@ -522,8 +522,8 @@ export class WhatsAppChannel {
         metadata: { phoneNumber, threadId, agentId: this.config.agentId },
         userId,
       });
-    } catch {
-      // Non-critical, ignore
+    } catch (error) {
+      console.debug('[WhatsAppChannel.getOrCreateThread] Failed to log conversation start:', error instanceof Error ? error.message : error);
     }
 
     return threadId;

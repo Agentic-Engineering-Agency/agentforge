@@ -34,8 +34,8 @@ async function ensureCredentialsDir(): Promise<void> {
   // Set restrictive permissions (owner read/write only)
   try {
     await fs.chmod(CREDENTIALS_DIR, 0o700);
-  } catch {
-    // Ignore permission errors on Windows
+  } catch (error) {
+    console.debug('[credentials] Failed to set permissions on credentials dir:', error instanceof Error ? error.message : error);
   }
 }
 
@@ -73,8 +73,8 @@ export async function writeCredentials(credentials: Credentials): Promise<void> 
   // Set restrictive permissions (owner read/write only)
   try {
     await fs.chmod(CREDENTIALS_FILE, 0o600);
-  } catch {
-    // Ignore permission errors on Windows
+  } catch (error) {
+    console.debug('[credentials] Failed to set permissions on credentials file:', error instanceof Error ? error.message : error);
   }
 }
 

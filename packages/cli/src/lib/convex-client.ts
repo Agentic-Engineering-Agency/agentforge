@@ -44,8 +44,8 @@ function getConvexUrl(): string {
     try {
       const data = JSON.parse(fs.readFileSync(convexEnv, 'utf-8'));
       if (data.url) return data.url;
-    } catch {
-      // ignore
+    } catch (error) {
+      console.debug('[getConvexUrl] Failed to parse .convex/deployment.json:', error instanceof Error ? error.message : error);
     }
   }
 

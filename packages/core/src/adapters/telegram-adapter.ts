@@ -272,8 +272,8 @@ export class TelegramAdapter extends ChannelAdapter {
     if (this.adapterConfig?.useWebhook) {
       try {
         await this.callApi('deleteWebhook');
-      } catch {
-        // Ignore errors on disconnect
+      } catch (error) {
+        console.debug('[TelegramAdapter.disconnect] Failed to delete webhook:', error instanceof Error ? error.message : error);
       }
     }
 
@@ -449,8 +449,8 @@ export class TelegramAdapter extends ChannelAdapter {
         chat_id: chatId,
         action: 'typing',
       });
-    } catch {
-      // Ignore typing indicator errors
+    } catch (error) {
+      console.debug('[TelegramAdapter.sendTypingIndicator] Failed for chat %s:', chatId, error instanceof Error ? error.message : error);
     }
   }
 

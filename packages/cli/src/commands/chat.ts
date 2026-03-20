@@ -193,8 +193,8 @@ export function registerChatCommand(program: Command) {
             );
           }
           await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'user', content: input }), 'Failed to save message');
-        } catch {
-          // Non-fatal: continue with chat even if Convex save fails
+        } catch (error) {
+          console.debug(`[chat] Failed to save user message to Convex:`, error instanceof Error ? error.message : error);
         }
 
         try {
@@ -291,8 +291,8 @@ export function registerChatCommand(program: Command) {
         // Save to Convex
         try {
           await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'user', content: input }), 'Failed to save');
-        } catch {
-          // Non-fatal
+        } catch (error) {
+          console.debug(`[chat] Failed to save interactive user message:`, error instanceof Error ? error.message : error);
         }
 
         if (isTTY) {
@@ -320,8 +320,8 @@ export function registerChatCommand(program: Command) {
           // Save assistant response to Convex
           try {
             await safeCall(() => client.mutation('messages:add' as any, { threadId, role: 'assistant', content: fullResponse }), 'Failed to save');
-          } catch {
-            // Non-fatal
+          } catch (error) {
+            console.debug(`[chat] Failed to save assistant response:`, error instanceof Error ? error.message : error);
           }
         } catch (err) {
           console.log(`${colors.yellow}[Chat failed: ${err instanceof Error ? err.message : String(err)}]${colors.reset}`);

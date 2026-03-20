@@ -58,8 +58,8 @@ export async function isNativeSandboxAvailable(): Promise<{
       // sandbox-exec is a built-in macOS tool; 'which' confirms it is on PATH
       await execFileAsync('which', ['sandbox-exec'], { timeout: 5000 });
       return { available: true, method: 'sandbox-exec' };
-    } catch {
-      // fall through
+    } catch (error) {
+      console.debug('[isNativeSandboxAvailable] sandbox-exec not found:', error instanceof Error ? error.message : error);
     }
   }
 
@@ -67,8 +67,8 @@ export async function isNativeSandboxAvailable(): Promise<{
     try {
       await execFileAsync('which', ['bwrap'], { timeout: 5000 });
       return { available: true, method: 'bwrap' };
-    } catch {
-      // fall through
+    } catch (error) {
+      console.debug('[isNativeSandboxAvailable] bwrap not found:', error instanceof Error ? error.message : error);
     }
   }
 

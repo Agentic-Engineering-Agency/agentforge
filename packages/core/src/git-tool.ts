@@ -190,8 +190,8 @@ export class GitTool {
         try {
           const repo = this.inspectRepository(dir);
           repos.push(repo);
-        } catch {
-          // Skip repos we can't inspect
+        } catch (error) {
+          console.debug('[GitTool.searchForRepos] Skipping repo at %s:', dir, error instanceof Error ? error.message : error);
         }
         return; // Don't search inside a git repo for nested repos
       }
@@ -204,12 +204,12 @@ export class GitTool {
           if (statSync(fullPath).isDirectory()) {
             this.searchForRepos(fullPath, depth + 1, repos);
           }
-        } catch {
-          // Skip inaccessible directories
+        } catch (error) {
+          console.debug('[GitTool.searchForRepos] Skipping inaccessible entry %s:', fullPath, error instanceof Error ? error.message : error);
         }
       }
-    } catch {
-      // Skip inaccessible directories
+    } catch (error) {
+      console.debug('[GitTool.searchForRepos] Cannot read directory %s:', dir, error instanceof Error ? error.message : error);
     }
   }
 
@@ -225,7 +225,8 @@ export class GitTool {
     let remoteUrl: string | null = null;
     try {
       remoteUrl = this.exec('remote get-url origin', repoPath).trim() || null;
-    } catch {
+    } catch (error) {
+      console.debug('[GitTool.inspectRepository] No remote origin for %s:', repoPath, error instanceof Error ? error.message : error);
       remoteUrl = null;
     }
 
@@ -253,8 +254,8 @@ export class GitTool {
       const parts = abOutput.split('\t');
       ahead = parseInt(parts[0], 10) || 0;
       behind = parseInt(parts[1], 10) || 0;
-    } catch {
-      // No upstream configured
+    } catch (error) {
+      console.debug('[GitTool.getStatus] No upstream configured:', error instanceof Error ? error.message : error);
     }
 
     // Parse file statuses
@@ -483,8 +484,8 @@ export class GitTool {
         deletions += delNum;
         filesChanged++;
       }
-    } catch {
-      // Stat parsing failed, use raw diff
+    } catch (error) {
+      console.debug('[GitTool.getDiff] Stat parsing failed, using raw diff:', error instanceof Error ? error.message : error);
     }
 
     return { filesChanged, insertions, deletions, raw, files };

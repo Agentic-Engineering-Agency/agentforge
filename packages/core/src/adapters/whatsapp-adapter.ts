@@ -936,8 +936,8 @@ export class WhatsAppAdapter extends ChannelAdapter {
           message_id: messageId,
         }
       );
-    } catch {
-      // Non-critical, ignore
+    } catch (error) {
+      console.debug('[WhatsAppAdapter.markAsRead] Failed for message %s:', messageId, error instanceof Error ? error.message : error);
     }
   }
 
