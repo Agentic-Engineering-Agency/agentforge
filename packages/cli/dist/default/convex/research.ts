@@ -1,11 +1,17 @@
 import { v } from "convex/values";
-import { mutation, query, action } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { mutation, query } from "./_generated/server";
 
 /**
- * Research module — Parallel multi-agent research orchestration.
+ * Research module — Data layer for research job tracking.
  *
- * Integrates with packages/core/src/research/orchestrator.ts (ResearchOrchestrator).
+ * Architecture compliance (CLAUDE.md Rule 5):
+ * This file contains ONLY database operations (queries + mutations).
+ * All LLM/Mastra orchestration runs in packages/runtime/ via the daemon.
+ * The dashboard delegates research execution to the daemon's HTTP API
+ * (POST /api/research) and uses these Convex functions only for
+ * persisting and displaying job status.
+ *
+ * See also: packages/core/src/research/orchestrator.ts (ResearchOrchestrator)
  */
 
 // Query: Get research job by ID
@@ -55,7 +61,7 @@ export const list = query({
   },
 });
 
-// Mutation: Create a research job
+// Mutation: Create a research job record
 export const create = mutation({
   args: {
     topic: v.string(),
@@ -117,69 +123,6 @@ export const update = mutation({
   handler: async (ctx, args) => {
     const { jobId, ...updates } = args;
     await ctx.db.patch(jobId, updates);
-    return jobId;
-  },
-});
-
-/**
- * Action: Start a research job using ResearchOrchestrator.
- *
- * This action runs in Node.js environment to support ResearchOrchestrator.
- */
-export const start = action({
-  args: {
-    topic: v.string(),
-    depth: v.union(v.literal("shallow"), v.literal("medium"), v.literal("deep")),
-    userId: v.optional(v.string()),
-    projectId: v.optional(v.id("projects")),
-  },
-  handler: async (ctx, args) => {
-    const agentCount = args.depth === "shallow" ? 3 : args.depth === "medium" ? 5 : 10;
-
-    const jobId = await ctx.runMutation(internal.research.create, {
-      topic: args.topic,
-      depth: args.depth,
-      agentCount,
-      userId: args.userId,
-      projectId: args.projectId,
-    });
-
-    await ctx.runMutation(internal.research.update, {
-      jobId,
-      status: "running",
-    });
-
-    try {
-      // Research orchestration — extend this to plug in ResearchOrchestrator
-      // from @agentforge-ai/core or your own implementation.
-      throw new Error("Research orchestration not yet configured. Extend this action to integrate your orchestrator.");
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      await ctx.runMutation(internal.research.update, {
-        jobId,
-        status: "failed",
-        error: errorMessage,
-        completedAt: Date.now(),
-      });
-      throw error;
-    }
-  },
-});
-
-export const createInternal = mutation({
-  args: {
-    topic: v.string(),
-    depth: v.union(v.literal("shallow"), v.literal("medium"), v.literal("deep")),
-    agentCount: v.number(),
-    userId: v.optional(v.string()),
-    projectId: v.optional(v.id("projects")),
-  },
-  handler: async (ctx, args) => {
-    const jobId = await ctx.db.insert("researchJobs", {
-      ...args,
-      status: "pending",
-      createdAt: Date.now(),
-    });
     return jobId;
   },
 });

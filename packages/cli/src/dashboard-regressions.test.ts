@@ -86,7 +86,6 @@ describe('dashboard and convex regressions', () => {
     const configSource = readFileSync(path.join(repoRoot, 'packages/cli/templates/default/agentforge.config.ts'), 'utf-8');
     const providersSource = readFileSync(path.join(templateConvexRoot, 'llmProviders.ts'), 'utf-8');
     const contextSource = readFileSync(path.join(templateConvexRoot, 'context.ts'), 'utf-8');
-    const researchSource = readFileSync(path.join(templateConvexRoot, 'lib/research.ts'), 'utf-8');
 
     expect(configSource).toContain("defaultModel: 'openai/gpt-5.4'");
     expect(configSource).not.toContain('gpt-4o-mini');
@@ -98,6 +97,19 @@ describe('dashboard and convex regressions', () => {
     expect(providersSource).not.toContain('openai/gpt-4.1-mini');
 
     expect(contextSource).toContain('process.env.OPENAI_SUMMARIZER_MODEL ?? "gpt-5.1-chat-latest"');
-    expect(researchSource).toContain('config.modelId ?? "gpt-5.1-chat-latest"');
+  });
+
+  it('convex/lib/research.ts should not exist (LLM calls belong in packages/runtime)', () => {
+    // Architecture rule: Mastra/LLM logic must NOT live in Convex directories.
+    // convex/lib/research.ts was removed in #231 because it contained direct
+    // LLM API calls (callLLM → fetch("https://api.openai.com/v1/chat/completions")).
+    const researchLibPath = path.join(templateConvexRoot, 'lib/research.ts');
+    let exists = true;
+    try {
+      readFileSync(researchLibPath, 'utf-8');
+    } catch {
+      exists = false;
+    }
+    expect(exists).toBe(false);
   });
 });
