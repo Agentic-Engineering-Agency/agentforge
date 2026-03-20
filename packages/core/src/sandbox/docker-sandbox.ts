@@ -205,8 +205,8 @@ export class DockerSandbox implements SandboxProvider {
       if (info.State.Running) {
         await this.container.stop({ t: 10 });
       }
-    } catch {
-      // Container may already be stopped — ignore
+    } catch (error) {
+      console.debug('[DockerSandbox.stop] Container may already be stopped:', error instanceof Error ? error.message : error);
     }
   }
 
@@ -224,8 +224,8 @@ export class DockerSandbox implements SandboxProvider {
 
     try {
       await container.remove({ force: true });
-    } catch {
-      // Already gone — ignore
+    } catch (error) {
+      console.debug('[DockerSandbox.destroy] Container already removed:', error instanceof Error ? error.message : error);
     }
   }
 

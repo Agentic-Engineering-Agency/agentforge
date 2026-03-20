@@ -136,8 +136,8 @@ export class A2AClient {
             try {
               const chunk = JSON.parse(trimmed.slice(6)) as A2AStreamChunk;
               yield chunk;
-            } catch {
-              // skip malformed lines
+            } catch (error) {
+              console.debug('[A2AClient.sendTaskStreaming] Skipping malformed SSE line:', error instanceof Error ? error.message : error);
             }
           }
         }

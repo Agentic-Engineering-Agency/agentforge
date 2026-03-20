@@ -91,8 +91,8 @@ export class MCPDynamicToolLoader {
           this.lastToolNames = currentNames;
           onUpdate({ ...this.tools });
         }
-      } catch {
-        // Polling errors are non-fatal; next interval will retry
+      } catch (error) {
+        console.debug('[MCPDynamicTools.watchTools] Polling error (will retry):', error instanceof Error ? error.message : error);
       }
     }, intervalMs);
   }

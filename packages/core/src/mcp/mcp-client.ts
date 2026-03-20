@@ -216,8 +216,8 @@ export class StdioTransport implements MCPTransport {
         } else if ('method' in msg) {
           this.notificationHandler?.(msg as MCPJsonRpcNotification);
         }
-      } catch {
-        // Malformed JSON — skip
+      } catch (error) {
+        console.debug('[MCPClient.handleStdioData] Malformed JSON in stdio message:', error instanceof Error ? error.message : error);
       }
     }
   }
@@ -434,8 +434,8 @@ export class SSETransport implements MCPTransport {
       } else if ('method' in msg && eventType !== 'response') {
         this.notificationHandler?.(msg as MCPJsonRpcNotification);
       }
-    } catch {
-      // Malformed JSON — skip
+    } catch (error) {
+      console.debug('[MCPClient.handleSSEEvent] Malformed JSON in SSE event:', error instanceof Error ? error.message : error);
     }
   }
 
@@ -735,8 +735,8 @@ export class MCPClient {
           ...notification,
           id: crypto.randomUUID(),
         } as MCPJsonRpcRequest);
-      } catch {
-        // Notifications are fire-and-forget; swallow errors
+      } catch (error) {
+        console.debug('[MCPClient.sendNotification] Fire-and-forget notification failed:', error instanceof Error ? error.message : error);
       }
     } else if (this.transport instanceof StdioTransport) {
       // For stdio we can write the raw notification (no id)
@@ -751,8 +751,8 @@ export class MCPClient {
     for (const handler of this.eventHandlers) {
       try {
         handler(event);
-      } catch {
-        // Swallow handler errors
+      } catch (error) {
+        console.debug('[MCPClient.emit] Event handler threw:', error instanceof Error ? error.message : error);
       }
     }
   }

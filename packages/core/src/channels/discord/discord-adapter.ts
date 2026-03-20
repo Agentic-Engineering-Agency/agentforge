@@ -312,8 +312,8 @@ export class DiscordAdapter extends ChannelAdapter {
       if (!channel) return;
       const sendable = channel as SendableChannel;
       await sendable.sendTyping();
-    } catch {
-      // Ignore typing indicator errors
+    } catch (error) {
+      console.debug('[DiscordAdapter.sendTypingIndicator] Failed for channel %s:', chatId, error instanceof Error ? error.message : error);
     }
   }
 

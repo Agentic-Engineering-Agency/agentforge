@@ -34,8 +34,8 @@ function readEnvValue(key: string): string | undefined {
           return value.replace(/^["']|["']$/g, '');
         }
       }
-    } catch {
-      // File doesn't exist or can't be read, continue
+    } catch (error) {
+      console.debug('[readEnvValue] Failed to read env file %s:', envFile, error instanceof Error ? error.message : error);
     }
   }
   return undefined;

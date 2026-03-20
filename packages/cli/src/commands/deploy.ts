@@ -77,8 +77,8 @@ export async function readAgentForgeConfig(projectDir: string): Promise<any | nu
       const agentMatches = content.matchAll(/id:\s*["']([^"']+)["']/g);
       const agents = Array.from(agentMatches).map(m => ({ id: m[1] }));
       return { agents };
-    } catch {
-      // Fall through to JSON
+    } catch (error) {
+      console.debug('[readAgentForgeConfig] Failed to parse TS config, falling through to JSON:', error instanceof Error ? error.message : error);
     }
   }
 

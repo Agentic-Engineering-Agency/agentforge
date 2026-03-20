@@ -590,8 +590,8 @@ export class TelegramChannel {
         metadata: { chatId, threadId, agentId: this.config.agentId },
         userId,
       });
-    } catch {
-      // Non-critical, ignore
+    } catch (error) {
+      console.debug('[TelegramChannel.getOrCreateThread] Failed to log conversation start:', error instanceof Error ? error.message : error);
     }
 
     return threadId;
@@ -609,8 +609,8 @@ export class TelegramChannel {
       if (agent) {
         agentName = (agent as { name: string }).name;
       }
-    } catch {
-      // Use default name
+    } catch (error) {
+      console.debug('[TelegramChannel.handleStartCommand] Failed to fetch agent name:', error instanceof Error ? error.message : error);
     }
 
     await this.adapter.sendMessage({

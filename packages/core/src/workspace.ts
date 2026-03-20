@@ -158,8 +158,8 @@ export class LocalWorkspaceProvider implements WorkspaceProvider {
             results.push(rel);
           }
         }
-      } catch {
-        // directory doesn't exist — return empty
+      } catch (error) {
+        console.debug('[Workspace.listFiles] Directory does not exist or is inaccessible %s:', currentDir, error instanceof Error ? error.message : error);
       }
     };
 

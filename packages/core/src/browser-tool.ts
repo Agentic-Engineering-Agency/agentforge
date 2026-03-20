@@ -251,8 +251,8 @@ export class BrowserSessionManager {
             const data = JSON.parse(response);
             return data.webSocketDebuggerUrl || `ws://localhost:${port}`;
           }
-        } catch {
-          // Browser not ready yet
+        } catch (error) {
+          console.debug('[BrowserTool.launchDocker] Browser not ready yet:', error instanceof Error ? error.message : error);
         }
         await new Promise((resolve) => setTimeout(resolve, 1000));
         retries--;
@@ -261,8 +261,8 @@ export class BrowserSessionManager {
       // Cleanup on failure
       try {
         execSync(`docker stop agentforge-browser-${port}`, { timeout: 5_000 });
-      } catch {
-        // Ignore cleanup errors
+      } catch (error) {
+        console.debug('[BrowserTool.launchDocker] Failed to stop container on cleanup:', error instanceof Error ? error.message : error);
       }
 
       throw new Error('Docker sandbox browser failed to start within timeout');
@@ -334,8 +334,8 @@ export class BrowserSessionManager {
       if (this.config.persistState && this.config.statePath) {
         try {
           await context.storageState({ path: this.config.statePath });
-        } catch {
-          // Ignore save errors on close
+        } catch (error) {
+          console.debug('[BrowserTool.closeSession] Failed to save storage state:', error instanceof Error ? error.message : error);
         }
       }
       await context.close();
@@ -466,8 +466,8 @@ export class BrowserActionExecutor {
       try {
         result.currentUrl = page.url();
         result.pageTitle = await page.title();
-      } catch {
-        // Page might be closed
+      } catch (error) {
+        console.debug('[BrowserTool.execute] Failed to get page info (page may be closed):', error instanceof Error ? error.message : error);
       }
 
       result.latencyMs = Date.now() - startTime;

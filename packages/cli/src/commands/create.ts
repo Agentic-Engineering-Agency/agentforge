@@ -110,8 +110,8 @@ export async function createProject(
       console.log(`\n  ✅ Dependencies installed (via ${pm})`);
       rootInstalled = true;
       break;
-    } catch {
-      // try next package manager
+    } catch (error) {
+      console.debug(`[create] Package manager '${pm}' failed for root install:`, error instanceof Error ? error.message : error);
     }
   }
   if (!rootInstalled) {
@@ -130,8 +130,8 @@ export async function createProject(
         console.log(`\n  ✅ Dashboard dependencies installed (via ${pm})`);
         dashInstalled = true;
         break;
-      } catch {
-        // try next
+      } catch (error) {
+        console.debug(`[create] Package manager '${pm}' failed for dashboard install:`, error instanceof Error ? error.message : error);
       }
     }
     if (!dashInstalled) {
