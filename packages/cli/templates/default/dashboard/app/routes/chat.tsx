@@ -24,6 +24,7 @@ import {
   ChevronDown,
   RotateCcw,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { useModelCatalog } from "../lib/model-catalog";
 
 // ============================================================
@@ -549,73 +550,69 @@ function ChatPageComponent() {
         </main>
 
         {/* Secret Warning Modal */}
-        {secretWarning && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-            <div className="bg-card border border-border rounded-xl shadow-2xl w-full max-w-md m-4 overflow-hidden">
-              <div className="p-4 bg-yellow-900/30 border-b border-yellow-700/50 flex items-center gap-3">
-                <ShieldAlert className="w-6 h-6 text-yellow-500" />
-                <div>
-                  <h3 className="font-semibold text-foreground">
-                    Secrets Detected
-                  </h3>
-                  <p className="text-sm text-muted-foreground">
-                    Your message contains sensitive information
-                  </p>
-                </div>
+        <Dialog open={!!secretWarning} onOpenChange={(open) => { if (!open) handleCancelSendWithSecrets(); }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader className="flex flex-row items-center gap-3 p-4 bg-yellow-900/30 border-b border-yellow-700/50 -m-6 mb-0 px-6 pt-6 pb-4">
+              <ShieldAlert className="w-6 h-6 text-yellow-500 flex-shrink-0" />
+              <div>
+                <DialogTitle>Secrets Detected</DialogTitle>
+                <DialogDescription>
+                  Your message contains sensitive information
+                </DialogDescription>
               </div>
-              <div className="p-4 space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  The following secrets were detected in your message. They will
-                  be{" "}
-                  <strong className="text-foreground">
-                    automatically redacted
-                  </strong>{" "}
-                  before being sent. The original values will{" "}
-                  <strong className="text-foreground">
-                    never appear in chat history
-                  </strong>
-                  .
-                </p>
-                <div className="space-y-2">
-                  {secretWarning.map((secret, i) => (
-                    <div
-                      key={i}
-                      className="flex items-center gap-2 px-3 py-2 bg-background rounded-lg border border-border"
-                    >
-                      <Lock className="w-4 h-4 text-yellow-500 flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">
-                          {secret.name}
-                        </p>
-                        <p className="text-xs text-muted-foreground font-mono truncate">
-                          {maskSecret(secret.match)}
-                        </p>
-                      </div>
-                      <span className="ml-auto text-xs px-2 py-0.5 bg-yellow-900/30 text-yellow-400 rounded-full">
-                        {secret.category}
-                      </span>
+            </DialogHeader>
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                The following secrets were detected in your message. They will
+                be{" "}
+                <strong className="text-foreground">
+                  automatically redacted
+                </strong>{" "}
+                before being sent. The original values will{" "}
+                <strong className="text-foreground">
+                  never appear in chat history
+                </strong>
+                .
+              </p>
+              <div className="space-y-2">
+                {secretWarning?.map((secret, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 px-3 py-2 bg-background rounded-lg border border-border"
+                  >
+                    <Lock className="w-4 h-4 text-yellow-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-foreground">
+                        {secret.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-mono truncate">
+                        {maskSecret(secret.match)}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div className="p-4 border-t border-border flex justify-end gap-2">
-                <button
-                  onClick={handleCancelSendWithSecrets}
-                  className="px-4 py-2 text-sm rounded-lg bg-muted text-muted-foreground hover:bg-muted/80"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleConfirmSendWithSecrets}
-                  className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2"
-                >
-                  <Shield className="w-4 h-4" />
-                  Redact &amp; Send
-                </button>
+                    <span className="ml-auto text-xs px-2 py-0.5 bg-yellow-900/30 text-yellow-400 rounded-full">
+                      {secret.category}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
-          </div>
-        )}
+            <DialogFooter>
+              <button
+                onClick={handleCancelSendWithSecrets}
+                className="px-4 py-2 text-sm rounded-lg bg-muted text-muted-foreground hover:bg-muted/80"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmSendWithSecrets}
+                className="px-4 py-2 text-sm rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2"
+              >
+                <Shield className="w-4 h-4" />
+                Redact &amp; Send
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Input Area */}
         <footer className="p-3 border-t border-border bg-card/50">

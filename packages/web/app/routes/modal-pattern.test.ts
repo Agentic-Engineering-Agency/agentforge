@@ -5,6 +5,7 @@ import path from 'node:path';
 const ROUTES_DIR = path.resolve(import.meta.dirname, '.');
 
 const ROUTES_WITH_MODALS = [
+  'chat.tsx',
   'agents.tsx',
   'connections.tsx',
   'cron.tsx',
@@ -13,7 +14,7 @@ const ROUTES_WITH_MODALS = [
   'skills.tsx',
 ];
 
-const HAND_ROLLED_PATTERN = /className="fixed inset-0 bg-black/;
+const HAND_ROLLED_PATTERN = /className="fixed inset-0[^"]*bg-black/;
 
 describe('modal pattern enforcement', () => {
   for (const routeFile of ROUTES_WITH_MODALS) {
@@ -36,8 +37,8 @@ describe('modal pattern enforcement', () => {
 
       expect(
         source,
-        `${routeFile} should import Dialog primitives from components/ui/dialog`,
-      ).toContain("from '../components/ui/dialog'");
+        `${routeFile} should import Dialog primitives from components/ui/dialog or ~/components/ui/dialog`,
+      ).toMatch(/from ['"](?:\.\.\/|~\/)components\/ui\/dialog['"]/);
     });
   }
 });
