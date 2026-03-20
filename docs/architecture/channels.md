@@ -97,7 +97,7 @@ TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 3. Configure via CLI:
 
 ```bash
-agentforge channel-telegram configure
+agentforge channel:telegram configure
 ```
 
 ### Webhook vs Polling
@@ -141,7 +141,7 @@ WHATSAPP_VERIFY_TOKEN=your-random-verify-string
 Configure via CLI:
 
 ```bash
-agentforge channel-whatsapp configure
+agentforge channel:whatsapp configure
 ```
 
 ### Webhook setup
